@@ -4,7 +4,21 @@ use oxc_span::SourceType;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
+
+fn is_ignored(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| {
+            s.starts_with('.')
+                || s == "node_modules"
+                || s == "target"
+                || s == "dist"
+                || s == "build"
+        })
+        .unwrap_or(false)
+}
 
 #[derive(Serialize, Clone)]
 pub struct ParsedNode {
@@ -28,7 +42,7 @@ pub struct GraphData {
 #[tauri::command]
 async fn parse_codebase(path: String) -> Result<GraphData, String> {
     let mut nodes = Vec::new();
-    let mut edges = Vec::new();
+    let edges = Vec::new();
 
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
@@ -37,6 +51,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
 
     for entry in WalkDir::new(path_ref)
         .into_iter()
+        .filter_entry(|e| !is_ignored(e))
         .filter_map(|e| e.ok())
     {
         let file_path = entry.path();
@@ -60,9 +75,9 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     let allocator = Allocator::default();
                     let source_type = SourceType::from_path(file_path).unwrap_or_default();
                     let ret = Parser::new(&allocator, &source_text, source_type).parse();
-                    
+
                     // A simple heuristic for imports without deep AST visitation
-                    for stmt in &ret.program.body {
+                    for _stmt in &ret.program.body {
                         // The AST can be inspected for dependencies here
                         // For demonstration, we'll leave deep import resolution to the next iteration
                         // and just prove oxc is successfully parsing the file.
@@ -84,4 +99,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
