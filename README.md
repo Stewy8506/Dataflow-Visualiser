@@ -109,6 +109,7 @@ Select any node and simulate a structural change. The engine traces dependencies
 
 ### Advanced Codebase Analysis
 - **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
+- **Complexity Heatmap** — visually maps code complexity (such as function density, import counts, and file sizes) across nodes using a color gradient, enabling developers to instantly locate maintainability hotspots and risky refactor targets.
 - **Fuzzy Search & Filter** — quickly navigate massive codebases with a real-time search bar that highlights matching nodes and collapses irrelevant subtrees.
 
 ### Interactive Git Integration
