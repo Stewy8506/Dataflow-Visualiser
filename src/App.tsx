@@ -79,24 +79,6 @@ function App() {
           },
         }));
 
-        // In a real scenario, you'd layout the graph. If edges are empty, dagre just puts them in a line/grid.
-        // Let's add some mock edges if none exist just for the visualization based on the screenshot
-        if (initialEdges.length === 0 && initialNodes.length > 1) {
-          for (let i = 0; i < initialNodes.length - 1; i++) {
-            // mock random connections
-            if (Math.random() > 0.5) {
-              initialEdges.push({
-                id: `mock-e-${i}`,
-                source: initialNodes[i].id,
-                target: initialNodes[i+1].id,
-                type: 'bezier',
-                animated: true,
-                style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
-              });
-            }
-          }
-        }
-
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           initialNodes,
           initialEdges
