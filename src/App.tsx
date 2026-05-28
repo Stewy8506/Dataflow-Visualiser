@@ -196,32 +196,33 @@ function App() {
       let subLabel = 'File';
       let isBackend = false;
 
-      if (n.id.includes('/api/') || n.label.startsWith('route.')) {
-        subLabel = 'API Route';
+      const pathLower = n.id.toLowerCase();
+      if (pathLower.includes('/api/') || n.label.startsWith('route.') || pathLower.includes('controller') || pathLower.includes('handler')) {
+        subLabel = 'API / Controller';
         isBackend = true;
-      } else if (n.id.includes('/server/') || n.id.includes('/backend/')) {
+      } else if (pathLower.includes('/server/') || pathLower.includes('/backend/') || pathLower.includes('service')) {
         subLabel = 'Backend Service';
         isBackend = true;
-      } else if (n.id.includes('src-tauri')) {
+      } else if (pathLower.includes('src-tauri')) {
         subLabel = 'Rust Backend';
         isBackend = true;
-      } else if (n.group === 'tsx' || n.group === 'jsx') {
-        subLabel = 'React Component';
-      } else if (n.group === 'ts' || n.group === 'js') {
+      } else if (['tsx', 'jsx', 'vue', 'svelte', 'dart'].includes(n.group)) {
+        subLabel = 'UI Component';
+      } else if (['ts', 'js', 'py', 'rs'].includes(n.group)) {
         subLabel = 'Script';
       }
 
-      // Flag all Next.js framework reserved entry point routing/template files as entry points to avoid dead code flagging
-      const isEntryPoint = /^(page|layout|loading|template|error|global-error|not-found|default|route|main|index|App|middleware|instrumentation|sitemap|robots)\./i.test(n.label) || n.id.includes('src-tauri');
+      // Flag common entry point files across frameworks (Next.js, Vite, React Native, Flutter, etc.)
+      const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|middleware|sitemap)\./i.test(n.label) || n.id.includes('src-tauri');
       const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
 
-      // Calculate 4-layer architectural taxonomy hierarchy
+      // Calculate architectural taxonomy hierarchy
       let layerIndex = 2; // Default script/utilities layer
       if (isBackend) {
         layerIndex = 3; // Backend service & APIs layer
-      } else if (n.label.startsWith('page.')) {
-        layerIndex = 0; // Webpages layer
-      } else if (n.group === 'tsx' || n.group === 'jsx') {
+      } else if (/^(page|main|index|app)\./i.test(n.label)) {
+        layerIndex = 0; // Entry points / Webpages layer
+      } else if (['tsx', 'jsx', 'vue', 'svelte', 'dart'].includes(n.group)) {
         layerIndex = 1; // UI components layer
       }
 

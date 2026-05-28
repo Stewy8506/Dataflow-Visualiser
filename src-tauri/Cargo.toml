@@ -32,3 +32,7 @@ regex = "1.12.3"
 ignore = "0.4.25"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+tree-sitter = "0.26.9"
+tree-sitter-python = "0.25.0"
+tree-sitter-rust = "0.24.2"
+tree-sitter-dart = "0.2.0"

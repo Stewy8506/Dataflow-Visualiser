@@ -8,18 +8,19 @@ Built with **Tauri v2**, **Rust**, and **React**, it focuses on native performan
 
 ## 🌟 Key Features (Planned & In Progress)
 
-- **Local Codebase Indexing**: Utilizes `oxc-parser` for extremely fast parsing and indexing of your local projects.
+- **Multi-Language Parsing**: Utilizes `oxc-parser` for JS/TS/JSX/TSX and `tree-sitter` for Python, Rust, and Dart, enabling support for a wide range of repositories (Next.js, Vite, React Native, Flutter, etc.).
 - **Code Structure Visualization**: Generates intuitive dependency graphs and visual representations of your codebase architecture.
-- **AI-Powered Analysis**: Integrates with local AI models (via Ollama) or cloud-based APIs (like Anthropic) to provide intelligent insights, explain code, and suggest improvements without compromising privacy.
-- **Privacy First**: All local indexing stays on your machine. You control what data, if any, is sent to external APIs.
+- **Blast Radius Analysis**: Automatically calculates the cascading impact of modifying a specific file using Reverse Dependency Traversal, highlighting affected Tier 1, Tier 2, etc. nodes in the UI.
+- **AI-Powered Analysis**: Integrates with Google AI (Gemini) or local models to provide intelligent insights, explain code, and suggest semantic groupings.
+- **Privacy First**: All local indexing stays on your machine. You control what data is sent to external APIs.
 - **High Performance**: Leverages Rust's speed for heavy lifting (parsing, indexing) and React for a smooth, modern UI.
 
 ## 🚀 Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, TailwindCSS
 - **Backend / Core**: Rust, Tauri v2
-- **Parsing**: `oxc-parser`
-- **AI Integration**: Ollama (Local), Anthropic API (Cloud)
+- **Parsing**: `oxc-parser` (JS/TS), `tree-sitter` (Python, Rust, Dart)
+- **AI Integration**: Gemini API (Cloud)
 
 ## 🛠️ Recommended IDE Setup
 

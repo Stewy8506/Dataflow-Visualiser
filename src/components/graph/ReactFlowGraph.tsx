@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
 import { LayoutController } from './LayoutController';
+import { calculateBlastRadius } from '../../utils/blastRadius';
 
 const nodeTypes: NodeTypes = {
   fileNode: FileNode,
@@ -50,48 +51,53 @@ export function ReactFlowGraph({
 
   const activeNodeId = hoveredNodeId || selectedNodeId;
 
-  const connectedNodes = useMemo(() => {
+  const blastRadius = useMemo(() => {
     if (!activeNodeId) return null;
-    const connected = new Set<string>();
-    connected.add(activeNodeId);
-
-    // BFS to find descendants
-    let queue = [activeNodeId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const edge of initialEdges) {
-        if (edge.source === current && !connected.has(edge.target)) {
-          connected.add(edge.target);
-          queue.push(edge.target);
-        }
-      }
-    }
-
-    // BFS to find ancestors
-    queue = [activeNodeId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const edge of initialEdges) {
-        if (edge.target === current && !connected.has(edge.source)) {
-          connected.add(edge.source);
-          queue.push(edge.source);
-        }
-      }
-    }
-
-    return connected;
+    return calculateBlastRadius(activeNodeId, initialEdges);
   }, [activeNodeId, initialEdges]);
 
   // Update state if initial props or selection changes
   useEffect(() => {
     const styledNodes = initialNodes.map(node => {
-      const isConnected = connectedNodes ? connectedNodes.has(node.id) : true;
+      let isConnected = true;
+      let tier = -1;
+      
+      if (blastRadius) {
+        if (blastRadius.tiers.has(node.id)) {
+          tier = blastRadius.tiers.get(node.id)!;
+        } else {
+          isConnected = false;
+        }
+      }
+
       const isSelected = selectedNodeId === node.id;
+      let borderColor = node.style?.border || 'rgba(255,255,255,0.1)';
+      let pulseStyle = {};
+
+      if (isConnected && blastRadius && tier >= 0) {
+        if (tier === 0) {
+          // Selected Node
+          borderColor = '#3b82f6'; // Blue
+          pulseStyle = { boxShadow: '0 0 20px rgba(59, 130, 246, 0.5)' };
+        } else if (tier === 1) {
+          // Tier 1 (High Risk)
+          borderColor = '#ef4444'; // Red
+          pulseStyle = { boxShadow: '0 0 15px rgba(239, 68, 68, 0.4)' };
+        } else {
+          // Tier 2+ (Moderate Risk)
+          borderColor = '#f59e0b'; // Amber
+          pulseStyle = { boxShadow: '0 0 10px rgba(245, 158, 11, 0.3)' };
+        }
+      }
+
       return {
         ...node,
         selected: isSelected,
         style: {
           ...node.style,
+          ...pulseStyle,
+          borderColor: isConnected && blastRadius ? borderColor : node.style?.borderColor,
+          borderWidth: isConnected && blastRadius && tier >= 0 ? '2px' : node.style?.borderWidth,
           opacity: isConnected ? 1 : 0.2,
           filter: isConnected ? 'none' : 'grayscale(100%) blur(1px)',
           pointerEvents: isConnected ? 'all' : 'none',
@@ -101,19 +107,24 @@ export function ReactFlowGraph({
     });
 
     const styledEdges = initialEdges.map(edge => {
-      const isConnected = connectedNodes ? connectedNodes.has(edge.source) && connectedNodes.has(edge.target) : false;
+      const sourceTier = blastRadius?.tiers.get(edge.source) ?? -1;
+      const targetTier = blastRadius?.tiers.get(edge.target) ?? -1;
+      
+      const isConnected = sourceTier >= 0 && targetTier >= 0;
       const isOutgoing = activeNodeId === edge.source;
       const isIncoming = activeNodeId === edge.target;
       const isDirectlyConnected = isOutgoing || isIncoming;
       const noActiveNode = !activeNodeId;
       
       let strokeColor = '#64748b'; // default slate
-      if (isOutgoing) {
-        strokeColor = '#10b981'; // emerald-500 (Outgoing)
-      } else if (isIncoming) {
-        strokeColor = '#3b82f6'; // blue-500 (Incoming)
-      } else if (isConnected) {
-        strokeColor = '#94a3b8'; // slate-400 (Indirectly connected)
+      if (blastRadius && isConnected) {
+        if (targetTier === 0 && sourceTier === 1) {
+           strokeColor = '#ef4444'; // Red (Tier 1 direct impact)
+        } else if (targetTier > 0 && sourceTier > targetTier) {
+           strokeColor = '#f59e0b'; // Amber (Tier 2+ impact flow)
+        } else {
+           strokeColor = '#94a3b8';
+        }
       }
 
       const markerEnd = edge.markerEnd && typeof edge.markerEnd === 'object'
@@ -125,18 +136,18 @@ export function ReactFlowGraph({
         style: {
           ...edge.style,
           opacity: noActiveNode ? 0.15 : (isConnected ? 0.8 : 0.05),
-          strokeWidth: isDirectlyConnected ? 3 : 2,
+          strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1),
           stroke: strokeColor,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         },
         markerEnd,
-        animated: isConnected && isDirectlyConnected,
+        animated: isConnected && blastRadius,
       };
     });
 
     setNodes(styledNodes);
     setEdges(styledEdges);
-  }, [initialNodes, initialEdges, connectedNodes, selectedNodeId, activeNodeId, setNodes, setEdges]);
+  }, [initialNodes, initialEdges, blastRadius, selectedNodeId, activeNodeId, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),

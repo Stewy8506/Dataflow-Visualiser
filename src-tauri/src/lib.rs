@@ -7,6 +7,65 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
+use tree_sitter::Parser as TSParser;
+
+fn extract_imports_ts(
+    language: tree_sitter::Language,
+    source_text: &str,
+    ext: &str,
+    imports: &mut Vec<(String, bool)>
+) {
+    let mut parser = TSParser::new();
+    parser.set_language(&language).unwrap();
+    if let Some(tree) = parser.parse(source_text, None) {
+        let mut cursor = tree.walk();
+        let mut reached_root = false;
+        while !reached_root {
+            let node = cursor.node();
+            let kind = node.kind();
+            
+            let mut target_node = None;
+
+            if ext == "py" && (kind == "import_statement" || kind == "import_from_statement") {
+                target_node = Some(node);
+            } else if ext == "rs" && kind == "use_declaration" {
+                target_node = Some(node);
+            } else if ext == "dart" && kind == "import_or_export" {
+                target_node = Some(node);
+            }
+
+            if let Some(n) = target_node {
+                if let Ok(text) = n.utf8_text(source_text.as_bytes()) {
+                    // Very simple string extraction for demonstration.
+                    // A true AST parser would walk children to find the exact module name node.
+                    // For now, we extract the whole statement and rely on the regex fallback for module name,
+                    // or just use regex on the AST node's text.
+                    let clean = text.replace("import ", "").replace("from ", "").replace("use ", "").replace(";", "").replace("'", "").replace("\"", "");
+                    let parts: Vec<&str> = clean.split_whitespace().collect();
+                    if let Some(module) = parts.first() {
+                        imports.push((module.to_string(), false));
+                    }
+                }
+            }
+
+            if cursor.goto_first_child() {
+                continue;
+            }
+            if cursor.goto_next_sibling() {
+                continue;
+            }
+            let mut retracing = true;
+            while retracing {
+                if !cursor.goto_parent() {
+                    retracing = false;
+                    reached_root = true;
+                } else if cursor.goto_next_sibling() {
+                    retracing = false;
+                }
+            }
+        }
+    }
+}
 
 fn is_ignored(entry: &DirEntry) -> bool {
     entry
@@ -91,7 +150,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
             let file_path = entry.path();
             if file_path.is_file() {
                 let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                if ext == "js" || ext == "ts" || ext == "jsx" || ext == "tsx" {
+                if matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") {
                     let id = file_path.to_string_lossy().replace('\\', "/");
                     let label = file_path
                         .file_name()
@@ -111,77 +170,87 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     let mut is_router = false;
 
                     if let Ok(source_text) = fs::read_to_string(file_path) {
-                        let allocator = Allocator::default();
-                        let source_type = SourceType::from_path(file_path).unwrap_or_default();
-                        let ret = Parser::new(&allocator, &source_text, source_type).parse();
+                        if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
+                            let allocator = Allocator::default();
+                            let source_type = SourceType::from_path(file_path).unwrap_or_default();
+                            let ret = Parser::new(&allocator, &source_text, source_type).parse();
 
-                        if ret.errors.is_empty() {
-                            let program = ret.program;
-                            let mut all_exports_imports = true;
-                            let mut has_exports = false;
+                            if ret.errors.is_empty() {
+                                let program = ret.program;
+                                let mut all_exports_imports = true;
+                                let mut has_exports = false;
 
-                            for stmt in &program.body {
-                                if let Some(decl) = stmt.as_module_declaration() {
-                                    match decl {
-                                        ModuleDeclaration::ImportDeclaration(import_decl) => {
-                                            let source = import_decl.source.value.to_string();
-                                            let mut local_names = Vec::new();
-                                            if let Some(specifiers) = &import_decl.specifiers {
-                                                for spec in specifiers {
-                                                    match spec {
-                                                        ImportDeclarationSpecifier::ImportSpecifier(s) => {
-                                                            local_names.push(s.local.name.to_string());
-                                                        }
-                                                        ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
-                                                            local_names.push(s.local.name.to_string());
-                                                        }
-                                                        ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
-                                                            local_names.push(s.local.name.to_string());
+                                for stmt in &program.body {
+                                    if let Some(decl) = stmt.as_module_declaration() {
+                                        match decl {
+                                            ModuleDeclaration::ImportDeclaration(import_decl) => {
+                                                let source = import_decl.source.value.to_string();
+                                                let mut local_names = Vec::new();
+                                                if let Some(specifiers) = &import_decl.specifiers {
+                                                    for spec in specifiers {
+                                                        match spec {
+                                                            ImportDeclarationSpecifier::ImportSpecifier(s) => {
+                                                                local_names.push(s.local.name.to_string());
+                                                            }
+                                                            ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
+                                                                local_names.push(s.local.name.to_string());
+                                                            }
+                                                            ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
+                                                                local_names.push(s.local.name.to_string());
+                                                            }
                                                         }
                                                     }
                                                 }
+
+                                                let mut is_data_source = false;
+                                                for name in local_names {
+                                                    let jsx_pattern = format!("<{}", name);
+                                                    let call_pattern = format!("{}(", name);
+                                                    let call_pattern_space = format!("{} (", name);
+
+                                                    if (source_text.contains(&call_pattern) || source_text.contains(&call_pattern_space)) && !source_text.contains(&jsx_pattern) {
+                                                        is_data_source = true;
+                                                        break;
+                                                    }
+                                                }
+
+                                                imports.push((source, is_data_source));
                                             }
-
-                                            let mut is_data_source = false;
-                                            for name in local_names {
-                                                let jsx_pattern = format!("<{}", name);
-                                                let call_pattern = format!("{}(", name);
-                                                let call_pattern_space = format!("{} (", name);
-
-                                                if (source_text.contains(&call_pattern) || source_text.contains(&call_pattern_space)) && !source_text.contains(&jsx_pattern) {
-                                                    is_data_source = true;
-                                                    break;
+                                            ModuleDeclaration::ExportAllDeclaration(_) => {
+                                                has_exports = true;
+                                            }
+                                            ModuleDeclaration::ExportNamedDeclaration(named) => {
+                                                if named.source.is_some() {
+                                                    has_exports = true;
+                                                } else {
+                                                    all_exports_imports = false;
                                                 }
                                             }
-
-                                            imports.push((source, is_data_source));
-                                        }
-                                        ModuleDeclaration::ExportAllDeclaration(_) => {
-                                            has_exports = true;
-                                        }
-                                        ModuleDeclaration::ExportNamedDeclaration(named) => {
-                                            if named.source.is_some() {
-                                                has_exports = true;
-                                            } else {
+                                            ModuleDeclaration::ExportDefaultDeclaration(_) => {
+                                                all_exports_imports = false;
+                                            }
+                                            _ => {
                                                 all_exports_imports = false;
                                             }
                                         }
-                                        ModuleDeclaration::ExportDefaultDeclaration(_) => {
-                                            all_exports_imports = false;
-                                        }
-                                        _ => {
-                                            all_exports_imports = false;
-                                        }
+                                    } else {
+                                        all_exports_imports = false;
                                     }
-                                } else {
-                                    all_exports_imports = false;
+                                }
+
+                                // It's a router if it purely handles imports/exports and doesn't contain component logic
+                                if all_exports_imports && has_exports {
+                                    is_router = true;
                                 }
                             }
-
-                            // It's a router if it purely handles imports/exports and doesn't contain component logic
-                            if all_exports_imports && has_exports {
-                                is_router = true;
-                            }
+                        } else if matches!(ext, "py" | "rs" | "dart") {
+                            let language = match ext {
+                                "py" => tree_sitter::Language::from(tree_sitter_python::LANGUAGE),
+                                "rs" => tree_sitter::Language::from(tree_sitter_rust::LANGUAGE),
+                                "dart" => tree_sitter::Language::from(tree_sitter_dart::LANGUAGE),
+                                _ => unreachable!(),
+                            };
+                            extract_imports_ts(language, &source_text, ext, &mut imports);
                         }
                     }
 
@@ -278,86 +347,90 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     }
 
     // Next.js Implicit Routing Connections
-    let mut layout_nodes = Vec::new();
-    let mut route_nodes = Vec::new();
+    let is_nextjs = nodes.iter().any(|n| n.label.starts_with("layout.") || n.label.starts_with("page."));
+    
+    if is_nextjs {
+        let mut layout_nodes = Vec::new();
+        let mut route_nodes = Vec::new();
 
-    for node in &nodes {
-        if node.label.starts_with("layout.") {
-            layout_nodes.push(node);
-        } else if node.label.starts_with("page.")
-            || node.label.starts_with("loading.")
-            || node.label.starts_with("template.")
-            || node.label.starts_with("route.")
-            || node.label.starts_with("error.")
-            || node.label.starts_with("not-found.")
-        {
-            route_nodes.push(node);
-        }
-    }
-
-    // A route node connects to its closest parent layout
-    for r_node in &route_nodes {
-        let mut current_dir = Path::new(&r_node.id).parent();
-        let mut found_layout = None;
-
-        while let Some(dir) = current_dir {
-            let dir_str = dir.to_string_lossy().replace('\\', "/").to_lowercase();
-
-            if let Some(l) = layout_nodes.iter().find(|l| {
-                Path::new(&l.id)
-                    .parent()
-                    .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
-                    == Some(dir_str.clone())
-            }) {
-                found_layout = Some(l);
-                break;
+        for node in &nodes {
+            if node.label.starts_with("layout.") {
+                layout_nodes.push(node);
+            } else if node.label.starts_with("page.")
+                || node.label.starts_with("loading.")
+                || node.label.starts_with("template.")
+                || node.label.starts_with("route.")
+                || node.label.starts_with("error.")
+                || node.label.starts_with("not-found.")
+            {
+                route_nodes.push(node);
             }
-            current_dir = dir.parent();
         }
 
-        if let Some(l) = found_layout {
-            edges.push(ParsedEdge {
-                source: l.id.clone(),
-                target: r_node.id.clone(),
-                via: None,
-                is_data_source: false, // Layout -> Route is a control flow
-            });
-        }
-    }
+        // A route node connects to its closest parent layout
+        for r_node in &route_nodes {
+            let mut current_dir = Path::new(&r_node.id).parent();
+            let mut found_layout = None;
 
-    // Layouts connect to their parent layout
-    for l_node in &layout_nodes {
-        let current_dir = Path::new(&l_node.id).parent();
-        if let Some(parent_dir) = current_dir.and_then(|p| p.parent()) {
-            let mut search_dir = Some(parent_dir);
-            let mut found_parent_layout = None;
-
-            while let Some(dir) = search_dir {
+            while let Some(dir) = current_dir {
                 let dir_str = dir.to_string_lossy().replace('\\', "/").to_lowercase();
-                if let Some(parent_l) = layout_nodes.iter().find(|l| {
+
+                if let Some(l) = layout_nodes.iter().find(|l| {
                     Path::new(&l.id)
                         .parent()
                         .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                         == Some(dir_str.clone())
                 }) {
-                    found_parent_layout = Some(parent_l);
+                    found_layout = Some(l);
                     break;
                 }
-                search_dir = dir.parent();
+                current_dir = dir.parent();
             }
 
-            if let Some(parent_l) = found_parent_layout {
-                // Ensure we don't duplicate edges if they imported it explicitly
-                let exists = edges
-                    .iter()
-                    .any(|e| e.source == parent_l.id && e.target == l_node.id);
-                if !exists {
-                    edges.push(ParsedEdge {
-                        source: parent_l.id.clone(),
-                        target: l_node.id.clone(),
-                        via: None,
-                        is_data_source: false, // Parent Layout -> Child Layout
-                    });
+            if let Some(l) = found_layout {
+                edges.push(ParsedEdge {
+                    source: l.id.clone(),
+                    target: r_node.id.clone(),
+                    via: None,
+                    is_data_source: false, // Layout -> Route is a control flow
+                });
+            }
+        }
+
+        // Layouts connect to their parent layout
+        for l_node in &layout_nodes {
+            let current_dir = Path::new(&l_node.id).parent();
+            if let Some(parent_dir) = current_dir.and_then(|p| p.parent()) {
+                let mut search_dir = Some(parent_dir);
+                let mut found_parent_layout = None;
+
+                while let Some(dir) = search_dir {
+                    let dir_str = dir.to_string_lossy().replace('\\', "/").to_lowercase();
+                    if let Some(parent_l) = layout_nodes.iter().find(|l| {
+                        Path::new(&l.id)
+                            .parent()
+                            .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
+                            == Some(dir_str.clone())
+                    }) {
+                        found_parent_layout = Some(parent_l);
+                        break;
+                    }
+                    search_dir = dir.parent();
+                }
+
+                if let Some(parent_l) = found_parent_layout {
+                    // Ensure we don't duplicate edges if they imported it explicitly
+                    let exists = edges
+                        .iter()
+                        .any(|e| e.source == parent_l.id && e.target == l_node.id);
+                    if !exists {
+                        edges.push(ParsedEdge {
+                            source: parent_l.id.clone(),
+                            target: l_node.id.clone(),
+                            via: None,
+                            is_data_source: false, // Parent Layout -> Child Layout
+                        });
+                    }
                 }
             }
         }
