@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
 import { LayoutController } from './LayoutController';
 import { calculateBlastRadius } from '../../utils/blastRadius';
+import { invoke } from '@tauri-apps/api/core';
 
 const nodeTypes: NodeTypes = {
   fileNode: FileNode,
@@ -188,9 +189,7 @@ function ReactFlowInner({
 
   const handleNodeDoubleClick = (_: React.MouseEvent, node: any) => {
     if (blastRadius && node.id) {
-       import('@tauri-apps/api/core').then(({ invoke }) => {
-           invoke("open_in_ide", { path: node.id, ide: preferredIde }).catch(console.error);
-       });
+       invoke("open_in_ide", { path: node.id, ide: preferredIde }).catch(console.error);
     }
   };
 
