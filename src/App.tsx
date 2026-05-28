@@ -10,6 +10,7 @@ import { load } from '@tauri-apps/plugin-store';
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header, GraphLayer } from "./components/layout/Header";
 import { BottomPanel } from "./components/layout/BottomPanel";
+import { SearchBar } from "./components/layout/SearchBar";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
 import { getLayoutedElements } from "./utils/layout";
@@ -268,6 +269,10 @@ function App() {
     const saved = localStorage.getItem('theme');
     return saved === 'light';
   });
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'highlight' | 'collapse'>('highlight');
+  const [showMiniMap, setShowMiniMap] = useState(false);
 
   const [preferredIde, setPreferredIde] = useState('code');
 
@@ -325,6 +330,7 @@ function App() {
         await new Promise(resolve => setTimeout(resolve, 500));
 
         const result: GraphData = await invoke("parse_codebase", { path });
+        invoke("watch_codebase", { path }).catch(e => console.error("Watcher init error", e));
 
         setEnrichmentMap(new Map()); // Reset enrichment for the new project
         setRawGraphData(result);
@@ -375,9 +381,39 @@ function App() {
       setLogs(prev => [...prev, `> Progressive AI Enrichment fully completed.`]);
     });
 
+    const unlistenUpdate = listen("node_updated", (event) => {
+      const payload = event.payload as { node: any, resolved_imports: [string, boolean][] };
+      setRawGraphData(prev => {
+        if (!prev) return prev;
+        const newNodes = prev.nodes.filter(n => n.id !== payload.node.id);
+        newNodes.push(payload.node);
+
+        const newEdges = prev.edges.filter(e => e.source !== payload.node.id);
+        const exts = ['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'dart'];
+        
+        for (const [targetStr, isDataSource] of payload.resolved_imports) {
+           const targetLower = targetStr.toLowerCase();
+           const match = prev.nodes.find(n => {
+              const idLower = n.id.toLowerCase();
+              return exts.some(ext => 
+                idLower.endsWith(`/${targetLower}.${ext}`) || 
+                idLower.endsWith(`/${targetLower}/index.${ext}`) ||
+                idLower.endsWith(`/${targetLower}`)
+              );
+           });
+           if (match) {
+             newEdges.push({ source: payload.node.id, target: match.id, via: null, is_data_source: isDataSource });
+           }
+        }
+        return { nodes: newNodes, edges: newEdges };
+      });
+      setLogs(prev => [...prev, `> Live update: Re-parsed ${payload.node.label}`]);
+    });
+
     return () => {
       unlisten.then(f => f());
       unlistenComplete.then(f => f());
+      unlistenUpdate.then(f => f());
     };
   }, []);
 
@@ -392,12 +428,27 @@ function App() {
     });
 
     // Filter nodes based on active layer
-    const filteredRawNodes = rawGraphData.nodes.filter(n => {
+    let filteredRawNodes = rawGraphData.nodes.filter(n => {
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
       if (activeLayer === 'ui') return !isBackend;
       if (activeLayer === 'backend') return isBackend;
       return true; // overall
     });
+
+    if (searchQuery && searchMode === 'collapse') {
+      const query = searchQuery.toLowerCase();
+      filteredRawNodes = filteredRawNodes.filter(n => {
+        const enriched = enrichmentMap.get(n.id);
+        const semanticGroup = enriched?.semantic_group || n.semantic_group || '';
+        const summary = enriched?.summary || n.summary || '';
+        return (
+          n.id.toLowerCase().includes(query) ||
+          n.label.toLowerCase().includes(query) ||
+          semanticGroup.toLowerCase().includes(query) ||
+          summary.toLowerCase().includes(query)
+        );
+      });
+    }
 
     const validNodeIds = new Set(filteredRawNodes.map(n => n.id));
 
@@ -454,6 +505,7 @@ function App() {
           semantic_group: n.semantic_group,
           summary: n.summary,
           isDeadCode,
+          metrics: (n as any).metrics,
           onDelete: () => handleDeleteNode(n.id, n.id),
           direction: layoutDirection,
           layerIndex
@@ -533,7 +585,7 @@ function App() {
     setFlowNodes(layoutedNodes);
     setFlowEdges(styledEdges);
 
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap]);
 
   // Merge AI enrichment metadata into flow nodes at render time.
   // This never triggers a dagre relayout — only updates summary/group fields.
@@ -636,7 +688,18 @@ function App() {
             onSettingsClick={() => setShowSettings(true)}
             isLightMode={isLightMode}
             setIsLightMode={setIsLightMode}
+            showMiniMap={showMiniMap}
+            setShowMiniMap={setShowMiniMap}
           />
+
+          {viewMode === '2d' && (
+            <SearchBar 
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              searchMode={searchMode}
+              setSearchMode={setSearchMode}
+            />
+          )}
 
           {viewMode === '2d' ? (
             <ReactFlowGraph
@@ -650,6 +713,10 @@ function App() {
               direction={layoutDirection}
               setDirection={setLayoutDirection}
               isLightMode={isLightMode}
+              preferredIde={preferredIde}
+              searchQuery={searchQuery}
+              searchMode={searchMode}
+              showMiniMap={showMiniMap}
             />
           ) : (
             <ThreeDGraph

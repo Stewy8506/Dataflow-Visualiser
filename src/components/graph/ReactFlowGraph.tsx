@@ -29,6 +29,10 @@ interface ReactFlowGraphProps {
   direction: 'LR' | 'TB';
   setDirection: (dir: 'LR' | 'TB') => void;
   isLightMode: boolean;
+  preferredIde: string;
+  searchQuery?: string;
+  searchMode?: 'highlight' | 'collapse';
+  showMiniMap?: boolean;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
@@ -43,6 +47,10 @@ function ReactFlowInner({
   direction,
   setDirection,
   isLightMode,
+  preferredIde,
+  searchQuery,
+  searchMode,
+  showMiniMap,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom } = useReactFlow();
 
@@ -99,6 +107,17 @@ function ReactFlowInner({
         }
       }
 
+      let isSearchMatch = true;
+      if (searchQuery && searchMode === 'highlight') {
+         const query = searchQuery.toLowerCase();
+         const semanticGroup = node.data.semantic_group || '';
+         const summary = node.data.summary || '';
+         isSearchMatch = node.id.toLowerCase().includes(query) || 
+                         node.data.label.toLowerCase().includes(query) ||
+                         semanticGroup.toLowerCase().includes(query) ||
+                         summary.toLowerCase().includes(query);
+      }
+
       const isSelected = selectedNodeId === node.id;
 
       return {
@@ -109,15 +128,16 @@ function ReactFlowInner({
           blastTier: tier,
           blastConnected: isConnected,
           hasBlastRadius: !!blastRadius,
+          isSearchMatch,
         },
         style: {
           ...node.style,
-          opacity: isConnected ? 1 : 0.15,
-          pointerEvents: isConnected ? 'all' : 'none',
+          opacity: (isConnected && isSearchMatch) ? 1 : 0.15,
+          pointerEvents: (isConnected && isSearchMatch) ? 'all' : 'none',
         }
       };
     });
-  }, [initialNodes, blastRadius, selectedNodeId]);
+  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -166,15 +186,19 @@ function ReactFlowInner({
     onNodeSelect(node);
   };
 
+  const handleNodeDoubleClick = (_: React.MouseEvent, node: any) => {
+    if (blastRadius && node.id) {
+       import('@tauri-apps/api/core').then(({ invoke }) => {
+           invoke("open_in_ide", { path: node.id, ide: preferredIde }).catch(console.error);
+       });
+    }
+  };
+
   const handlePaneClick = () => {
     setSelectedNodeId(null);
     onNodeSelect(null);
   };
 
-  const miniMapNodeColor = useCallback(
-    () => isLightMode ? '#94a3b8' : '#475569',
-    [isLightMode]
-  );
 
   return (
     <div className="w-full h-full bg-background relative" onWheel={handleWheel}>
@@ -182,6 +206,7 @@ function ReactFlowInner({
         nodes={styledNodes}
         edges={styledEdges}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         colorMode={isLightMode ? "light" : "dark"}
@@ -197,10 +222,20 @@ function ReactFlowInner({
       >
         <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
         <Controls />
-        <MiniMap
-          nodeColor={miniMapNodeColor}
-          maskColor={isLightMode ? "rgba(255, 255, 255, 0.7)" : "rgba(10, 10, 16, 0.7)"}
-        />
+        {showMiniMap && (
+          <MiniMap
+            position="bottom-right"
+            nodeColor={isLightMode ? '#94a3b8' : '#64748b'}
+            maskColor={isLightMode ? 'rgba(255, 255, 255, 0.6)' : 'rgba(15, 15, 20, 0.7)'}
+            style={{ 
+              backgroundColor: isLightMode ? '#f8fafc' : '#1e1e2a',
+              borderRadius: '8px',
+              border: `1px solid ${isLightMode ? '#e2e8f0' : '#334155'}`
+            }}
+            pannable
+            zoomable
+          />
+        )}
       </ReactFlow>
       <LayoutController
         nodesep={nodesep}

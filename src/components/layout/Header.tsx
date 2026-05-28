@@ -1,4 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon, Map } from 'lucide-react';
 
 export type GraphLayer = 'ui' | 'backend' | 'overall';
 
@@ -10,9 +10,11 @@ interface HeaderProps {
   onSettingsClick?: () => void;
   isLightMode: boolean;
   setIsLightMode: (val: boolean) => void;
+  showMiniMap?: boolean;
+  setShowMiniMap?: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, isLightMode, setIsLightMode }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap }: HeaderProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
@@ -79,6 +81,21 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
       </div>
 
       <div className="flex items-center gap-1">
+        {/* Map Toggle */}
+        {viewMode === '2d' && setShowMiniMap && (
+          <button
+            onClick={() => setShowMiniMap(!showMiniMap)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              showMiniMap 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                : 'text-text-dim hover:text-text-main hover:bg-glass-light border border-transparent'
+            }`}
+            title="Toggle Mini Map"
+          >
+            <Map size={15} />
+          </button>
+        )}
+
         {/* Theme Toggle */}
         <button
           onClick={() => setIsLightMode(!isLightMode)}

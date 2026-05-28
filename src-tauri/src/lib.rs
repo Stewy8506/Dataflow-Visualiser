@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
 use tree_sitter::Parser as TSParser;
+use regex::Regex;
 
 // Thread-local parsers: constructed once per thread, reused across files.
 thread_local! {
@@ -119,6 +120,13 @@ fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct NodeMetrics {
+    pub function_count: usize,
+    pub import_count: usize,
+    pub complexity_score: String, // "High", "Medium", "Low"
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ParsedNode {
     pub id: String,
@@ -128,6 +136,8 @@ pub struct ParsedNode {
     pub semantic_group: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    #[serde(default)]
+    pub metrics: Option<NodeMetrics>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -136,6 +146,105 @@ pub struct ParsedEdge {
     pub target: String,
     pub via: Option<String>,
     pub is_data_source: bool,
+}
+
+pub struct AliasResolver {
+    paths: HashMap<String, Vec<String>>,
+    monorepo_packages: HashMap<String, String>,
+    _workspace_root: PathBuf,
+}
+
+impl AliasResolver {
+    pub fn new(workspace_root: &Path) -> Self {
+        let mut paths = HashMap::new();
+        let tsconfig_path = workspace_root.join("tsconfig.json");
+        if let Ok(content) = fs::read_to_string(&tsconfig_path) {
+            let re_line = Regex::new(r"(?m)//.*$").unwrap();
+            let re_block = Regex::new(r"(?s)/\*.*?\*/").unwrap();
+            let no_block = re_block.replace_all(&content, "");
+            let no_line = re_line.replace_all(&no_block, "");
+            
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&no_line) {
+                if let Some(compiler_options) = json.get("compilerOptions") {
+                    if let Some(paths_val) = compiler_options.get("paths") {
+                        if let Ok(paths_map) = serde_json::from_value::<HashMap<String, Vec<String>>>(paths_val.clone()) {
+                            paths = paths_map;
+                        }
+                    }
+                }
+            }
+        }
+        if paths.is_empty() {
+            let vite_config = workspace_root.join("vite.config.ts");
+            if let Ok(content) = fs::read_to_string(&vite_config) {
+                let re = Regex::new(r#"["'](@/.*?)["']\s*:\s*["'](.*?)["']"#).unwrap();
+                for cap in re.captures_iter(&content) {
+                    if let (Some(alias), Some(target)) = (cap.get(1), cap.get(2)) {
+                        paths.insert(alias.as_str().to_string(), vec![target.as_str().to_string()]);
+                    }
+                }
+            }
+        }
+        let mut monorepo_packages = HashMap::new();
+        for result in ignore::WalkBuilder::new(workspace_root)
+            .hidden(true)
+            .git_ignore(true)
+            .build()
+        {
+            if let Ok(entry) = result {
+                if entry.path().is_file() && entry.path().file_name().unwrap_or_default() == "package.json" {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(name) = json.get("name").and_then(|n| n.as_str()) {
+                                if let Ok(rel_path) = entry.path().parent().unwrap().strip_prefix(workspace_root) {
+                                    let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+                                    monorepo_packages.insert(name.to_string(), if rel_str.is_empty() { ".".to_string() } else { rel_str });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Self {
+            paths,
+            monorepo_packages,
+            _workspace_root: workspace_root.to_path_buf(),
+        }
+    }
+    
+    pub fn resolve(&self, import_str: &str) -> String {
+        // Monorepo resolution
+        for (pkg_name, pkg_path) in &self.monorepo_packages {
+            if import_str == pkg_name || import_str.starts_with(&format!("{}/", pkg_name)) {
+                let rest = import_str.strip_prefix(pkg_name).unwrap_or("");
+                let mut resolved = format!("{}{}", pkg_path, rest);
+                if resolved.starts_with("./") {
+                    resolved = resolved.strip_prefix("./").unwrap().to_string();
+                }
+                if resolved == "." {
+                    resolved = pkg_path.to_string();
+                }
+                return resolved;
+            }
+        }
+        for (alias, targets) in &self.paths {
+            let alias_prefix = alias.trim_end_matches('*');
+            if import_str.starts_with(alias_prefix) {
+                if let Some(target) = targets.first() {
+                    let target_prefix = target.trim_end_matches('*');
+                    let rest = import_str.strip_prefix(alias_prefix).unwrap_or("");
+                    let mut resolved = format!("{}{}", target_prefix, rest);
+                    if resolved.starts_with("./") {
+                        resolved = resolved.strip_prefix("./").unwrap().to_string();
+                    }
+                    return resolved;
+                }
+            }
+        }
+        import_str.to_string()
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -151,6 +260,7 @@ fn resolve_import_path(
     package_name: Option<&str>,
     node_index: &HashMap<String, usize>,
     nodes: &[ParsedNode],
+    alias_resolver: &AliasResolver,
 ) -> Option<usize> {
     // 1. Clean import path
     let mut import_path = import_str.replace('\\', "/");
@@ -200,10 +310,11 @@ fn resolve_import_path(
         clean_import = clean_import.replace('.', "/");
     }
 
-    let clean_import = clean_import
+    let resolved_alias = alias_resolver.resolve(&clean_import);
+    let clean_import = resolved_alias
         .strip_prefix("@/")
-        .or_else(|| clean_import.strip_prefix("~/"))
-        .unwrap_or(&clean_import);
+        .or_else(|| resolved_alias.strip_prefix("~/"))
+        .unwrap_or(&resolved_alias);
 
     // Candidates checklist
     let mut candidates = Vec::new();
@@ -288,6 +399,8 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     if !path_ref.exists() {
         return Err("Path does not exist".to_string());
     }
+    
+    let alias_resolver = AliasResolver::new(path_ref);
 
     // Try to extract Dart package name from pubspec.yaml for Flutter support
     let mut package_name = None;
@@ -340,12 +453,17 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         group: ext.to_string(),
                         semantic_group: None,
                         summary: None,
+                        metrics: None,
                     });
 
                     let mut imports = Vec::new();
                     let mut is_router = false;
+                    let mut function_count = 0;
 
                     if let Ok(source_text) = fs::read_to_string(file_path) {
+                        let re = Regex::new(r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)").unwrap();
+                        function_count = re.find_iter(&source_text).count();
+
                         if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
                             let allocator = Allocator::default();
                             let source_type = SourceType::from_path(file_path).unwrap_or_default();
@@ -453,6 +571,23 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                             }
                         }
                     }
+                    
+                    let import_count = imports.len();
+                    let score = if function_count > 10 || import_count > 15 {
+                        "High"
+                    } else if function_count > 3 || import_count > 5 {
+                        "Medium"
+                    } else {
+                        "Low"
+                    };
+
+                    if let Some(node) = nodes.last_mut() {
+                        node.metrics = Some(NodeMetrics {
+                            function_count,
+                            import_count,
+                            complexity_score: score.to_string(),
+                        });
+                    }
 
                     files_data.push(FileData {
                         id,
@@ -483,6 +618,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                 package_name.as_deref(),
                 &node_index,
                 &nodes,
+                &alias_resolver,
             ) {
                 edges.push(ParsedEdge {
                     source: file_data.id.clone(),
@@ -842,6 +978,96 @@ fn open_in_ide(path: String, ide: String) -> Result<(), String> {
     status.map(|_| ()).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize, Clone)]
+struct NodeUpdatedPayload {
+    node: ParsedNode,
+    resolved_imports: Vec<(String, bool)>,
+}
+
+#[tauri::command]
+async fn watch_codebase(path: String, window: Window) -> Result<(), String> {
+    use notify::{Watcher, RecursiveMode, EventKind};
+    
+    tauri::async_runtime::spawn(async move {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = notify::recommended_watcher(tx).unwrap();
+        
+        let path_ref = Path::new(&path);
+        let _ = watcher.watch(path_ref, RecursiveMode::Recursive);
+        
+        for res in rx {
+            if let Ok(event) = res {
+                if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+                    for path_buf in event.paths {
+                        if !path_buf.is_file() { continue; }
+                        let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
+                        if !matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") { continue; }
+                        
+                        let id = path_buf.to_string_lossy().replace('\\', "/");
+                        let label = path_buf.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        
+                        let mut imports = Vec::new();
+                        let mut function_count = 0;
+                        
+                        if let Ok(source_text) = fs::read_to_string(&path_buf) {
+                            let re = Regex::new(r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)").unwrap();
+                            function_count = re.find_iter(&source_text).count();
+                            
+                            if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
+                                let allocator = Allocator::default();
+                                let source_type = SourceType::from_path(&path_buf).unwrap_or_default();
+                                let ret = Parser::new(&allocator, &source_text, source_type).parse();
+                                
+                                if ret.errors.is_empty() {
+                                    for stmt in &ret.program.body {
+                                        if let Some(decl) = stmt.as_module_declaration() {
+                                            if let ModuleDeclaration::ImportDeclaration(import_decl) = decl {
+                                                let source = import_decl.source.value.to_string();
+                                                imports.push((source, false));
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                match ext {
+                                    "py" => PYTHON_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
+                                    "rs" => RUST_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
+                                    "dart" => DART_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        
+                        let import_count = imports.len();
+                        let score = if function_count > 10 || import_count > 15 { "High" } else if function_count > 3 || import_count > 5 { "Medium" } else { "Low" };
+                        
+                        let node = ParsedNode {
+                            id: id.clone(),
+                            label,
+                            group: ext.to_string(),
+                            semantic_group: None,
+                            summary: None,
+                            metrics: Some(NodeMetrics { function_count, import_count, complexity_score: score.to_string() }),
+                        };
+                        
+                        let alias_resolver = AliasResolver::new(path_ref);
+                        let mut resolved_imports = Vec::new();
+                        for (imp, is_data) in imports {
+                            let resolved = alias_resolver.resolve(&imp);
+                            let clean = resolved.strip_prefix("@/").or_else(|| resolved.strip_prefix("~/")).unwrap_or(&resolved);
+                            resolved_imports.push((clean.to_string(), is_data));
+                        }
+                        
+                        let _ = window.emit("node_updated", NodeUpdatedPayload { node, resolved_imports });
+                    }
+                }
+            }
+        }
+    });
+    
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -852,7 +1078,8 @@ pub fn run() {
             parse_codebase,
             enrich_graph_with_ai,
             delete_file,
-            open_in_ide
+            open_in_ide,
+            watch_codebase
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

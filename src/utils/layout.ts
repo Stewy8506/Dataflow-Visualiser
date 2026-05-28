@@ -124,6 +124,8 @@ export function getLayoutedElements(
         finalNodes.push({
           ...cleanNode,
           position: { x: finalX, y: finalY },
+          width: nodeWidth,
+          height: nodeHeight,
         });
       });
     }

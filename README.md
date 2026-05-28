@@ -125,11 +125,13 @@ npm run tauri build
 
 ## Roadmap
 
-- [ ] `notify` crate — live filesystem watcher with incremental re-parse on save
-- [ ] `tsconfig.json` paths alias resolution (`@/components/X` imports)
+- [x] `notify` crate — live filesystem watcher with incremental re-parse on save
+- [x] `tsconfig.json` paths alias resolution (`@/components/X` imports)
+- [x] Static complexity metrics extraction (function & import counts) and UI badges
+- [x] Barrel export flattening (`index.ts` bypass)
 - [ ] Monorepo / multi-root workspace support
-- [ ] Fuzzy search/filter bar with canvas highlight and collapse
-- [ ] Mini-map overlay for large codebases
+- [x] Fuzzy search/filter bar with canvas highlight and collapse
+- [x] Mini-map overlay for large codebases
 - [ ] Persistent node layout across sessions
 - [ ] Ollama + Anthropic AI panel UI
 - [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)

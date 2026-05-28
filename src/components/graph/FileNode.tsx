@@ -170,16 +170,35 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
 
           {/* Bottom badge */}
           <div className="flex items-center justify-between mt-3 pt-2 border-t border-border-subtle">
-            {data.semantic_group ? (
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-semibold bg-primary/10 text-primary-light border border-primary/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary-light animate-pulse" />
-                AI Enriched
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider text-text-dim border border-border-subtle bg-surface">
-                {data.subLabel && data.subLabel !== 'File' ? data.subLabel : data.type}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {data.semantic_group ? (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-semibold bg-primary/10 text-primary-light border border-primary/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary-light animate-pulse" />
+                  AI Enriched
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider text-text-dim border border-border-subtle bg-surface">
+                  {data.subLabel && data.subLabel !== 'File' ? data.subLabel : data.type}
+                </span>
+              )}
+              
+              {data.metrics && (
+                <div 
+                  className={`group relative px-2 py-0.5 rounded text-[9px] font-semibold tracking-wider uppercase border cursor-help ${
+                    data.metrics.complexity_score === 'High' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                    data.metrics.complexity_score === 'Medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}
+                >
+                  Cx: {data.metrics.complexity_score}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block w-max bg-[#1a1a24] text-text-main text-[10px] p-2 rounded border border-border-subtle shadow-xl z-50">
+                    <div className="font-bold border-b border-border-subtle pb-1 mb-1">Metrics</div>
+                    <div>Functions: {data.metrics.function_count}</div>
+                    <div>Imports: {data.metrics.import_count}</div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full" style={{ background: accent.color, opacity: 0.7 }} />
