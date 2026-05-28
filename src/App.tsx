@@ -11,35 +11,35 @@ import { Header, GraphLayer } from "./components/layout/Header";
 import { BottomPanel } from "./components/layout/BottomPanel";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
-import { getLayoutedElements } from "./utils/layout";
+import { getLayoutedElements } from "./utils/layout"; // Layout and spacing utility
 import { Edge, MarkerType } from "@xyflow/react";
 
 interface GraphData {
   nodes: { id: string; label: string; group: string; semantic_group?: string; summary?: string }[];
-  edges: { source: string; target: string; via: string | null }[];
+  edges: { source: string; target: string; via: string | null; is_data_source?: boolean }[];
 }
 
 function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [activeLayer, setActiveLayer] = useState<GraphLayer>('overall');
-  
+
   // Data state
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
   const [flowNodes, setFlowNodes] = useState<any[]>([]);
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
-  
+
   // UI state
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
-  
+
   // Layout spacing state
   const [nodesep, setNodesep] = useState(70);
   const [ranksep, setRanksep] = useState(400);
-  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('LR');
-  
+  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('TB');
+
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -58,7 +58,7 @@ function App() {
         .then(res => res.json())
         .then(data => {
           if (data.models) {
-            const generateContentModels = data.models.filter((m: any) => 
+            const generateContentModels = data.models.filter((m: any) =>
               m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent')
             );
             setAvailableModels(generateContentModels);
@@ -80,15 +80,15 @@ function App() {
         directory: true,
         multiple: false,
       });
-      
+
       if (path) {
         setIsParsing(true);
         setLogs(prev => [...prev, `> Selected directory: ${path}`, '> Parsing codebase...']);
-        
+
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         const result: GraphData = await invoke("parse_codebase", { path });
-        
+
         setRawGraphData(result);
         setSelectedPath(path);
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
@@ -118,10 +118,10 @@ function App() {
   useEffect(() => {
     const unlisten = listen("ai_nodes_enriched", (event) => {
       const enrichedNodes = event.payload as { id: string; semantic_group: string; summary: string }[];
-      
+
       setRawGraphData(prev => {
         if (!prev) return prev;
-        
+
         const newNodes = prev.nodes.map(node => {
           const enrichment = enrichedNodes.find(en => en.id === node.id);
           if (enrichment) {
@@ -133,13 +133,13 @@ function App() {
           }
           return node;
         });
-        
+
         return {
           ...prev,
           nodes: newNodes
         };
       });
-      
+
       setLogs(prev => [...prev, `> AI enriched ${enrichedNodes.length} nodes.`]);
     });
 
@@ -164,11 +164,8 @@ function App() {
       inDegrees.set(e.target, (inDegrees.get(e.target) || 0) + 1);
     });
 
-    const layoutNodes = rawGraphData.nodes.filter(n => n.label.startsWith('layout.'));
-
-    // Filter nodes based on active layer, excluding layouts from graph nodes
+    // Filter nodes based on active layer
     const filteredRawNodes = rawGraphData.nodes.filter(n => {
-      if (n.label.startsWith('layout.')) return false;
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
       if (activeLayer === 'ui') return !isBackend;
       if (activeLayer === 'backend') return isBackend;
@@ -178,7 +175,7 @@ function App() {
     const validNodeIds = new Set(filteredRawNodes.map(n => n.id));
 
     // Filter edges
-    const filteredRawEdges = rawGraphData.edges.filter(e => 
+    const filteredRawEdges = rawGraphData.edges.filter(e =>
       validNodeIds.has(e.source) && validNodeIds.has(e.target)
     );
 
@@ -194,16 +191,11 @@ function App() {
       setLogs(prev => [...prev, `> Permanently deleted: ${nodePath}`]);
     };
 
-    const getDir = (filePath: string) => {
-      const parts = filePath.split('/');
-      parts.pop();
-      return parts.join('/') + '/';
-    };
 
     const initialNodes = filteredRawNodes.map((n) => {
       let subLabel = 'File';
       let isBackend = false;
-      
+
       if (n.id.includes('/api/') || n.label.startsWith('route.')) {
         subLabel = 'API Route';
         isBackend = true;
@@ -233,14 +225,7 @@ function App() {
         layerIndex = 1; // UI components layer
       }
 
-      // Calculate parent layouts wrapping this node
-      const inheritedLayouts = layoutNodes
-        .filter(lay => n.id.startsWith(getDir(lay.id)))
-        .map(lay => {
-          const parts = lay.id.split('/');
-          const dirName = parts.length > 2 ? parts[parts.length - 2] : '';
-          return dirName ? `${dirName}/layout.tsx` : 'layout.tsx';
-        });
+
 
       return {
         id: n.id,
@@ -258,40 +243,76 @@ function App() {
           isDeadCode,
           onDelete: () => handleDeleteNode(n.id, n.id),
           direction: layoutDirection,
-          layouts: inheritedLayouts,
           layerIndex
         }
       };
     });
 
-    const initialEdges: Edge[] = filteredRawEdges.map((e, i) => ({
-      id: `e-${i}`,
+    const initialEdges: Edge[] = filteredRawEdges.map((e, i) => {
+      let isSource = e.is_data_source === true;
+
+      const sourceId = isSource ? e.target : e.source;
+      const targetId = isSource ? e.source : e.target;
+
+      return {
+        id: `e-${i}`,
+        source: sourceId,
+        target: targetId,
+        type: 'default',
+        animated: true,
+        label: e.via ? `via ${e.via}` : undefined,
+        labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+        labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9, stroke: '#334155', strokeWidth: 1 },
+        labelBgPadding: [6, 3],
+        labelBgBorderRadius: 6,
+        style: { stroke: '#475569', strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#475569',
+        },
+      };
+    });
+
+    const dagreEdges: Edge[] = initialEdges.map((e) => ({
+      id: e.id,
       source: e.source,
       target: e.target,
-      type: 'default',
-      animated: true,
-      label: e.via ? `via ${e.via}` : undefined,
-      labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
-      labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9, stroke: '#334155', strokeWidth: 1 },
-      labelBgPadding: [6, 3],
-      labelBgBorderRadius: 6,
-      style: { stroke: '#475569', strokeWidth: 2 },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: '#475569',
-      },
     }));
 
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+    const { nodes: layoutedNodes } = getLayoutedElements(
       initialNodes,
-      initialEdges,
+      dagreEdges,
       layoutDirection,
       nodesep,
       ranksep
     );
 
+    const styledEdges = initialEdges.map(e => {
+       const sourceNode = layoutedNodes.find(n => n.id === e.source);
+       const targetNode = layoutedNodes.find(n => n.id === e.target);
+       let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
+       let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
+
+       if (sourceNode && targetNode) {
+          if (layoutDirection === 'TB') {
+             // If target is ABOVE source, flow UP from source TOP to target BOTTOM
+             if (targetNode.position.y < sourceNode.position.y) {
+                 sourceHandle = 'top-source';
+                 targetHandle = 'bottom-target';
+             }
+          } else {
+             // If target is LEFT of source, flow LEFT from source LEFT to target RIGHT
+             if (targetNode.position.x < sourceNode.position.x) {
+                 sourceHandle = 'left-source';
+                 targetHandle = 'right-target';
+             }
+          }
+       }
+       return { ...e, sourceHandle, targetHandle };
+    });
+
     setFlowNodes(layoutedNodes);
-    setFlowEdges(layoutedEdges);
+    setFlowEdges(styledEdges);
 
   }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep]);
 
@@ -302,7 +323,7 @@ function App() {
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
         </div>
-        
+
         <div className="z-10 flex flex-col items-center bg-slate-900/50 p-12 rounded-3xl border border-slate-800 backdrop-blur-xl shadow-2xl max-w-md text-center">
           <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-emerald-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-6">
             <Sparkles className="text-white" size={32} />
@@ -311,7 +332,7 @@ function App() {
           <p className="text-slate-400 mb-8 text-sm">
             Visualize your codebase architecture in stunning 2D and 3D graphs.
           </p>
-          
+
           <button
             onClick={handleSelectDirectory}
             className="flex items-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl transition-all duration-300 font-semibold shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:-translate-y-0.5 cursor-pointer mb-4"
@@ -319,7 +340,7 @@ function App() {
             <FolderOpen size={20} />
             <span>Select Project Folder</span>
           </button>
-          
+
           <button
             onClick={() => setShowSettings(true)}
             className="text-slate-400 hover:text-white transition-colors text-sm underline flex items-center justify-center space-x-2"
@@ -341,7 +362,7 @@ function App() {
                   placeholder="AIzaSy..."
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 mb-4"
                 />
-                
+
                 <label className="block text-slate-400 text-sm mb-2">AI Model</label>
                 <select
                   value={selectedModel}
@@ -361,8 +382,8 @@ function App() {
                     <option value={selectedModel}>{selectedModel}</option>
                   )}
                 </select>
-                 <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
-                
+                <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
+
                 <div className="flex items-center space-x-2 mt-4 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
                   <input
                     type="checkbox"
@@ -416,22 +437,22 @@ function App() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <Header 
-          viewMode={viewMode} 
-          onViewModeChange={setViewMode} 
+        <Header
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           activeLayer={activeLayer}
           onLayerChange={setActiveLayer}
           onSettingsClick={() => setShowSettings(true)}
         />
-        
+
         <div className="flex-1 relative overflow-hidden bg-[#050510]">
           {viewMode === '2d' ? (
-            <ReactFlowGraph 
-              nodes={flowNodes} 
-              edges={flowEdges} 
-              onNodeSelect={setSelectedNode} 
+            <ReactFlowGraph
+              nodes={flowNodes}
+              edges={flowEdges}
+              onNodeSelect={setSelectedNode}
               nodesep={nodesep}
               setNodesep={setNodesep}
               ranksep={ranksep}
@@ -440,14 +461,14 @@ function App() {
               setDirection={setLayoutDirection}
             />
           ) : (
-            <ThreeDGraph 
-              graphData={rawGraphData} 
+            <ThreeDGraph
+              graphData={rawGraphData}
               selectedNode={selectedNode}
               onNodeSelect={setSelectedNode}
             />
           )}
         </div>
-        
+
         <BottomPanel selectedNode={selectedNode} logs={logs} />
       </div>
 
@@ -464,7 +485,7 @@ function App() {
                 placeholder="AIzaSy..."
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 mb-4"
               />
-              
+
               <label className="block text-slate-400 text-sm mb-2">AI Model</label>
               <select
                 value={selectedModel}
@@ -485,7 +506,7 @@ function App() {
                 )}
               </select>
               <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
-              
+
               <div className="flex items-center space-x-2 mt-4 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
                 <input
                   type="checkbox"

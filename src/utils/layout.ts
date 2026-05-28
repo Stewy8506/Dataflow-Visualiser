@@ -16,12 +16,19 @@ export function getLayoutedElements(
 
   dagreGraph.setGraph({ rankdir: direction, nodesep, ranksep, ranker: 'network-simplex' });
 
+  const inDegree = new Map<string, number>();
+  const outDegree = new Map<string, number>();
+
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    inDegree.set(node.id, 0);
+    outDegree.set(node.id, 0);
   });
 
   edges.forEach((edge) => {
     dagreGraph.setEdge(edge.source, edge.target);
+    outDegree.set(edge.source, (outDegree.get(edge.source) || 0) + 1);
+    inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
   });
 
   dagre.layout(dagreGraph);
@@ -60,40 +67,66 @@ export function getLayoutedElements(
 
   for (const key of sortedRankKeys) {
     const group = rankGroups.get(key)!;
-    // Sort nodes within the rank by the secondary axis to preserve Dagre's crossing minimization
-    group.sort((a, b) => isLR ? a.dagreY - b.dagreY : a.dagreX - b.dagreX);
+    
+    // Sort nodes within the rank. 
+    // Nodes with more incoming than outgoing go on the left (lower index).
+    // Nodes with more outgoing than incoming go on the right (higher index).
+    group.sort((a, b) => {
+      const inA = inDegree.get(a.id) || 0;
+      const outA = outDegree.get(a.id) || 0;
+      const totalA = inA + outA;
+      const ratioA = totalA === 0 ? 0.5 : inA / totalA;
+
+      const inB = inDegree.get(b.id) || 0;
+      const outB = outDegree.get(b.id) || 0;
+      const totalB = inB + outB;
+      const ratioB = totalB === 0 ? 0.5 : inB / totalB;
+
+      if (Math.abs(ratioB - ratioA) < 0.01) {
+        // Fallback to Dagre's crossing minimization coordinate
+        return isLR ? a.dagreY - b.dagreY : a.dagreX - b.dagreX;
+      }
+      return ratioB - ratioA; // Descending order: highest incoming ratio first (left)
+    });
 
     // Limit the maximum number of rows to balance vertical/horizontal spread
     const maxItemsPerLine = 10;
     const lines = Math.ceil(group.length / maxItemsPerLine);
     const intraRankGap = 150; // Increased to prevent horizontal overlaps
 
-    group.forEach((node, index) => {
-      const lineIndex = Math.floor(index / maxItemsPerLine);
-      const itemIndex = index % maxItemsPerLine;
+    for (let lineIndex = 0; lineIndex < lines; lineIndex++) {
+      const rowNodes = group.slice(lineIndex * maxItemsPerLine, (lineIndex + 1) * maxItemsPerLine);
+      
+      // 1. Sort nodes within the row by Dagre's optimized coordinates to minimize crossing
+      rowNodes.sort((a, b) => isLR ? a.dagreY - b.dagreY : a.dagreX - b.dagreX);
 
-      // Stagger alternating columns to break the rigid grid look and allow edges to flow better
-      const staggerOffset = (lineIndex % 2 === 1) ? (nodeHeight + nodesep) / 2 : 0;
+      // 2. Calculate center alignment offset for short rows
+      const itemsInThisLine = rowNodes.length;
+      const totalSpanForThisLine = isLR ? itemsInThisLine * (nodeHeight + nodesep) : itemsInThisLine * (nodeWidth + nodesep);
+      const maxSpan = isLR ? maxItemsPerLine * (nodeHeight + nodesep) : maxItemsPerLine * (nodeWidth + nodesep);
+      const centerOffset = (maxSpan - totalSpanForThisLine) / 2;
 
-      let finalX = 0;
-      let finalY = 0;
+      rowNodes.forEach((node, itemIndex) => {
+        let finalX = 0;
+        let finalY = 0;
 
-      if (isLR) {
-        finalX = currentOffset + lineIndex * (nodeWidth + intraRankGap);
-        finalY = itemIndex * (nodeHeight + nodesep) + staggerOffset;
-      } else {
-        finalX = itemIndex * (nodeWidth + nodesep) + staggerOffset;
-        finalY = currentOffset + lineIndex * (nodeHeight + intraRankGap);
-      }
+        if (isLR) {
+          finalX = currentOffset + lineIndex * (nodeWidth + intraRankGap);
+          finalY = centerOffset + itemIndex * (nodeHeight + nodesep);
+        } else {
+          finalX = centerOffset + itemIndex * (nodeWidth + nodesep);
+          finalY = currentOffset + lineIndex * (nodeHeight + intraRankGap);
+        }
 
-      // Remove temporary dagre properties
-      const { dagreX, dagreY, ...cleanNode } = node;
+        // Remove temporary dagre properties
+        const { dagreX, dagreY, ...cleanNode } = node;
 
-      finalNodes.push({
-        ...cleanNode,
-        position: { x: finalX, y: finalY },
+        finalNodes.push({
+          ...cleanNode,
+          position: { x: finalX, y: finalY },
+        });
       });
-    });
+    }
 
     // Advance the offset for the next rank
     if (isLR) {

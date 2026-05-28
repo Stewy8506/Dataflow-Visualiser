@@ -1,6 +1,6 @@
 use ignore::{DirEntry, WalkBuilder};
 use oxc_allocator::Allocator;
-use oxc_ast::ast::ModuleDeclaration;
+use oxc_ast::ast::{ModuleDeclaration, ImportDeclarationSpecifier};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,7 @@ pub struct ParsedEdge {
     pub source: String,
     pub target: String,
     pub via: Option<String>,
+    pub is_data_source: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -74,7 +75,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     struct FileData {
         id: String,
         path: PathBuf,
-        imports: Vec<String>,
+        imports: Vec<(String, bool)>,
         is_router: bool,
     }
 
@@ -123,7 +124,37 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                 if let Some(decl) = stmt.as_module_declaration() {
                                     match decl {
                                         ModuleDeclaration::ImportDeclaration(import_decl) => {
-                                            imports.push(import_decl.source.value.to_string());
+                                            let source = import_decl.source.value.to_string();
+                                            let mut local_names = Vec::new();
+                                            if let Some(specifiers) = &import_decl.specifiers {
+                                                for spec in specifiers {
+                                                    match spec {
+                                                        ImportDeclarationSpecifier::ImportSpecifier(s) => {
+                                                            local_names.push(s.local.name.to_string());
+                                                        }
+                                                        ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
+                                                            local_names.push(s.local.name.to_string());
+                                                        }
+                                                        ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
+                                                            local_names.push(s.local.name.to_string());
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            let mut is_data_source = false;
+                                            for name in local_names {
+                                                let jsx_pattern = format!("<{}", name);
+                                                let call_pattern = format!("{}(", name);
+                                                let call_pattern_space = format!("{} (", name);
+
+                                                if (source_text.contains(&call_pattern) || source_text.contains(&call_pattern_space)) && !source_text.contains(&jsx_pattern) {
+                                                    is_data_source = true;
+                                                    break;
+                                                }
+                                            }
+
+                                            imports.push((source, is_data_source));
                                         }
                                         ModuleDeclaration::ExportAllDeclaration(_) => {
                                             has_exports = true;
@@ -172,8 +203,8 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         for import_str in &file_data.imports {
             let mut matched = false;
 
-            if import_str.starts_with('.') {
-                let resolved = normalize_path(&dir.join(import_str));
+            if import_str.0.starts_with('.') {
+                let resolved = normalize_path(&dir.join(&import_str.0));
                 // Try different extensions or index files
                 let possible_paths = vec![
                     resolved.with_extension("ts"),
@@ -197,6 +228,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                             source: file_data.id.clone(),
                             target: target_node.id.clone(),
                             via: None,
+                            is_data_source: import_str.1,
                         });
                         matched = true;
                         break;
@@ -206,10 +238,10 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
 
             // Fallback for path aliases (e.g., @/components/Button) or baseUrl imports
             if !matched {
-                let clean_import = import_str
+                let clean_import = import_str.0
                     .strip_prefix("@/")
-                    .or_else(|| import_str.strip_prefix("~/"))
-                    .unwrap_or(import_str);
+                    .or_else(|| import_str.0.strip_prefix("~/"))
+                    .unwrap_or(&import_str.0);
 
                 // Ignore likely node_modules without slashes unless they match exactly
                 let suffixes = vec![
@@ -231,6 +263,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                 source: file_data.id.clone(),
                                 target: node.id.clone(),
                                 via: None,
+                                is_data_source: import_str.1,
                             });
                             found = true;
                             break;
@@ -287,6 +320,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                 source: l.id.clone(),
                 target: r_node.id.clone(),
                 via: None,
+                is_data_source: false, // Layout -> Route is a control flow
             });
         }
     }
@@ -322,6 +356,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         source: parent_l.id.clone(),
                         target: l_node.id.clone(),
                         via: None,
+                        is_data_source: false, // Parent Layout -> Child Layout
                     });
                 }
             }
@@ -373,6 +408,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         source: inc.source.clone(),
                         target: out.target.clone(),
                         via: new_via,
+                        is_data_source: inc.is_data_source || out.is_data_source,
                     });
                 }
             }

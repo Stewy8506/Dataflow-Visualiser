@@ -46,14 +46,17 @@ export function ReactFlowGraph({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  const activeNodeId = hoveredNodeId || selectedNodeId;
 
   const connectedNodes = useMemo(() => {
-    if (!selectedNodeId) return null;
+    if (!activeNodeId) return null;
     const connected = new Set<string>();
-    connected.add(selectedNodeId);
+    connected.add(activeNodeId);
 
     // BFS to find descendants
-    let queue = [selectedNodeId];
+    let queue = [activeNodeId];
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const edge of initialEdges) {
@@ -65,7 +68,7 @@ export function ReactFlowGraph({
     }
 
     // BFS to find ancestors
-    queue = [selectedNodeId];
+    queue = [activeNodeId];
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const edge of initialEdges) {
@@ -77,7 +80,7 @@ export function ReactFlowGraph({
     }
 
     return connected;
-  }, [selectedNodeId, initialEdges]);
+  }, [activeNodeId, initialEdges]);
 
   // Update state if initial props or selection changes
   useEffect(() => {
@@ -98,24 +101,42 @@ export function ReactFlowGraph({
     });
 
     const styledEdges = initialEdges.map(edge => {
-      const isConnected = connectedNodes ? connectedNodes.has(edge.source) && connectedNodes.has(edge.target) : true;
-      const isDirectlyConnected = selectedNodeId === edge.source || selectedNodeId === edge.target;
+      const isConnected = connectedNodes ? connectedNodes.has(edge.source) && connectedNodes.has(edge.target) : false;
+      const isOutgoing = activeNodeId === edge.source;
+      const isIncoming = activeNodeId === edge.target;
+      const isDirectlyConnected = isOutgoing || isIncoming;
+      const noActiveNode = !activeNodeId;
+      
+      let strokeColor = '#64748b'; // default slate
+      if (isOutgoing) {
+        strokeColor = '#10b981'; // emerald-500 (Outgoing)
+      } else if (isIncoming) {
+        strokeColor = '#3b82f6'; // blue-500 (Incoming)
+      } else if (isConnected) {
+        strokeColor = '#94a3b8'; // slate-400 (Indirectly connected)
+      }
+
+      const markerEnd = edge.markerEnd && typeof edge.markerEnd === 'object'
+        ? { ...edge.markerEnd, color: strokeColor }
+        : edge.markerEnd;
+
       return {
         ...edge,
         style: {
           ...edge.style,
-          opacity: isConnected ? 0.6 : 0.1,
-          strokeWidth: isDirectlyConnected ? 4 : 2,
-          stroke: isDirectlyConnected ? '#38bdf8' : '#64748b',
+          opacity: noActiveNode ? 0.15 : (isConnected ? 0.8 : 0.05),
+          strokeWidth: isDirectlyConnected ? 3 : 2,
+          stroke: strokeColor,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         },
+        markerEnd,
         animated: isConnected && isDirectlyConnected,
       };
     });
 
     setNodes(styledNodes);
     setEdges(styledEdges);
-  }, [initialNodes, initialEdges, connectedNodes, selectedNodeId, setNodes, setEdges]);
+  }, [initialNodes, initialEdges, connectedNodes, selectedNodeId, activeNodeId, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
@@ -141,6 +162,8 @@ export function ReactFlowGraph({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
+        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
+        onNodeMouseLeave={() => setHoveredNodeId(null)}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         colorMode="dark"

@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2, Layers } from 'lucide-react';
+import { FileCode, FileType, Layout, Trash2 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/core';
@@ -7,7 +7,7 @@ import { confirm } from '@tauri-apps/plugin-dialog';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-}export function FileNode({ data, selected }: any) {
+} export function FileNode({ data, selected }: any) {
   const isBackend = data.isBackend;
   const isHorizontal = data.direction !== 'TB';
 
@@ -33,9 +33,19 @@ function cn(...inputs: ClassValue[]) {
       <Handle
         type="target"
         position={isHorizontal ? Position.Left : Position.Top}
+        id={isHorizontal ? "left" : "top"}
         className={cn(
           "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
           isHorizontal ? "!-left-[7px]" : "!-top-[7px]"
+        )}
+      />
+      <Handle
+        type="source"
+        position={isHorizontal ? Position.Left : Position.Top}
+        id={isHorizontal ? "left-source" : "top-source"}
+        className={cn(
+          "opacity-0 w-1 h-1 pointer-events-none",
+          isHorizontal ? "!-left-[5px]" : "!-top-[5px]"
         )}
       />
       <div className="p-4 relative">
@@ -89,27 +99,18 @@ function cn(...inputs: ClassValue[]) {
                   {data.label}
                 </span>
               </div>
-              
+
               {data.semantic_group && (
                 <span className="px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 whitespace-nowrap ml-2 shrink-0">
                   {data.semantic_group}
                 </span>
               )}
             </div>
-            
+
             {data.summary && (
               <p className="text-sm text-slate-300 mt-3 leading-snug line-clamp-2">
                 {data.summary}
               </p>
-            )}
-
-            {data.layouts && data.layouts.length > 0 && (
-              <div className="flex items-center space-x-1.5 mt-3.5 px-2.5 py-1.5 bg-violet-950/45 text-violet-300 border border-violet-800/30 rounded-xl text-[10px] font-semibold tracking-wide w-fit shadow-inner animate-in fade-in slide-in-from-bottom-1 duration-200">
-                <Layers size={12} className="text-violet-400 shrink-0" />
-                <span className="truncate max-w-[180px]">
-                  Wrapped by {data.layouts[data.layouts.length - 1]}
-                </span>
-              </div>
             )}
           </div>
           {data.semantic_group ? (
@@ -127,9 +128,19 @@ function cn(...inputs: ClassValue[]) {
       <Handle
         type="source"
         position={isHorizontal ? Position.Right : Position.Bottom}
+        id={isHorizontal ? "right" : "bottom"}
         className={cn(
           "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
           isHorizontal ? "!-right-[7px]" : "!-bottom-[7px]"
+        )}
+      />
+      <Handle
+        type="target"
+        position={isHorizontal ? Position.Right : Position.Bottom}
+        id={isHorizontal ? "right-target" : "bottom-target"}
+        className={cn(
+          "opacity-0 w-1 h-1 pointer-events-none",
+          isHorizontal ? "!-right-[5px]" : "!-bottom-[5px]"
         )}
       />
     </div>
