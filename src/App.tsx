@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Sparkles } from "lucide-react";
@@ -6,7 +6,7 @@ import "./App.css";
 
 // Components
 import { Sidebar } from "./components/layout/Sidebar";
-import { Header } from "./components/layout/Header";
+import { Header, GraphLayer } from "./components/layout/Header";
 import { BottomPanel } from "./components/layout/BottomPanel";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
@@ -21,6 +21,7 @@ interface GraphData {
 function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [activeLayer, setActiveLayer] = useState<GraphLayer>('overall');
   
   // Data state
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
@@ -43,7 +44,6 @@ function App() {
         setIsParsing(true);
         setLogs(prev => [...prev, `> Selected directory: ${path}`, '> Parsing codebase...']);
         
-        // This simulates a short delay so the user sees the loading state if parsing is too fast
         await new Promise(resolve => setTimeout(resolve, 500));
         
         const result: GraphData = await invoke("parse_codebase", { path });
@@ -51,41 +51,6 @@ function App() {
         setRawGraphData(result);
         setSelectedPath(path);
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
-        
-        // Convert to React Flow format
-        const initialNodes = result.nodes.map((n) => ({
-          id: n.id,
-          type: 'fileNode',
-          position: { x: 0, y: 0 },
-          data: {
-            label: n.label,
-            subLabel: n.group === 'tsx' || n.group === 'jsx' ? 'React Component' : 
-                      n.group === 'ts' || n.group === 'js' ? 'Script' : 'File',
-            group: n.group,
-            type: n.group.toUpperCase()
-          }
-        }));
-
-        const initialEdges: Edge[] = result.edges.map((e, i) => ({
-          id: `e-${i}`,
-          source: e.source,
-          target: e.target,
-          type: 'smoothstep',
-          animated: true,
-          style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: '#475569',
-          },
-        }));
-
-        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-          initialNodes,
-          initialEdges
-        );
-
-        setFlowNodes(layoutedNodes);
-        setFlowEdges(layoutedEdges);
         setIsParsing(false);
       }
     } catch (e) {
@@ -94,6 +59,81 @@ function App() {
       setIsParsing(false);
     }
   };
+
+  useEffect(() => {
+    if (!rawGraphData) return;
+
+    // Filter nodes based on active layer
+    const filteredRawNodes = rawGraphData.nodes.filter(n => {
+      const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
+      if (activeLayer === 'ui') return !isBackend;
+      if (activeLayer === 'backend') return isBackend;
+      return true; // overall
+    });
+
+    const validNodeIds = new Set(filteredRawNodes.map(n => n.id));
+
+    // Filter edges
+    const filteredRawEdges = rawGraphData.edges.filter(e => 
+      validNodeIds.has(e.source) && validNodeIds.has(e.target)
+    );
+
+    const initialNodes = filteredRawNodes.map((n) => {
+      let subLabel = 'File';
+      let isBackend = false;
+      
+      if (n.id.includes('/api/') || n.label.startsWith('route.')) {
+        subLabel = 'API Route';
+        isBackend = true;
+      } else if (n.id.includes('/server/') || n.id.includes('/backend/')) {
+        subLabel = 'Backend Service';
+        isBackend = true;
+      } else if (n.id.includes('src-tauri')) {
+        subLabel = 'Rust Backend';
+        isBackend = true;
+      } else if (n.group === 'tsx' || n.group === 'jsx') {
+        subLabel = 'React Component';
+      } else if (n.group === 'ts' || n.group === 'js') {
+        subLabel = 'Script';
+      }
+
+      return {
+        id: n.id,
+        type: 'fileNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: n.label,
+          subLabel,
+          group: n.group,
+          type: n.group.toUpperCase(),
+          isBackend
+        }
+      };
+    });
+
+    const initialEdges: Edge[] = filteredRawEdges.map((e, i) => ({
+      id: `e-${i}`,
+      source: e.source,
+      target: e.target,
+      type: 'smoothstep',
+      animated: true,
+      style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#475569',
+      },
+    }));
+
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      initialNodes,
+      initialEdges,
+      'LR'
+    );
+
+    setFlowNodes(layoutedNodes);
+    setFlowEdges(layoutedEdges);
+
+  }, [rawGraphData, activeLayer]);
 
   if (!selectedPath && !isParsing) {
     return (
@@ -140,7 +180,12 @@ function App() {
       <Sidebar />
       
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <Header viewMode={viewMode} onViewModeChange={setViewMode} />
+        <Header 
+          viewMode={viewMode} 
+          onViewModeChange={setViewMode} 
+          activeLayer={activeLayer}
+          onLayerChange={setActiveLayer}
+        />
         
         <div className="flex-1 relative overflow-hidden bg-[#050510]">
           {viewMode === '2d' ? (

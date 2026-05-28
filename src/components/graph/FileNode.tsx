@@ -25,13 +25,19 @@ function getIconForGroup(group: string) {
 }
 
 export function FileNode({ data, selected }: any) {
+  const isBackend = data.isBackend;
+
   return (
     <div
       className={cn(
         "bg-slate-900/90 backdrop-blur-md border rounded-xl min-w-[220px] transition-all duration-200 shadow-xl",
         selected
-          ? "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)] ring-1 ring-blue-500"
-          : "border-slate-700 hover:border-slate-500"
+          ? isBackend 
+            ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500"
+            : "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)] ring-1 ring-blue-500"
+          : isBackend
+            ? "border-emerald-900/50 hover:border-emerald-700"
+            : "border-slate-700 hover:border-slate-500"
       )}
     >
       <Handle 

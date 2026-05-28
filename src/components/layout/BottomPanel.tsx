@@ -14,12 +14,27 @@ interface BottomPanelProps {
 
 export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'matrix' | 'console'>('inspector');
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const tabs = [
     { id: 'inspector', label: 'Node Inspector' },
     { id: 'matrix', label: 'Dependency Matrix' },
     { id: 'console', label: 'Console Logs' },
   ] as const;
+
+  if (isCollapsed) {
+    return (
+      <div 
+        className="h-10 border-t border-slate-800 bg-[#111115] flex items-center justify-center px-4 z-10 flex-shrink-0 cursor-pointer hover:bg-slate-800/50 transition-colors"
+        onClick={() => setIsCollapsed(false)}
+      >
+        <div className="flex items-center space-x-2 text-text-muted">
+          <span className="text-xs font-semibold uppercase tracking-wider">Show Panel</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-64 border-t border-slate-800 bg-[#111115] flex flex-col z-10 flex-shrink-0">
@@ -42,11 +57,18 @@ export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
           ))}
         </div>
         <div className="flex space-x-2">
-          <button className="text-slate-500 hover:text-white p-2 cursor-pointer">
-            <span className="sr-only">Minimize</span>
+          <button 
+            className="text-slate-500 hover:text-white p-2 cursor-pointer transition-colors"
+            onClick={() => setIsCollapsed(true)}
+            title="Minimize"
+          >
             <div className="w-3 h-0.5 bg-current" />
           </button>
-          <button className="text-slate-500 hover:text-white p-2 cursor-pointer">
+          <button 
+            className="text-slate-500 hover:text-white p-2 cursor-pointer transition-colors"
+            onClick={() => setIsCollapsed(true)}
+            title="Close"
+          >
             <X size={16} />
           </button>
         </div>
