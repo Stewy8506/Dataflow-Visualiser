@@ -15,7 +15,7 @@ import { Edge, MarkerType } from "@xyflow/react";
 
 interface GraphData {
   nodes: { id: string; label: string; group: string }[];
-  edges: { source: string; target: string }[];
+  edges: { source: string; target: string; via: string | null }[];
 }
 
 function App() {
@@ -118,6 +118,11 @@ function App() {
       target: e.target,
       type: 'default',
       animated: true,
+      label: e.via ? `via ${e.via}` : undefined,
+      labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+      labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9, stroke: '#334155', strokeWidth: 1 },
+      labelBgPadding: [6, 3],
+      labelBgBorderRadius: 6,
       style: { stroke: '#475569', strokeWidth: 2 },
       markerEnd: {
         type: MarkerType.ArrowClosed,

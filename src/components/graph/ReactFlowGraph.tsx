@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -27,12 +27,77 @@ interface ReactFlowGraphProps {
 export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNodeSelect }: ReactFlowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  // Update state if initial props change
+  const connectedNodes = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const connected = new Set<string>();
+    connected.add(selectedNodeId);
+
+    // BFS to find descendants
+    let queue = [selectedNodeId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const edge of initialEdges) {
+        if (edge.source === current && !connected.has(edge.target)) {
+          connected.add(edge.target);
+          queue.push(edge.target);
+        }
+      }
+    }
+
+    // BFS to find ancestors
+    queue = [selectedNodeId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const edge of initialEdges) {
+        if (edge.target === current && !connected.has(edge.source)) {
+          connected.add(edge.source);
+          queue.push(edge.source);
+        }
+      }
+    }
+
+    return connected;
+  }, [selectedNodeId, initialEdges]);
+
+  // Update state if initial props or selection changes
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+    const styledNodes = initialNodes.map(node => {
+      const isConnected = connectedNodes ? connectedNodes.has(node.id) : true;
+      const isSelected = selectedNodeId === node.id;
+      return {
+        ...node,
+        selected: isSelected,
+        style: {
+          ...node.style,
+          opacity: isConnected ? 1 : 0.2,
+          filter: isConnected ? 'none' : 'grayscale(100%) blur(1px)',
+          pointerEvents: isConnected ? 'all' : 'none',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        }
+      };
+    });
+
+    const styledEdges = initialEdges.map(edge => {
+      const isConnected = connectedNodes ? connectedNodes.has(edge.source) && connectedNodes.has(edge.target) : true;
+      const isDirectlyConnected = selectedNodeId === edge.source || selectedNodeId === edge.target;
+      return {
+        ...edge,
+        style: {
+          ...edge.style,
+          opacity: isConnected ? 1 : 0.05,
+          strokeWidth: isDirectlyConnected ? 3 : 2,
+          stroke: isDirectlyConnected ? '#3b82f6' : '#475569',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        },
+        animated: isConnected,
+      };
+    });
+
+    setNodes(styledNodes);
+    setEdges(styledEdges);
+  }, [initialNodes, initialEdges, connectedNodes, selectedNodeId, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
@@ -40,10 +105,12 @@ export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNod
   );
 
   const handleNodeClick = (_: React.MouseEvent, node: any) => {
+    setSelectedNodeId(node.id);
     onNodeSelect(node);
   };
 
   const handlePaneClick = () => {
+    setSelectedNodeId(null);
     onNodeSelect(null);
   };
 

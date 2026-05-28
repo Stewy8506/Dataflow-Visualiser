@@ -1,4 +1,8 @@
 use ignore::{DirEntry, WalkBuilder};
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+use oxc_ast::ast::ModuleDeclaration;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -43,6 +47,7 @@ pub struct ParsedNode {
 pub struct ParsedEdge {
     pub source: String,
     pub target: String,
+    pub via: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -65,6 +70,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         id: String,
         path: PathBuf,
         imports: Vec<String>,
+        is_router: bool,
     }
 
     let mut files_data = Vec::new();
@@ -94,12 +100,41 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     });
 
                     let mut imports = Vec::new();
+                    let mut is_router = false;
+
                     if let Ok(source_text) = fs::read_to_string(file_path) {
-                        // Use regex to catch static imports, dynamic imports, require(), and re-exports
-                        let re = regex::Regex::new(r#"(?:import|export)\s+(?:[^"']*?\s+from\s+)?['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)"#).unwrap();
-                        for caps in re.captures_iter(&source_text) {
-                            if let Some(m) = caps.get(1).or_else(|| caps.get(2)) {
-                                imports.push(m.as_str().to_string());
+                        let allocator = Allocator::default();
+                        let source_type = SourceType::from_path(file_path).unwrap_or_default();
+                        let ret = Parser::new(&allocator, &source_text, source_type).parse();
+                        
+                        if ret.errors.is_empty() {
+                            let program = ret.program;
+                            let mut all_exports_imports = true;
+                            let mut has_exports = false;
+                            
+                            for stmt in &program.body {
+                                if let Some(decl) = stmt.as_module_declaration() {
+                                    match decl {
+                                        ModuleDeclaration::ImportDeclaration(import_decl) => {
+                                            imports.push(import_decl.source.value.to_string());
+                                        }
+                                        ModuleDeclaration::ExportNamedDeclaration(_) |
+                                        ModuleDeclaration::ExportAllDeclaration(_) |
+                                        ModuleDeclaration::ExportDefaultDeclaration(_) => {
+                                            has_exports = true;
+                                        }
+                                        _ => {
+                                            all_exports_imports = false;
+                                        }
+                                    }
+                                } else {
+                                    all_exports_imports = false;
+                                }
+                            }
+                            
+                            // It's a router if it purely handles imports/exports and doesn't contain component logic
+                            if all_exports_imports && has_exports {
+                                is_router = true;
                             }
                         }
                     }
@@ -108,6 +143,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         id,
                         path: file_path.to_path_buf(),
                         imports,
+                        is_router,
                     });
                 }
             }
@@ -137,11 +173,13 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
 
                 for possible in possible_paths {
                     // normalize to the same format as id (forward slashes)
-                    let possible_id = possible.to_string_lossy().replace('\\', "/");
-                    if nodes.iter().any(|n| n.id == possible_id) {
+                    let possible_id = possible.to_string_lossy().replace('\\', "/").to_lowercase();
+                    
+                    if let Some(target_node) = nodes.iter().find(|n| n.id.to_lowercase() == possible_id) {
                         edges.push(ParsedEdge {
                             source: file_data.id.clone(),
-                            target: possible_id,
+                            target: target_node.id.clone(),
+                            via: None,
                         });
                         matched = true;
                         break;
@@ -171,10 +209,11 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                 for node in &nodes {
                     let mut found = false;
                     for suffix in &suffixes {
-                        if node.id.ends_with(suffix) {
+                        if node.id.to_lowercase().ends_with(&suffix.to_lowercase()) {
                             edges.push(ParsedEdge {
                                 source: file_data.id.clone(),
                                 target: node.id.clone(),
+                                via: None,
                             });
                             found = true;
                             break;
@@ -212,12 +251,12 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         let mut found_layout = None;
 
         while let Some(dir) = current_dir {
-            let dir_str = dir.to_string_lossy().replace('\\', "/");
+            let dir_str = dir.to_string_lossy().replace('\\', "/").to_lowercase();
 
             if let Some(l) = layout_nodes.iter().find(|l| {
                 Path::new(&l.id)
                     .parent()
-                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                     == Some(dir_str.clone())
             }) {
                 found_layout = Some(l);
@@ -230,6 +269,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
             edges.push(ParsedEdge {
                 source: l.id.clone(),
                 target: r_node.id.clone(),
+                via: None,
             });
         }
     }
@@ -242,11 +282,11 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
             let mut found_parent_layout = None;
 
             while let Some(dir) = search_dir {
-                let dir_str = dir.to_string_lossy().replace('\\', "/");
+                let dir_str = dir.to_string_lossy().replace('\\', "/").to_lowercase();
                 if let Some(parent_l) = layout_nodes.iter().find(|l| {
                     Path::new(&l.id)
                         .parent()
-                        .map(|p| p.to_string_lossy().replace('\\', "/"))
+                        .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                         == Some(dir_str.clone())
                 }) {
                     found_parent_layout = Some(parent_l);
@@ -264,13 +304,69 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     edges.push(ParsedEdge {
                         source: parent_l.id.clone(),
                         target: l_node.id.clone(),
+                        via: None,
                     });
                 }
             }
         }
     }
 
-    Ok(GraphData { nodes, edges })
+    // Graph Reduction: Collapse Router Nodes
+    let router_ids: Vec<String> = files_data
+        .iter()
+        .filter(|f| f.is_router)
+        .map(|f| f.id.clone())
+        .collect();
+
+    let mut final_edges = edges;
+    
+    for router_id in &router_ids {
+        let incoming: Vec<ParsedEdge> = final_edges
+            .iter()
+            .filter(|e| e.target == *router_id)
+            .cloned()
+            .collect();
+            
+        let outgoing: Vec<ParsedEdge> = final_edges
+            .iter()
+            .filter(|e| e.source == *router_id)
+            .cloned()
+            .collect();
+            
+        for inc in &incoming {
+            for out in &outgoing {
+                if inc.source != out.target {
+                    let mut new_via = inc.via.clone();
+                    let router_filename = Path::new(router_id)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                        
+                    if new_via.is_none() {
+                        new_via = Some(router_filename);
+                    } else {
+                        new_via = Some(format!("{}, {}", new_via.unwrap(), router_filename));
+                    }
+                    
+                    final_edges.push(ParsedEdge {
+                        source: inc.source.clone(),
+                        target: out.target.clone(),
+                        via: new_via,
+                    });
+                }
+            }
+        }
+        
+        final_edges.retain(|e| e.source != *router_id && e.target != *router_id);
+    }
+    
+    let final_nodes: Vec<ParsedNode> = nodes
+        .into_iter()
+        .filter(|n| !router_ids.contains(&n.id))
+        .collect();
+
+    Ok(GraphData { nodes: final_nodes, edges: final_edges })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
