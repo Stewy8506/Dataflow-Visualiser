@@ -4,8 +4,8 @@
 
 A high-performance native desktop tool for indexing, visualizing, and analyzing local codebases — with AI-powered blast-radius simulation and full privacy control.
 
-![TypeScript](https://img.shields.io/badge/TypeScript-65.3%25-3178C6?style=flat&logo=typescript&logoColor=white)
-![Rust](https://img.shields.io/badge/Rust-30.9%25-CE422B?style=flat&logo=rust&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-64%25-3178C6?style=flat&logo=typescript&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-32%25-CE422B?style=flat&logo=rust&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 ![Status](https://img.shields.io/badge/Status-Active%20Development-orange?style=flat)
 
@@ -94,7 +94,7 @@ Dataflow-Visualiser/
 
 ### Multi-Language AST Ingestion
 - **JS/TS**: Uses `oxc-parser` in Rust for native-speed ingestion (10–50× faster than Node-based parsers), extracting exact imported variables and distinguishing between data sources vs sinks.
-- **Python, Rust, & Dart**: Leverages `tree-sitter` for rapid dependency extraction across other primary backend and mobile languages, including smart resolution of `pubspec.yaml` and Rust module hierarchies.
+- **Python, Rust, Dart, C, & C++**: Leverages `tree-sitter` for rapid dependency extraction across primary backend, mobile, and embedded languages. Supports smart resolution of `pubspec.yaml`, Rust module hierarchies, and complex `#include` parsing for embedded frameworks like ESP-IDF.
 
 ### Interactive Spatial Canvas
 - Directory-based bounding box clustering — files grouped visually by folder hierarchy
@@ -129,6 +129,17 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Ollama mode** — fully air-gapped, all analysis on-machine. Zero proprietary code leaves the device. Suitable for enterprise, fintech, and defence environments
 - **Anthropic Cloud mode** — deep macro-architectural analysis for complex refactoring decisions
 - Single toggle, shared prompt interface, swappable transport
+
+---
+
+## Supported Frameworks
+
+Dataflow Visualiser is designed to be language and framework agnostic, but includes dedicated smart-resolution logic for the following architectures:
+
+- **Web & Full-Stack**: `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
+- **Systems & Backend**: `Rust` (Cargo workspace resolution), `Python` (FastAPI, Django, Flask).
+- **Mobile Applications**: `Flutter / Dart` (automatic `pubspec.yaml` package mapping).
+- **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
 
 ---
 

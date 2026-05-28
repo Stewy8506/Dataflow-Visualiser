@@ -27,6 +27,16 @@ thread_local! {
         p.set_language(&tree_sitter::Language::from(tree_sitter_dart::LANGUAGE)).unwrap();
         std::cell::RefCell::new(p)
     };
+    static C_PARSER: std::cell::RefCell<TSParser> = {
+        let mut p = TSParser::new();
+        p.set_language(&tree_sitter::Language::from(tree_sitter_c::LANGUAGE)).unwrap();
+        std::cell::RefCell::new(p)
+    };
+    static CPP_PARSER: std::cell::RefCell<TSParser> = {
+        let mut p = TSParser::new();
+        p.set_language(&tree_sitter::Language::from(tree_sitter_cpp::LANGUAGE)).unwrap();
+        std::cell::RefCell::new(p)
+    };
 }
 
 fn extract_imports_with_parser(
@@ -49,6 +59,8 @@ fn extract_imports_with_parser(
                 target_node = Some(node);
             } else if ext == "dart" && kind == "import_or_export" {
                 target_node = Some(node);
+            } else if matches!(ext, "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx") && kind == "preproc_include" {
+                target_node = Some(node);
             }
 
             if let Some(n) = target_node {
@@ -57,6 +69,9 @@ fn extract_imports_with_parser(
                         .replace("import ", "")
                         .replace("from ", "")
                         .replace("use ", "")
+                        .replace("#include ", "")
+                        .replace("<", "")
+                        .replace(">", "")
                         .replace(';', "")
                         .replace('\'', "")
                         .replace('"', "");
@@ -369,7 +384,7 @@ fn resolve_import_path(
         candidates.push(workspace_root.join("lib").join(clean_import));
     }
 
-    const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart"];
+    const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart", "c", "h", "cpp", "hpp", "cc", "cxx", "hxx"];
 
     for base in &candidates {
         if let Some(idx) = check_node_existence(base, node_index) {
@@ -477,7 +492,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
             let file_path = entry.path();
             if file_path.is_file() {
                 let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                if matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") {
+                if matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx") {
                     let id = file_path.to_string_lossy().replace('\\', "/");
                     let label = file_path
                         .file_name()
@@ -582,7 +597,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                     is_barrel_file = true;
                                 }
                             }
-                        } else if matches!(ext, "py" | "rs" | "dart") {
+                        } else if matches!(ext, "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx") {
                             match ext {
                                 "py" => PYTHON_PARSER.with(|p| {
                                     extract_imports_with_parser(
@@ -601,6 +616,22 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                     );
                                 }),
                                 "dart" => DART_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                    );
+                                }),
+                                "c" | "h" => C_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                    );
+                                }),
+                                "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
                                     extract_imports_with_parser(
                                         &mut p.borrow_mut(),
                                         &source_text,
@@ -856,7 +887,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                             continue;
                         }
                         let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
-                        if !matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") {
+                        if !matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx") {
                             continue;
                         }
 
@@ -916,6 +947,22 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                         )
                                     }),
                                     "dart" => DART_PARSER.with(|p| {
+                                        extract_imports_with_parser(
+                                            &mut p.borrow_mut(),
+                                            &source_text,
+                                            ext,
+                                            &mut imports,
+                                        )
+                                    }),
+                                    "c" | "h" => C_PARSER.with(|p| {
+                                        extract_imports_with_parser(
+                                            &mut p.borrow_mut(),
+                                            &source_text,
+                                            ext,
+                                            &mut imports,
+                                        )
+                                    }),
+                                    "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
                                         extract_imports_with_parser(
                                             &mut p.borrow_mut(),
                                             &source_text,
