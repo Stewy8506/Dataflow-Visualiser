@@ -171,7 +171,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
               )}
             </div>
             
-            <div className="flex-1 p-4 bg-[#0a0a10] font-mono text-[11px] overflow-y-auto">
+            <div className="flex-1 p-4 bg-background font-mono text-[11px] overflow-y-auto border-l border-border">
               {logs.length > 0 ? (
                 <div className="space-y-0.5">
                   {logs.map((log, i) => {
@@ -200,7 +200,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
         )}
 
         {activeTab === 'console' && (
-          <div className="flex-1 p-4 bg-[#0a0a10] font-mono text-[11px] overflow-y-auto">
+          <div className="flex-1 p-4 bg-background font-mono text-[11px] overflow-y-auto">
             {logs.length > 0 ? (
               <div className="space-y-0.5">
                 {logs.map((log, i) => (

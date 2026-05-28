@@ -9,14 +9,14 @@ interface SearchBarProps {
 
 export function SearchBar({ searchQuery, setSearchQuery, searchMode, setSearchMode }: SearchBarProps) {
   return (
-    <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-      <div className="flex items-center bg-surface/60 p-1 rounded-lg border border-border-subtle nebula-glass shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+    <div className="absolute top-4 right-4 z-20 flex items-center gap-2 animate-slide-up">
+      <div className="flex items-center glass-panel p-1 rounded-lg">
         <button
           onClick={() => setSearchMode('highlight')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
             searchMode === 'highlight'
               ? 'bg-surface-raised text-text-main shadow-sm border border-border'
-              : 'text-text-dim hover:text-text-muted border border-transparent'
+              : 'text-text-dim hover:text-text-main border border-transparent'
           }`}
           title="Highlight Matching Nodes"
         >
@@ -28,7 +28,7 @@ export function SearchBar({ searchQuery, setSearchQuery, searchMode, setSearchMo
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
             searchMode === 'collapse'
               ? 'bg-surface-raised text-text-main shadow-sm border border-border'
-              : 'text-text-dim hover:text-text-muted border border-transparent'
+              : 'text-text-dim hover:text-text-main border border-transparent'
           }`}
           title="Hide Non-Matching Nodes"
         >
@@ -39,14 +39,14 @@ export function SearchBar({ searchQuery, setSearchQuery, searchMode, setSearchMo
 
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search size={14} className="text-text-dim group-focus-within:text-blue-400 transition-colors" />
+          <Search size={14} className="text-text-dim group-focus-within:text-text-main transition-colors" />
         </div>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search files, folders..."
-          className="bg-surface/80 border border-border-subtle rounded-lg pl-9 pr-9 py-2 text-sm text-text-main outline-none focus:border-blue-500/50 focus:bg-surface-raised w-64 nebula-glass shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-all placeholder:text-text-dim/50"
+          placeholder="Search..."
+          className="glass-panel rounded-lg pl-9 pr-9 py-2 text-sm text-text-main outline-none focus:border-text-dim focus:bg-surface-raised w-56 transition-all placeholder:text-text-dim/60"
         />
         {searchQuery && (
           <button

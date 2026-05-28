@@ -11,6 +11,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { Header, GraphLayer } from "./components/layout/Header";
 import { BottomPanel } from "./components/layout/BottomPanel";
 import { SearchBar } from "./components/layout/SearchBar";
+import { SourceControlPanel } from "./components/layout/SourceControlPanel";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
 import { getLayoutedElements } from "./utils/layout";
@@ -240,6 +241,7 @@ function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [activeLayer, setActiveLayer] = useState<GraphLayer>('overall');
+  const [activeTab, setActiveTab] = useState<'network' | 'source-control'>('network');
 
   // Data state
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
@@ -675,8 +677,12 @@ function App() {
   // ─── Main Workspace ───────────────────────────────────────
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background relative">
-      <Sidebar />
+    <div className="flex h-screen w-screen overflow-hidden bg-background relative text-text-main font-sans">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      
+      {activeTab === 'source-control' && (
+        <SourceControlPanel workspacePath={selectedPath} />
+      )}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex-1 relative overflow-hidden bg-background">

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
 use tree_sitter::Parser as TSParser;
 use regex::Regex;
+use git2::{Repository, StatusOptions};
 
 // Thread-local parsers: constructed once per thread, reused across files.
 thread_local! {
@@ -984,6 +985,87 @@ struct NodeUpdatedPayload {
     resolved_imports: Vec<(String, bool)>,
 }
 
+#[derive(Serialize)]
+pub struct GitFileStatus {
+    pub path: String,
+    pub status: String,
+    pub staged: bool,
+}
+
+#[tauri::command]
+async fn get_git_status(path: String) -> Result<Vec<GitFileStatus>, String> {
+    let repo = Repository::discover(&path).map_err(|e| e.to_string())?;
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true).recurse_untracked_dirs(true);
+    let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.to_string())?;
+    
+    let mut result = Vec::new();
+    for entry in statuses.iter() {
+        let status = entry.status();
+        let path = entry.path().unwrap_or("").to_string();
+        
+        let mut staged = false;
+        let mut status_str = "Unknown";
+        
+        if status.intersects(git2::Status::INDEX_NEW | git2::Status::INDEX_MODIFIED | git2::Status::INDEX_DELETED) {
+            staged = true;
+            if status.contains(git2::Status::INDEX_NEW) { status_str = "Added"; }
+            else if status.contains(git2::Status::INDEX_DELETED) { status_str = "Deleted"; }
+            else { status_str = "Modified"; }
+        } else if status.contains(git2::Status::WT_NEW) {
+            status_str = "Untracked";
+        } else if status.contains(git2::Status::WT_MODIFIED) {
+            status_str = "Modified";
+        } else if status.contains(git2::Status::WT_DELETED) {
+            status_str = "Deleted";
+        }
+        
+        if status_str != "Unknown" {
+            result.push(GitFileStatus { path, status: status_str.to_string(), staged });
+        }
+    }
+    
+    Ok(result)
+}
+
+#[tauri::command]
+async fn git_stage_file(workspace: String, path: String) -> Result<(), String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    index.add_path(Path::new(&path)).map_err(|e| e.to_string())?;
+    index.write().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn git_unstage_file(workspace: String, path: String) -> Result<(), String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let head = repo.head().map_err(|e| e.to_string())?.peel_to_commit().map_err(|e| e.to_string())?;
+    repo.reset_default(Some(head.as_object()), std::iter::once(path.as_str())).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn git_commit(workspace: String, message: String) -> Result<(), String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    let oid = index.write_tree().map_err(|e| e.to_string())?;
+    let signature = repo.signature().map_err(|e| e.to_string())?;
+    let parent_commit = repo.head().map_err(|e| e.to_string())?.peel_to_commit().map_err(|e| e.to_string())?;
+    let tree = repo.find_tree(oid).map_err(|e| e.to_string())?;
+    
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        &message,
+        &tree,
+        &[&parent_commit],
+    ).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
 #[tauri::command]
 async fn watch_codebase(path: String, window: Window) -> Result<(), String> {
     use notify::{Watcher, RecursiveMode, EventKind};
@@ -1079,7 +1161,11 @@ pub fn run() {
             enrich_graph_with_ai,
             delete_file,
             open_in_ide,
-            watch_codebase
+            watch_codebase,
+            get_git_status,
+            git_stage_file,
+            git_unstage_file,
+            git_commit
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

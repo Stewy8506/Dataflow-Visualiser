@@ -22,7 +22,7 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
   ];
 
   return (
-    <header className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 rounded-2xl nebula-glass shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+    <header className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 rounded-xl glass-panel shadow-md animate-slide-up">
       {/* Logo */}
       <div className="flex items-center gap-2 pr-3 border-r border-border">
         <Sparkles size={16} className="text-blue-400" />

@@ -37,6 +37,7 @@ tree-sitter-dart = "0.2.0"
 tauri-plugin-store = "2"
 notify = "6"
 regex = "1"
+git2 = "0.19"
 
 [profile.release]
 lto = true
