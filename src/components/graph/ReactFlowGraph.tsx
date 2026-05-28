@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
+import { LayoutController } from './LayoutController';
 
 const nodeTypes: NodeTypes = {
   fileNode: FileNode,
@@ -23,9 +24,25 @@ interface ReactFlowGraphProps {
   nodes: any[];
   edges: any[];
   onNodeSelect: (node: any) => void;
+  nodesep: number;
+  setNodesep: (val: number) => void;
+  ranksep: number;
+  setRanksep: (val: number) => void;
+  direction: 'LR' | 'TB';
+  setDirection: (dir: 'LR' | 'TB') => void;
 }
 
-export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNodeSelect }: ReactFlowGraphProps) {
+export function ReactFlowGraph({
+  nodes: initialNodes,
+  edges: initialEdges,
+  onNodeSelect,
+  nodesep,
+  setNodesep,
+  ranksep,
+  setRanksep,
+  direction,
+  setDirection,
+}: ReactFlowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -116,7 +133,7 @@ export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNod
   };
 
   return (
-    <div className="w-full h-full bg-[#0a0a0c]">
+    <div className="w-full h-full bg-[#0a0a0c] relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -148,6 +165,14 @@ export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNod
           className="bg-slate-900 border-slate-700 rounded-lg overflow-hidden"
         />
       </ReactFlow>
+      <LayoutController
+        nodesep={nodesep}
+        setNodesep={setNodesep}
+        ranksep={ranksep}
+        setRanksep={setRanksep}
+        direction={direction}
+        setDirection={setDirection}
+      />
     </div>
   );
 }

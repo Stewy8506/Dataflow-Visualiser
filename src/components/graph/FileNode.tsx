@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2 } from 'lucide-react';
+import { FileCode, FileType, Layout, Trash2, Layers } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/core';
@@ -9,6 +9,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }export function FileNode({ data, selected }: any) {
   const isBackend = data.isBackend;
+  const isHorizontal = data.direction !== 'TB';
 
   // Extract a short path, e.g. the last 2 folder names
   const pathParts = data.path ? data.path.split('/') : [];
@@ -31,8 +32,11 @@ function cn(...inputs: ClassValue[]) {
     >
       <Handle
         type="target"
-        position={Position.Left}
-        className="w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full !-left-[7px]"
+        position={isHorizontal ? Position.Left : Position.Top}
+        className={cn(
+          "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
+          isHorizontal ? "!-left-[7px]" : "!-top-[7px]"
+        )}
       />
       <div className="p-4 relative">
         {data.isDeadCode && (
@@ -98,6 +102,15 @@ function cn(...inputs: ClassValue[]) {
                 {data.summary}
               </p>
             )}
+
+            {data.layouts && data.layouts.length > 0 && (
+              <div className="flex items-center space-x-1.5 mt-3.5 px-2.5 py-1.5 bg-violet-950/45 text-violet-300 border border-violet-800/30 rounded-xl text-[10px] font-semibold tracking-wide w-fit shadow-inner animate-in fade-in slide-in-from-bottom-1 duration-200">
+                <Layers size={12} className="text-violet-400 shrink-0" />
+                <span className="truncate max-w-[180px]">
+                  Wrapped by {data.layouts[data.layouts.length - 1]}
+                </span>
+              </div>
+            )}
           </div>
           {data.semantic_group ? (
             <span className="px-2 py-1 bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-blue-300 rounded-md border border-blue-500/30 text-[10px] font-bold flex items-center shadow-[0_0_10px_rgba(59,130,246,0.1)]">
@@ -113,8 +126,11 @@ function cn(...inputs: ClassValue[]) {
       </div>
       <Handle
         type="source"
-        position={Position.Right}
-        className="w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full !-right-[7px]"
+        position={isHorizontal ? Position.Right : Position.Bottom}
+        className={cn(
+          "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
+          isHorizontal ? "!-right-[7px]" : "!-bottom-[7px]"
+        )}
       />
     </div>
   );

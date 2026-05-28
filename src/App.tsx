@@ -35,12 +35,21 @@ function App() {
   const [isParsing, setIsParsing] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
   
+  // Layout spacing state
+  const [nodesep, setNodesep] = useState(70);
+  const [ranksep, setRanksep] = useState(400);
+  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('LR');
+  
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
   const [selectedModel, setSelectedModel] = useState(localStorage.getItem('gemini_model') || 'models/gemini-1.5-flash');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [enableAi, setEnableAi] = useState(() => {
+    const saved = localStorage.getItem('enable_ai_summary');
+    return saved === null ? true : saved === 'true';
+  });
 
   useEffect(() => {
     if (showSettings && apiKey) {
@@ -85,7 +94,7 @@ function App() {
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
         setIsParsing(false);
 
-        if (apiKey) {
+        if (apiKey && enableAi) {
           setLogs(prev => [...prev, `> Found API Key, starting progressive AI enrichment with ${selectedModel}...`]);
           setIsEnriching(true);
           try {
@@ -95,6 +104,8 @@ function App() {
             setLogs(prev => [...prev, `> AI Error: ${String(aiErr)}`]);
             setIsEnriching(false);
           }
+        } else if (apiKey && !enableAi) {
+          setLogs(prev => [...prev, `> AI summary generation is disabled in Settings.`]);
         }
       }
     } catch (e) {
@@ -146,8 +157,18 @@ function App() {
   useEffect(() => {
     if (!rawGraphData) return;
 
-    // Filter nodes based on active layer
+    // Calculate in-degrees for all files using the complete raw edges list before layout filtering
+    // to prevent components imported only inside layouts (e.g. CustomCursor, DynamicBackground) from being flagged as dead code.
+    const inDegrees = new Map<string, number>();
+    rawGraphData.edges.forEach(e => {
+      inDegrees.set(e.target, (inDegrees.get(e.target) || 0) + 1);
+    });
+
+    const layoutNodes = rawGraphData.nodes.filter(n => n.label.startsWith('layout.'));
+
+    // Filter nodes based on active layer, excluding layouts from graph nodes
     const filteredRawNodes = rawGraphData.nodes.filter(n => {
+      if (n.label.startsWith('layout.')) return false;
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
       if (activeLayer === 'ui') return !isBackend;
       if (activeLayer === 'backend') return isBackend;
@@ -161,12 +182,6 @@ function App() {
       validNodeIds.has(e.source) && validNodeIds.has(e.target)
     );
 
-    // Calculate in-degrees for dead code detection
-    const inDegrees = new Map<string, number>();
-    filteredRawEdges.forEach(e => {
-      inDegrees.set(e.target, (inDegrees.get(e.target) || 0) + 1);
-    });
-
     const handleDeleteNode = (nodeId: string, nodePath: string) => {
       setRawGraphData(prev => {
         if (!prev) return prev;
@@ -177,6 +192,12 @@ function App() {
         };
       });
       setLogs(prev => [...prev, `> Permanently deleted: ${nodePath}`]);
+    };
+
+    const getDir = (filePath: string) => {
+      const parts = filePath.split('/');
+      parts.pop();
+      return parts.join('/') + '/';
     };
 
     const initialNodes = filteredRawNodes.map((n) => {
@@ -198,8 +219,28 @@ function App() {
         subLabel = 'Script';
       }
 
-      const isEntryPoint = /^(page|layout|route|main|index|App|middleware)\./i.test(n.label) || n.id.includes('src-tauri');
+      // Flag all Next.js framework reserved entry point routing/template files as entry points to avoid dead code flagging
+      const isEntryPoint = /^(page|layout|loading|template|error|global-error|not-found|default|route|main|index|App|middleware|instrumentation|sitemap|robots)\./i.test(n.label) || n.id.includes('src-tauri');
       const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
+
+      // Calculate 4-layer architectural taxonomy hierarchy
+      let layerIndex = 2; // Default script/utilities layer
+      if (isBackend) {
+        layerIndex = 3; // Backend service & APIs layer
+      } else if (n.label.startsWith('page.')) {
+        layerIndex = 0; // Webpages layer
+      } else if (n.group === 'tsx' || n.group === 'jsx') {
+        layerIndex = 1; // UI components layer
+      }
+
+      // Calculate parent layouts wrapping this node
+      const inheritedLayouts = layoutNodes
+        .filter(lay => n.id.startsWith(getDir(lay.id)))
+        .map(lay => {
+          const parts = lay.id.split('/');
+          const dirName = parts.length > 2 ? parts[parts.length - 2] : '';
+          return dirName ? `${dirName}/layout.tsx` : 'layout.tsx';
+        });
 
       return {
         id: n.id,
@@ -215,7 +256,10 @@ function App() {
           semantic_group: n.semantic_group,
           summary: n.summary,
           isDeadCode,
-          onDelete: () => handleDeleteNode(n.id, n.id)
+          onDelete: () => handleDeleteNode(n.id, n.id),
+          direction: layoutDirection,
+          layouts: inheritedLayouts,
+          layerIndex
         }
       };
     });
@@ -241,13 +285,15 @@ function App() {
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
       initialNodes,
       initialEdges,
-      'LR'
+      layoutDirection,
+      nodesep,
+      ranksep
     );
 
     setFlowNodes(layoutedNodes);
     setFlowEdges(layoutedEdges);
 
-  }, [rawGraphData, activeLayer]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep]);
 
   if (!selectedPath && !isParsing) {
     return (
@@ -315,7 +361,20 @@ function App() {
                     <option value={selectedModel}>{selectedModel}</option>
                   )}
                 </select>
-                <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
+                 <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
+                
+                <div className="flex items-center space-x-2 mt-4 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                  <input
+                    type="checkbox"
+                    id="enableAiSummary"
+                    checked={enableAi}
+                    onChange={(e) => setEnableAi(e.target.checked)}
+                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                  />
+                  <label htmlFor="enableAiSummary" className="text-slate-300 text-sm cursor-pointer select-none font-medium">
+                    Enable AI Summary Generation
+                  </label>
+                </div>
               </div>
               <div className="flex justify-end space-x-3">
                 <button
@@ -328,6 +387,7 @@ function App() {
                   onClick={() => {
                     localStorage.setItem('gemini_api_key', apiKey);
                     localStorage.setItem('gemini_model', selectedModel);
+                    localStorage.setItem('enable_ai_summary', String(enableAi));
                     setShowSettings(false);
                   }}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
@@ -372,9 +432,19 @@ function App() {
               nodes={flowNodes} 
               edges={flowEdges} 
               onNodeSelect={setSelectedNode} 
+              nodesep={nodesep}
+              setNodesep={setNodesep}
+              ranksep={ranksep}
+              setRanksep={setRanksep}
+              direction={layoutDirection}
+              setDirection={setLayoutDirection}
             />
           ) : (
-            <ThreeDGraph graphData={rawGraphData} />
+            <ThreeDGraph 
+              graphData={rawGraphData} 
+              selectedNode={selectedNode}
+              onNodeSelect={setSelectedNode}
+            />
           )}
         </div>
         
@@ -392,9 +462,42 @@ function App() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="AIzaSy..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 mb-4"
               />
-              <p className="text-xs text-slate-500 mt-2">Required for AI-powered graph enrichment (gemma4-31b-it).</p>
+              
+              <label className="block text-slate-400 text-sm mb-2">AI Model</label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={isLoadingModels || !apiKey}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 disabled:opacity-50 appearance-none mb-2"
+              >
+                {isLoadingModels ? (
+                  <option>Loading models...</option>
+                ) : availableModels.length > 0 ? (
+                  availableModels.map(m => (
+                    <option key={m.name} value={m.name}>
+                      {m.displayName} ({m.name.replace('models/', '')})
+                    </option>
+                  ))
+                ) : (
+                  <option value={selectedModel}>{selectedModel}</option>
+                )}
+              </select>
+              <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
+              
+              <div className="flex items-center space-x-2 mt-4 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                <input
+                  type="checkbox"
+                  id="enableAiSummaryWorkspace"
+                  checked={enableAi}
+                  onChange={(e) => setEnableAi(e.target.checked)}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                />
+                <label htmlFor="enableAiSummaryWorkspace" className="text-slate-300 text-sm cursor-pointer select-none font-medium">
+                  Enable AI Summary Generation
+                </label>
+              </div>
             </div>
             <div className="flex justify-end space-x-3">
               <button
@@ -406,6 +509,8 @@ function App() {
               <button
                 onClick={() => {
                   localStorage.setItem('gemini_api_key', apiKey);
+                  localStorage.setItem('gemini_model', selectedModel);
+                  localStorage.setItem('enable_ai_summary', String(enableAi));
                   setShowSettings(false);
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors cursor-pointer"
