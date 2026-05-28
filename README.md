@@ -62,19 +62,59 @@ Ollama (local) or Anthropic (cloud) → response streamed back to UI
 
 ---
 
+## Repository Structure
+
+```text
+Dataflow-Visualiser/
+├── src-tauri/             # Rust Backend Engine
+│   ├── src/
+│   │   ├── ai.rs          # Gemini AI integration for blast-radius & semantic grouping
+│   │   ├── commands.rs    # Basic utility commands (delete, open in IDE)
+│   │   ├── git.rs         # Git operations (history, diffs, staging, commits)
+│   │   ├── lib.rs         # Tauri application setup and command registration
+│   │   ├── parser.rs      # AST parsing, monorepo alias resolution, and edge building
+│   │   ├── pty.rs         # Interactive terminal integration via portable-pty
+│   │   └── state.rs       # Shared application state
+│   ├── Cargo.toml         # Rust dependencies
+│   └── build.rs           # Tauri build script
+├── src/                   # React Frontend
+│   ├── components/        # UI components
+│   │   ├── graph/         # Nodes, edges, controls, and mini-map
+│   │   ├── layout/        # Main panels (Terminal, Source Control, Sidebars)
+│   │   └── ...            # Other shared UI elements
+│   ├── App.tsx            # Main application layout and state management
+│   └── main.tsx           # React DOM render entry
+├── package.json           # Node.js dependencies and scripts
+└── vite.config.ts         # Vite build configuration
+```
+
+---
+
 ## Key Features
 
-### Blazing Fast AST Ingestion
-`oxc-parser` runs natively in Rust off the main thread — 10–50× faster than Node-based parsers. Extracts exact imported variable names, detects data sources (hooks/function calls) vs data sinks (JSX tags), and builds a precise dependency graph per file.
+### Multi-Language AST Ingestion
+- **JS/TS**: Uses `oxc-parser` in Rust for native-speed ingestion (10–50× faster than Node-based parsers), extracting exact imported variables and distinguishing between data sources vs sinks.
+- **Python, Rust, & Dart**: Leverages `tree-sitter` for rapid dependency extraction across other primary backend and mobile languages, including smart resolution of `pubspec.yaml` and Rust module hierarchies.
 
 ### Interactive Spatial Canvas
 - Directory-based bounding box clustering — files grouped visually by folder hierarchy
+- **Next.js Architecture Awareness** — automatically infers implicit routing dependencies (connecting `layout.tsx` to nested `page.tsx`) and collapses noisy API routes to clean up the graph.
+- **Contextual Node Actions** — right-click any node to instantly open the file in your default IDE or delete it from the codebase.
 - Edge weight and opacity scaled to actual import frequency from AST data
 - Smart dynamic handle routing — post-Dagre layout resolves bezier handle direction per edge
 - Color-coded directionality — blue (incoming), green (outgoing) with matching arrowheads
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
+
+### Interactive Git Integration
+- **Full History Timeline** — View commit history directly in a bottom panel.
+- **Diff Viewer Modal** — Click any commit to view a dedicated modal showing exact, line-by-line diffs per changed file.
+- **Staging & Commits** — Stage, unstage, and commit files without leaving the application.
+
+### Integrated PTY Terminal
+- Built-in, resizable interactive terminal powered by `portable-pty`.
+- Run commands, start dev servers, or use standard CLI tools in the same window as your graph.
 
 ### Privacy-First AI Toggle
 - **Ollama mode** — fully air-gapped, all analysis on-machine. Zero proprietary code leaves the device. Suitable for enterprise, fintech, and defence environments
@@ -129,13 +169,15 @@ npm run tauri build
 - [x] `tsconfig.json` paths alias resolution (`@/components/X` imports)
 - [x] Static complexity metrics extraction (function & import counts) and UI badges
 - [x] Barrel export flattening (`index.ts` bypass)
-- [ ] Monorepo / multi-root workspace support
+- [x] Uncommitted change detection and live Git status panel
+- [x] Full Git History timeline and file diff visualizer
+- [x] Integrated PTY terminal inside a resizable bottom pane
 - [x] Fuzzy search/filter bar with canvas highlight and collapse
 - [x] Mini-map overlay for large codebases
+- [x] Monorepo / multi-root workspace support
 - [ ] Persistent node layout across sessions
 - [ ] Ollama + Anthropic AI panel UI
 - [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)
-- [ ] Uncommitted change detection — live flag on actively modified nodes
 - [ ] PNG canvas export
 - [ ] JSON dependency graph export for CI diffing
 
