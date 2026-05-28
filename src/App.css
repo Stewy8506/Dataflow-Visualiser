@@ -2,15 +2,306 @@
 
 @theme {
   --color-primary: #3b82f6;
+  --color-primary-light: #60a5fa;
+  --color-primary-dark: #2563eb;
   --color-secondary: #10b981;
-  --color-background: #0f172a;
-  --color-surface: #1e293b;
-  --color-text-main: #f8fafc;
+  --color-secondary-dark: #059669;
+  --color-accent-cyan: #22d3ee;
+  --color-accent-rose: #f43f5e;
+  --color-accent-amber: #f59e0b;
+  --color-background: #0a0a0a;
+  --color-surface: #121212;
+  --color-surface-raised: #1c1c1c;
+  --color-surface-overlay: #262626;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-accent: rgba(59, 130, 246, 0.3);
+  --color-text-main: #e2e8f0;
   --color-text-muted: #94a3b8;
+  --color-text-dim: #64748b;
+  --color-glass: rgba(18, 18, 18, 0.8);
+  --color-glass-light: rgba(255, 255, 255, 0.05);
+
+  --font-sans: 'Montserrat', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-serif: 'Newsreader', 'Playfair Display', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
+
+.light {
+  --color-background: #e2e8f0;
+  --color-surface: #f8fafc;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.15);
+  --color-border-subtle: rgba(0, 0, 0, 0.05);
+  --color-text-main: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-dim: #94a3b8;
+  --color-glass: rgba(255, 255, 255, 0.85);
+  --color-glass-light: rgba(0, 0, 0, 0.04);
+}
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+.react-flow,
+.codebase-flow,
+.react-flow__node {
+  font-family: inherit;
+}
+
+.react-flow__node {
+  cursor: pointer !important;
+}
+
+.react-flow__node.dragging {
+  cursor: grabbing !important;
+}
+
+/* ─── Keyframes ───────────────────────────────────────────── */
+
+@keyframes nebula-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -20px) scale(1.05); }
+  50% { transform: translate(-20px, 15px) scale(0.95); }
+  75% { transform: translate(15px, 25px) scale(1.02); }
+}
+
+@keyframes nebula-gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes nebula-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes nebula-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nebula-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nebula-orbit-1 {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes nebula-orbit-2 {
+  from { transform: rotate(120deg); }
+  to { transform: rotate(480deg); }
+}
+
+@keyframes nebula-orbit-3 {
+  from { transform: rotate(240deg); }
+  to { transform: rotate(600deg); }
+}
+
+/* ─── Base ────────────────────────────────────────────────── */
 
 @layer base {
   body {
     @apply bg-background text-text-main font-sans antialiased m-0 p-0 overflow-hidden;
   }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.08) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.15);
+  }
+}
+
+/* ─── Utility Classes ─────────────────────────────────────── */
+
+@layer utilities {
+  .nebula-glass {
+    background: rgba(17, 17, 24, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .nebula-glass-light {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .nebula-float {
+    animation: nebula-float 20s ease-in-out infinite;
+  }
+
+  .nebula-shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: nebula-shimmer 3s ease-in-out infinite;
+  }
+
+  .nebula-slide-up {
+    animation: nebula-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .nebula-fade-in {
+    animation: nebula-fade-in 0.5s ease forwards;
+  }
+}
+
+/* ─── ReactFlow Overrides ─────────────────────────────────── */
+
+.react-flow__node.selected {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls {
+  background: var(--color-glass) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  background: transparent !important;
+  border-bottom: 1px solid var(--color-border-subtle) !important;
+  fill: var(--color-text-dim) !important;
+  color: var(--color-text-dim) !important;
+  width: 30px !important;
+  height: 30px !important;
+  padding: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.react-flow__controls button:hover {
+  background: var(--color-glass-light) !important;
+  fill: var(--color-text-main) !important;
+  color: var(--color-text-main) !important;
+}
+
+.react-flow__controls button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls button svg {
+  max-width: 14px;
+  max-height: 14px;
+}
+
+.react-flow__minimap {
+  background: var(--color-glass) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden !important;
+}
+
+.react-flow__minimap-mask {
+  fill: var(--color-background) !important;
+  opacity: 0.7;
+}
+
+/* ─── Range Input Styling ─────────────────────────────────── */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #1a1a24;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid #111118;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+  transition: box-shadow 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid #111118;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+}
+
+/* ─── Switch Component ────────────────────────────────────── */
+
+.nebula-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease;
+  flex-shrink: 0;
+}
+
+.nebula-switch.active {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.nebula-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-text-dim);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease;
+}
+
+.nebula-switch.active::after {
+  transform: translateX(18px);
+  background: white;
 }

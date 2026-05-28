@@ -31,6 +31,7 @@ interface ReactFlowGraphProps {
   setRanksep: (val: number) => void;
   direction: 'LR' | 'TB';
   setDirection: (dir: 'LR' | 'TB') => void;
+  isLightMode: boolean;
 }
 
 export function ReactFlowGraph({
@@ -43,6 +44,7 @@ export function ReactFlowGraph({
   setRanksep,
   direction,
   setDirection,
+  isLightMode,
 }: ReactFlowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -55,7 +57,6 @@ export function ReactFlowGraph({
     return calculateBlastRadius(activeNodeId, initialEdges);
   }, [activeNodeId, initialEdges]);
 
-  // Update state if initial props or selection changes
   useEffect(() => {
     const styledNodes = initialNodes.map(node => {
       let isConnected = true;
@@ -70,37 +71,22 @@ export function ReactFlowGraph({
       }
 
       const isSelected = selectedNodeId === node.id;
-      let borderColor = node.style?.border || 'rgba(255,255,255,0.1)';
-      let pulseStyle = {};
-
-      if (isConnected && blastRadius && tier >= 0) {
-        if (tier === 0) {
-          // Selected Node
-          borderColor = '#3b82f6'; // Blue
-          pulseStyle = { boxShadow: '0 0 20px rgba(59, 130, 246, 0.5)' };
-        } else if (tier === 1) {
-          // Tier 1 (High Risk)
-          borderColor = '#ef4444'; // Red
-          pulseStyle = { boxShadow: '0 0 15px rgba(239, 68, 68, 0.4)' };
-        } else {
-          // Tier 2+ (Moderate Risk)
-          borderColor = '#f59e0b'; // Amber
-          pulseStyle = { boxShadow: '0 0 10px rgba(245, 158, 11, 0.3)' };
-        }
-      }
 
       return {
         ...node,
         selected: isSelected,
+        data: {
+          ...node.data,
+          blastTier: tier,
+          blastConnected: isConnected,
+          hasBlastRadius: !!blastRadius,
+        },
         style: {
           ...node.style,
-          ...pulseStyle,
-          borderColor: isConnected && blastRadius ? borderColor : node.style?.borderColor,
-          borderWidth: isConnected && blastRadius && tier >= 0 ? '2px' : node.style?.borderWidth,
           opacity: isConnected ? 1 : 0.2,
           filter: isConnected ? 'none' : 'grayscale(100%) blur(1px)',
           pointerEvents: isConnected ? 'all' : 'none',
-          transition: 'opacity 0.2s, border-color 0.2s, box-shadow 0.2s',
+          transition: 'opacity 0.2s, filter 0.2s',
         }
       };
     });
@@ -115,14 +101,15 @@ export function ReactFlowGraph({
       const isDirectlyConnected = isOutgoing || isIncoming;
       const noActiveNode = !activeNodeId;
       
-      let strokeColor = '#64748b'; // default slate
+      let strokeColor = isLightMode ? '#94a3b8' : '#334155';
       if (blastRadius && isConnected) {
-        if (targetTier === 0 && sourceTier === 1) {
-           strokeColor = '#ef4444'; // Red (Tier 1 direct impact)
-        } else if (targetTier > 0 && sourceTier > targetTier) {
-           strokeColor = '#f59e0b'; // Amber (Tier 2+ impact flow)
+        if (sourceTier >= 0 && targetTier > sourceTier) {
+           if (targetTier === 1) strokeColor = '#ef4444';
+           else if (targetTier === 2) strokeColor = '#f97316';
+           else if (targetTier === 3) strokeColor = '#eab308';
+           else strokeColor = isLightMode ? '#94a3b8' : '#475569';
         } else {
-           strokeColor = '#94a3b8';
+           strokeColor = isLightMode ? '#94a3b8' : '#334155';
         }
       }
 
@@ -134,8 +121,8 @@ export function ReactFlowGraph({
         ...edge,
         style: {
           ...edge.style,
-          opacity: noActiveNode ? 0.15 : (isConnected ? 0.8 : 0.05),
-          strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1),
+          opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.05),
+          strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5),
           stroke: strokeColor,
           transition: 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s',
         },
@@ -164,7 +151,7 @@ export function ReactFlowGraph({
   };
 
   return (
-    <div className="w-full h-full bg-[#0a0a0c] relative">
+    <div className="w-full h-full bg-background relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -174,26 +161,20 @@ export function ReactFlowGraph({
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
-        colorMode="dark"
+        colorMode={isLightMode ? "light" : "dark"}
         fitView
         minZoom={0.05}
         maxZoom={4}
         className="codebase-flow"
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#475569" gap={20} size={1.5} variant={BackgroundVariant.Dots} />
-        <Controls 
-          className="bg-slate-900 border-slate-700 fill-slate-300 [&>button]:border-b-slate-700 hover:[&>button]:bg-slate-800"
-        />
+        <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
+        <Controls />
         <MiniMap 
-          nodeColor={(n) => {
-            if (n.data?.group === 'tsx' || n.data?.group === 'ts') return '#3b82f6';
-            if (n.data?.group === 'css') return '#38bdf8';
-            if (n.data?.group === 'json') return '#4ade80';
-            return '#94a3b8';
+          nodeColor={() => {
+            return isLightMode ? '#94a3b8' : '#475569';
           }}
-          maskColor="rgba(10, 10, 12, 0.7)"
-          className="bg-slate-900 border-slate-700 rounded-lg overflow-hidden"
+          maskColor={isLightMode ? "rgba(255, 255, 255, 0.7)" : "rgba(10, 10, 16, 0.7)"}
         />
       </ReactFlow>
       <LayoutController

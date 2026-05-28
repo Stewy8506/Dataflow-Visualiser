@@ -13,13 +13,16 @@ export function calculateBlastRadius(
   // Pre-build reverse adjacency map: target -> list of sources importing it
   const reverseAdjacency = new Map<string, string[]>();
   for (const edge of edges) {
-    if (edge && edge.target && edge.source) {
-      let list = reverseAdjacency.get(edge.target);
+    const originalSource = edge.data?.originalSource || edge.source;
+    const originalTarget = edge.data?.originalTarget || edge.target;
+
+    if (edge && originalTarget && originalSource) {
+      let list = reverseAdjacency.get(originalTarget);
       if (!list) {
         list = [];
-        reverseAdjacency.set(edge.target, list);
+        reverseAdjacency.set(originalTarget, list);
       }
-      list.push(edge.source);
+      list.push(originalSource);
     }
   }
 

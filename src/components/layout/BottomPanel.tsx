@@ -1,11 +1,5 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { ChevronUp, Minus, X, Terminal, Search, Grid3x3 } from 'lucide-react';
 
 interface BottomPanelProps {
   selectedNode: any | null;
@@ -15,61 +9,112 @@ interface BottomPanelProps {
 export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'matrix' | 'console'>('inspector');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(240);
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeTab === 'console' && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, activeTab]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    startY.current = e.clientY;
+    startHeight.current = panelHeight;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = startY.current - e.clientY;
+      const newHeight = Math.min(500, Math.max(150, startHeight.current + delta));
+      setPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [panelHeight]);
 
   const tabs = [
-    { id: 'inspector', label: 'Node Inspector' },
-    { id: 'matrix', label: 'Dependency Matrix' },
-    { id: 'console', label: 'Console Logs' },
-  ] as const;
+    { id: 'inspector' as const, label: 'Inspector', icon: Search },
+    { id: 'console' as const, label: 'Console', icon: Terminal },
+    { id: 'matrix' as const, label: 'Matrix', icon: Grid3x3 },
+  ];
 
   if (isCollapsed) {
     return (
       <div 
-        className="h-10 border-t border-slate-800 bg-[#111115] flex items-center justify-center px-4 z-10 flex-shrink-0 cursor-pointer hover:bg-slate-800/50 transition-colors"
+        className="h-8 border-t border-border bg-surface flex items-center justify-center px-4 z-10 flex-shrink-0 cursor-pointer hover:bg-surface-raised transition-colors group"
         onClick={() => setIsCollapsed(false)}
       >
-        <div className="flex items-center space-x-2 text-text-muted">
-          <span className="text-xs font-semibold uppercase tracking-wider">Show Panel</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+        <div className="flex items-center gap-2 text-text-dim group-hover:text-text-muted transition-colors">
+          <ChevronUp size={14} />
+          <span className="text-[10px] font-semibold uppercase tracking-wider">Show Panel</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-64 border-t border-slate-800 bg-[#111115] flex flex-col z-10 flex-shrink-0">
-      {/* Tabs */}
-      <div className="flex items-center justify-between px-4 border-b border-slate-800/50 bg-[#111115]">
-        <div className="flex space-x-6">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "py-3 text-sm font-medium transition-colors border-b-2 cursor-pointer",
-                activeTab === tab.id
-                  ? "border-white text-white"
-                  : "border-transparent text-text-muted hover:text-slate-300"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <div
+      className="border-t border-border bg-surface flex flex-col z-10 flex-shrink-0"
+      style={{ height: panelHeight }}
+    >
+      {/* Drag handle */}
+      <div
+        className="h-1.5 w-full cursor-row-resize flex items-center justify-center group hover:bg-blue-500/5 transition-colors"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="w-8 h-0.5 rounded-full bg-text-dim/40 group-hover:bg-blue-400/40 transition-colors" />
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex items-center justify-between px-3 border-b border-border-subtle">
+        <div className="flex items-center gap-1 py-1">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-surface-raised text-text-main border border-border'
+                    : 'text-text-dim hover:text-text-muted border border-transparent'
+                }`}
+              >
+                <Icon size={12} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex space-x-2">
+        <div className="flex items-center gap-0.5">
           <button 
-            className="text-slate-500 hover:text-white p-2 cursor-pointer transition-colors"
+            className="p-1.5 text-text-dim hover:text-text-muted rounded-md hover:bg-surface-raised transition-colors cursor-pointer"
             onClick={() => setIsCollapsed(true)}
             title="Minimize"
           >
-            <div className="w-3 h-0.5 bg-current" />
+            <Minus size={12} />
           </button>
           <button 
-            className="text-slate-500 hover:text-white p-2 cursor-pointer transition-colors"
+            className="p-1.5 text-text-dim hover:text-text-muted rounded-md hover:bg-surface-raised transition-colors cursor-pointer"
             onClick={() => setIsCollapsed(true)}
             title="Close"
           >
-            <X size={16} />
+            <X size={12} />
           </button>
         </div>
       </div>
@@ -78,65 +123,92 @@ export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
       <div className="flex-1 flex overflow-hidden">
         {activeTab === 'inspector' && (
           <>
-            {/* Inspector Left */}
-            <div className="w-80 border-r border-slate-800/50 p-6 flex flex-col overflow-y-auto">
-              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-                SELECTED: {selectedNode ? selectedNode.data?.label.toUpperCase() : 'NONE'}
+            <div className="w-72 border-r border-border-subtle p-4 flex flex-col overflow-y-auto">
+              <h3 className="text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-3">
+                {selectedNode ? `Selected: ${selectedNode.data?.label}` : 'No Selection'}
               </h3>
               
               {selectedNode ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2 border-b border-slate-800/50">
-                    <span className="text-sm text-slate-400">Type</span>
-                    <span className="text-sm font-medium text-white">{selectedNode.data?.subLabel || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-800/50">
-                    <span className="text-sm text-slate-400">Size</span>
-                    <span className="text-sm font-medium text-white">
-                      {Math.floor(Math.random() * 100) + 5} KB
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-slate-800/50">
-                    <span className="text-sm text-slate-400">Complexity</span>
-                    <span className="text-sm font-medium text-white">Medium (O(n))</span>
-                  </div>
+                <div className="space-y-0.5">
+                  {[
+                    { label: 'Type', value: selectedNode.data?.subLabel || '—' },
+                    { label: 'Extension', value: selectedNode.data?.group?.toUpperCase() || '—' },
+                    { label: 'Path', value: selectedNode.data?.path || '—', mono: true },
+                    ...(selectedNode.data?.semantic_group ? [{ label: 'AI Group', value: selectedNode.data.semantic_group }] : []),
+                  ].map((row, i) => (
+                    <div key={i} className={`flex justify-between items-center py-2 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
+                      <span className="text-[11px] text-text-dim">{row.label}</span>
+                      <span className={`text-[11px] font-medium text-text-main ${row.mono ? 'font-mono text-[10px] max-w-[140px] truncate' : ''}`}>
+                        {row.value}
+                      </span>
+                    </div>
+                  ))}
+
+                  {selectedNode.data?.summary && (
+                    <div className="pt-2 mt-1 border-t border-border-subtle">
+                      <span className="text-[10px] text-text-dim uppercase tracking-wider block mb-1.5">AI Summary</span>
+                      <p className="text-[11px] text-text-muted leading-relaxed">{selectedNode.data.summary}</p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-sm text-slate-500 italic">
-                  Select a node in the flow view to inspect details.
+                <div className="text-xs text-text-dim italic">
+                  Click a node in the graph to inspect.
                 </div>
               )}
             </div>
             
-            {/* Inspector Right (Console preview) */}
-            <div className="flex-1 p-6 bg-[#0a0a0c] font-mono text-sm overflow-y-auto">
-              <div className="text-slate-300 mb-4 flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                <span>Analysis complete. 0 structural anomalies detected.</span>
-              </div>
-              
-              <div className="space-y-1 text-slate-500">
-                {logs.map((log, i) => (
-                  <div key={i}>{log}</div>
-                ))}
-              </div>
+            <div className="flex-1 p-4 bg-[#0a0a10] font-mono text-[11px] overflow-y-auto">
+              {logs.length > 0 ? (
+                <div className="space-y-0.5">
+                  {logs.map((log, i) => {
+                    const isError = log.toLowerCase().includes('error');
+                    const isSuccess = log.includes('successfully') || log.includes('completed');
+                    return (
+                      <div key={i} className={`flex items-start gap-2 py-0.5 ${
+                        isError ? 'text-red-400' : isSuccess ? 'text-emerald-400' : 'text-text-dim'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${
+                          isError ? 'bg-red-400' : isSuccess ? 'bg-emerald-400' : 'bg-text-dim/40'
+                        }`} />
+                        <span>{log}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-text-dim">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span>Ready. Select a project folder to begin analysis.</span>
+                </div>
+              )}
             </div>
           </>
         )}
 
         {activeTab === 'console' && (
-           <div className="flex-1 p-6 bg-[#0a0a0c] font-mono text-sm overflow-y-auto">
-             <div className="space-y-1 text-slate-400">
-               {logs.map((log, i) => (
-                 <div key={i}>{log}</div>
-               ))}
-             </div>
-           </div>
+          <div className="flex-1 p-4 bg-[#0a0a10] font-mono text-[11px] overflow-y-auto">
+            {logs.length > 0 ? (
+              <div className="space-y-0.5">
+                {logs.map((log, i) => (
+                  <div key={i} className="flex items-start gap-2 py-0.5">
+                    <span className="text-text-dim shrink-0 select-none">❯</span>
+                    <span className="text-text-muted">{log}</span>
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </div>
+            ) : (
+              <div className="text-text-dim">No log entries yet.</div>
+            )}
+          </div>
         )}
 
         {activeTab === 'matrix' && (
-          <div className="flex-1 p-6 flex items-center justify-center text-slate-500">
-            Dependency Matrix View (Coming Soon)
+          <div className="flex-1 p-6 flex flex-col items-center justify-center gap-3">
+            <Grid3x3 size={32} className="text-text-dim/30" />
+            <p className="text-sm text-text-dim font-medium">Dependency Matrix</p>
+            <p className="text-xs text-text-dim/60">Coming soon.</p>
           </div>
         )}
       </div>

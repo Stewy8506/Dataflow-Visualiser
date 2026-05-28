@@ -1,4 +1,4 @@
-import { Settings, HelpCircle, User, Box, Spline, Layers, Server, Layout } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon } from 'lucide-react';
 
 export type GraphLayer = 'ui' | 'backend' | 'overall';
 
@@ -8,78 +8,93 @@ interface HeaderProps {
   activeLayer: GraphLayer;
   onLayerChange: (layer: GraphLayer) => void;
   onSettingsClick?: () => void;
+  isLightMode: boolean;
+  setIsLightMode: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick }: HeaderProps) {
-  return (
-    <header className="h-16 border-b border-slate-800 bg-[#111115]/80 backdrop-blur flex items-center justify-between px-6 z-10 flex-shrink-0">
-      <div className="flex items-center space-x-6">
-        <h1 className="text-xl font-bold text-white tracking-tight">CodeMapper</h1>
-        
-        {/* Layer Switcher */}
-        {viewMode === '2d' && (
-          <div className="flex bg-slate-800/50 p-1 rounded-lg border border-slate-700">
-            <button
-              onClick={() => onLayerChange('ui')}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                activeLayer === 'ui' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Layout size={14} />
-              <span>UI Mapping</span>
-            </button>
-            <button
-              onClick={() => onLayerChange('backend')}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                activeLayer === 'backend' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Server size={14} />
-              <span>Backend Layer</span>
-            </button>
-            <button
-              onClick={() => onLayerChange('overall')}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                activeLayer === 'overall' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Layers size={14} />
-              <span>Overall</span>
-            </button>
-          </div>
-        )}
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, isLightMode, setIsLightMode }: HeaderProps) {
+  const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
+    { key: 'ui', icon: Layout, label: 'UI Layer' },
+    { key: 'backend', icon: Server, label: 'Backend' },
+    { key: 'overall', icon: Layers, label: 'Overall' },
+  ];
 
-        <div className="flex bg-slate-800/50 p-1 rounded-lg border border-slate-700">
-          <button
-            onClick={() => onViewModeChange('2d')}
-            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-              viewMode === '2d' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Spline size={14} />
-            <span>Flow View</span>
-          </button>
-          <button
-            onClick={() => onViewModeChange('3d')}
-            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-              viewMode === '3d' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Box size={14} />
-            <span>3D View</span>
-          </button>
-        </div>
+  return (
+    <header className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 rounded-2xl nebula-glass shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      {/* Logo */}
+      <div className="flex items-center gap-2 pr-3 border-r border-border">
+        <Sparkles size={16} className="text-blue-400" />
+        <span className="text-sm font-bold tracking-tight text-text-main">
+          CodeMapper
+        </span>
       </div>
 
-      <div className="flex items-center space-x-4">
-        <button onClick={onSettingsClick} className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">
-          <Settings size={20} />
+      {/* Layer Switcher — only in 2D */}
+      {viewMode === '2d' && (
+        <div className="flex items-center gap-0.5 bg-surface/60 p-1 rounded-lg border border-border-subtle">
+          {layerItems.map(({ key, icon: Icon, label }) => {
+            const isActive = activeLayer === key;
+            return (
+              <button
+                key={key}
+                onClick={() => onLayerChange(key)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? 'bg-surface-raised text-text-main shadow-sm border border-border'
+                    : 'text-text-dim hover:text-text-muted border border-transparent'
+                }`}
+              >
+                <Icon size={13} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* View Mode Toggle */}
+      <div className="flex items-center bg-surface/60 p-1 rounded-lg border border-border-subtle">
+        <button
+          onClick={() => onViewModeChange('2d')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
+            viewMode === '2d'
+              ? 'bg-surface-raised text-text-main shadow-sm border border-border'
+              : 'text-text-dim hover:text-text-muted border border-transparent'
+          }`}
+        >
+          <Spline size={13} />
+          <span>Flow</span>
         </button>
-        <button className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">
-          <HelpCircle size={20} />
+        <button
+          onClick={() => onViewModeChange('3d')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
+            viewMode === '3d'
+              ? 'bg-surface-raised text-text-main shadow-sm border border-border'
+              : 'text-text-dim hover:text-text-muted border border-transparent'
+          }`}
+        >
+          <Box size={13} />
+          <span>3D</span>
         </button>
-        <button className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">
-          <User size={20} />
+      </div>
+
+      <div className="flex items-center gap-1">
+        {/* Theme Toggle */}
+        <button
+          onClick={() => setIsLightMode(!isLightMode)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-dim hover:text-text-main hover:bg-glass-light transition-all duration-200 cursor-pointer"
+          title="Toggle Theme"
+        >
+          {isLightMode ? <Moon size={16} /> : <Sun size={16} />}
+        </button>
+
+        {/* Settings */}
+        <button
+          onClick={onSettingsClick}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-dim hover:text-text-main hover:bg-glass-light transition-all duration-200 cursor-pointer"
+          title="Settings"
+        >
+          <Settings size={16} />
         </button>
       </div>
     </header>

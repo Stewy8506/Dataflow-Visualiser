@@ -24,7 +24,6 @@ interface ThreeDGraphProps {
   onNodeSelect: (node: any) => void;
 }
 
-// Camera controller to smoothly interpolate focus targets
 interface CameraControllerProps {
   targetPos: THREE.Vector3 | null;
 }
@@ -35,7 +34,6 @@ function CameraController({ targetPos }: CameraControllerProps) {
 
   useFrame(() => {
     if (targetPos) {
-      // Lerp camera target close to node
       const desiredCamPos = new THREE.Vector3(
         targetPos.x,
         targetPos.y,
@@ -49,7 +47,6 @@ function CameraController({ targetPos }: CameraControllerProps) {
         orbitControls.update();
       }
     } else {
-      // Return target to center and reset camera
       const origin = new THREE.Vector3(0, 0, 0);
       camera.position.lerp(initialCameraPos.current, 0.04);
       if (controls) {
@@ -66,14 +63,12 @@ function CameraController({ targetPos }: CameraControllerProps) {
 export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGraphProps) {
   const [nodes3D, setNodes3D] = useState<Node3D[]>([]);
 
-  // 3D Force-Directed Simulation
   useEffect(() => {
     if (!graphData?.nodes || graphData.nodes.length === 0) {
       setNodes3D([]);
       return;
     }
 
-    // Retain coordinates of existing nodes to prevent visual jumping
     const existingMap = new Map(nodes3D.map(n => [n.id, n]));
 
     const initializedNodes: Node3D[] = graphData.nodes.map((n: any) => {
@@ -93,7 +88,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
         group: n.group,
         semantic_group: n.semantic_group,
         summary: n.summary,
-        // Start near origin with slight noise
         x: (Math.random() - 0.5) * 5,
         y: (Math.random() - 0.5) * 5,
         z: (Math.random() - 0.5) * 5,
@@ -103,18 +97,15 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
       };
     });
 
-    // Solver constants
-    const kRep = 1.6;        // Node repulsion strength
-    const kAtt = 0.06;       // Edge attraction strength
-    const kGrav = 0.02;      // Gravity pull strength
-    const friction = 0.85;   // Velocity damping factor
+    const kRep = 1.6;
+    const kAtt = 0.06;
+    const kGrav = 0.02;
+    const friction = 0.85;
     
     const edges = graphData.edges || [];
     const nodeMap = new Map(initializedNodes.map(n => [n.id, n]));
 
-    // Run layout for 180 ticks for beautiful convergence
     for (let tick = 0; tick < 180; tick++) {
-      // 1. Repulsion between all node pairs
       for (let i = 0; i < initializedNodes.length; i++) {
         const u = initializedNodes[i];
         for (let j = i + 1; j < initializedNodes.length; j++) {
@@ -142,7 +133,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
         }
       }
 
-      // 2. Attraction along connection edges
       edges.forEach((edge: any) => {
         const u = nodeMap.get(edge.source);
         const v = nodeMap.get(edge.target);
@@ -168,7 +158,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
         }
       });
 
-      // 3. Gravity pull and coordinates update
       initializedNodes.forEach(n => {
         n.vx -= n.x * kGrav;
         n.vy -= n.y * kGrav;
@@ -187,7 +176,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
     setNodes3D(initializedNodes);
   }, [graphData]);
 
-  // Track connected IDs for active selection highlighting
   const connectedIds = useMemo(() => {
     if (!selectedNode) return null;
     const connected = new Set<string>();
@@ -202,12 +190,10 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
     return connected;
   }, [selectedNode, graphData]);
 
-  // Fast O(1) map for looking up node positions by ID in the 3D space
   const nodesMap = useMemo(() => {
     return new Map(nodes3D.map(n => [n.id, n]));
   }, [nodes3D]);
 
-  // Target coordinates for selected camera focus
   const cameraTarget = useMemo(() => {
     if (!selectedNode || nodes3D.length === 0) return null;
     const matched = nodesMap.get(selectedNode.id);
@@ -216,7 +202,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
   }, [selectedNode, nodesMap]);
 
   const handleNodeClick = (node: Node3D) => {
-    // Reconstruct ReactFlow format matching the rest of the application
     onNodeSelect({
       id: node.id,
       data: {
@@ -234,14 +219,13 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
   };
 
   return (
-    <div className="w-full h-full bg-[#050510]" onClick={handleCanvasClick}>
+    <div className="w-full h-full bg-[#0a0a10]" onClick={handleCanvasClick}>
       <Canvas camera={{ position: [0, 0, 18], fov: 60 }}>
         <ambientLight intensity={0.6} />
         <pointLight position={[10, 10, 10]} intensity={1.2} />
         <pointLight position={[-10, -10, -10]} intensity={0.5} />
         <Stars radius={120} depth={50} count={6000} factor={4} saturation={0.5} fade speed={1.2} />
 
-        {/* Nodes Constellation */}
         {nodes3D.map((node) => {
           const isSelected = selectedNode?.id === node.id;
           const isDimmed = connectedIds !== null && !connectedIds.has(node.id);
@@ -256,7 +240,6 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
           );
         })}
 
-        {/* Edge Connections */}
         {nodes3D.length > 0 && graphData?.edges?.map((edge: any, idx: number) => {
           const u = nodesMap.get(edge.source);
           const v = nodesMap.get(edge.target);
@@ -269,7 +252,7 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
             <Line
               key={`edge-${idx}`}
               points={[[u.x, u.y, u.z], [v.x, v.y, v.z]]}
-              color={isDirect ? "#22d3ee" : "#475569"}
+              color={isDirect ? "#60a5fa" : "#334155"}
               lineWidth={isDirect ? 2.5 : 1}
               transparent
               opacity={isDimmed ? 0.04 : isDirect ? 0.9 : 0.3}

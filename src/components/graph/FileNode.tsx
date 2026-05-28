@@ -1,148 +1,215 @@
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2 } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { FileCode, FileType, Layout, Trash2, Cpu } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-} export function FileNode({ data, selected }: any) {
+// Vibrant accent colors for zoomed-out visibility
+function getAccent(type: string, isBackend: boolean) {
+  if (isBackend) return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+  if (type === 'TSX' || type === 'JSX') return { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' };
+  if (type === 'TS' || type === 'JS' || type === 'PY') return { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+  return { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' };
+}
+
+export function FileNode({ data, selected }: any) {
   const isBackend = data.isBackend;
   const isHorizontal = data.direction !== 'TB';
+  const accent = getAccent(data.type, isBackend);
 
-  // Extract a short path, e.g. the last 2 folder names
   const pathParts = data.path ? data.path.split('/') : [];
   const dirPath = pathParts.length > 1
     ? pathParts.slice(Math.max(0, pathParts.length - 3), pathParts.length - 1).join('/')
     : '';
 
-  return (
-    <div
-      className={cn(
-        "bg-slate-800/90 backdrop-blur-xl border-2 rounded-2xl min-w-[260px] max-w-[320px] transition-all duration-300 shadow-2xl",
-        selected
-          ? isBackend
-            ? "border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400"
-            : "border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.4)] ring-2 ring-blue-400"
-          : isBackend
-            ? "border-emerald-700/60 hover:border-emerald-500 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"
-            : "border-slate-600 hover:border-slate-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
-      )}
-    >
-      <Handle
-        type="target"
-        position={isHorizontal ? Position.Left : Position.Top}
-        id={isHorizontal ? "left" : "top"}
-        className={cn(
-          "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
-          isHorizontal ? "!-left-[7px]" : "!-top-[7px]"
-        )}
-      />
-      <Handle
-        type="source"
-        position={isHorizontal ? Position.Left : Position.Top}
-        id={isHorizontal ? "left-source" : "top-source"}
-        className={cn(
-          "opacity-0 w-1 h-1 pointer-events-none",
-          isHorizontal ? "!-left-[5px]" : "!-top-[5px]"
-        )}
-      />
-      <div className="p-4 relative">
-        {data.isDeadCode && (
-          <div className="absolute -top-3 -right-3 flex items-center space-x-1 z-10">
-            <span className="px-2 py-1 bg-red-900/60 text-red-300 border border-red-500/50 rounded-md text-[10px] font-bold uppercase tracking-wider shadow-lg flex items-center backdrop-blur-sm">
-              <span className="mr-1">💀</span> Dead Code
-            </span>
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                const confirmed = await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
-                  title: 'Delete Dead Code',
-                  kind: 'warning'
-                });
-                if (confirmed) {
-                  try {
-                    await invoke('delete_file', { path: data.path });
-                    if (data.onDelete) data.onDelete();
-                  } catch (err) {
-                    console.error("Failed to delete", err);
-                  }
-                }
-              }}
-              className="p-1.5 bg-slate-800 hover:bg-red-600 text-red-400 hover:text-white rounded-md border border-slate-600 hover:border-red-500 transition-colors cursor-pointer shadow-lg"
-              title="Delete File"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-start space-x-3">
-          <div className="p-2.5 bg-slate-900/80 rounded-xl shrink-0 mt-0.5 ring-1 ring-slate-700">
-            {data.type === 'TSX' || data.type === 'JSX' ? (
-              <Layout size={18} className="text-blue-400" />
-            ) : data.type === 'TS' || data.type === 'JS' ? (
-              <FileCode size={18} className="text-yellow-400" />
-            ) : (
-              <FileType size={18} className="text-slate-400" />
-            )}
-          </div>
-          <div className="flex flex-col overflow-hidden w-full">
-            <div className="flex justify-between items-start w-full">
-              <div className="flex flex-col">
-                {dirPath && (
-                  <span className="text-xs text-slate-400 font-mono truncate max-w-[150px] leading-tight mb-1">
-                    {dirPath}/
-                  </span>
-                )}
-                <span className="font-bold text-white text-base truncate max-w-[150px] tracking-wide">
-                  {data.label}
-                </span>
-              </div>
+  const isBlastMode = data.hasBlastRadius;
+  const isBlastConnected = data.blastConnected;
+  const tier = data.blastTier;
 
-              {data.semantic_group && (
-                <span className="px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 whitespace-nowrap ml-2 shrink-0">
-                  {data.semantic_group}
-                </span>
+  let blastBorder = 'var(--color-border)';
+  let blastShadow: string | undefined = undefined;
+  let blastBorderWidth = '1px';
+
+  if (isBlastMode && isBlastConnected && tier > 0) {
+    blastBorderWidth = '2px';
+    if (tier === 1) {
+      blastBorder = '#ef4444';
+      blastShadow = '0 0 15px rgba(239, 68, 68, 0.4)';
+    } else if (tier === 2) {
+      blastBorder = '#f97316';
+      blastShadow = '0 0 12px rgba(249, 115, 22, 0.35)';
+    } else if (tier === 3) {
+      blastBorder = '#eab308';
+      blastShadow = '0 0 10px rgba(234, 179, 8, 0.3)';
+    } else {
+      blastBorder = 'var(--color-border-subtle)';
+      blastShadow = '0 0 5px rgba(148, 163, 184, 0.1)';
+      blastBorderWidth = '1px';
+    }
+  }
+
+  return (
+    <div className="relative transition-all duration-200">
+      {/* Card */}
+      <div
+        className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${
+          selected
+            ? 'shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 scale-[1.02]'
+            : 'shadow-lg hover:shadow-xl'
+        }`}
+        style={{
+          background: 'var(--color-surface-raised)',
+          borderTop: `${blastBorderWidth} solid ${blastBorder}`,
+          borderRight: `${blastBorderWidth} solid ${blastBorder}`,
+          borderBottom: `${blastBorderWidth} solid ${blastBorder}`,
+          borderLeftColor: accent.color,
+          boxShadow: selected ? `0 0 24px ${accent.color}40, 0 4px 16px rgba(0,0,0,0.4)` : (blastShadow || `0 4px 16px rgba(0, 0, 0, 0.3)`),
+        }}
+      >
+        {/* Handles */}
+        <Handle
+          type="target"
+          position={isHorizontal ? Position.Left : Position.Top}
+          id={isHorizontal ? "left" : "top"}
+          className="!w-2.5 !h-2.5 !rounded-full !border-2"
+          style={{
+            background: 'var(--color-text-muted)',
+            borderColor: 'var(--color-surface)',
+            ...(isHorizontal ? { left: -6 } : { top: -6 }),
+          }}
+        />
+        <Handle
+          type="source"
+          position={isHorizontal ? Position.Left : Position.Top}
+          id={isHorizontal ? "left-source" : "top-source"}
+          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+          style={isHorizontal ? { left: -4 } : { top: -4 }}
+        />
+
+        {/* Dead code overlay */}
+        {data.isDeadCode && (
+          <div className="absolute inset-0 rounded-xl bg-red-950/20 pointer-events-none z-0" />
+        )}
+
+        {/* Content */}
+        <div className="p-4 relative z-10">
+          {/* Dead code badge */}
+          {data.isDeadCode && (
+            <div className="absolute -top-1 -right-1 flex items-center gap-1 z-20">
+              <span className="px-2 py-0.5 bg-red-950/90 text-red-400 border border-red-800/60 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center">
+                <span className="mr-1">💀</span> Dead Code
+              </span>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const confirmed = await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
+                    title: 'Delete Dead Code',
+                    kind: 'warning'
+                  });
+                  if (confirmed) {
+                    try {
+                      await invoke('delete_file', { path: data.path });
+                      if (data.onDelete) data.onDelete();
+                    } catch (err) {
+                      console.error("Failed to delete", err);
+                    }
+                  }
+                }}
+                className="p-1 bg-[#1a1a24] hover:bg-red-900/80 text-red-400 hover:text-red-300 rounded-md border border-red-900/50 hover:border-red-700 transition-all duration-200 cursor-pointer"
+                title="Delete File"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-start gap-3">
+            {/* File icon */}
+            <div
+              className="p-2.5 rounded-lg shrink-0 mt-0.5 border shadow-inner"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              {data.type === 'TSX' || data.type === 'JSX' ? (
+                <Layout size={16} style={{ color: accent.color }} />
+              ) : data.type === 'TS' || data.type === 'JS' ? (
+                <FileCode size={16} style={{ color: accent.color }} />
+              ) : isBackend ? (
+                <Cpu size={16} style={{ color: accent.color }} />
+              ) : (
+                <FileType size={16} style={{ color: accent.color }} />
               )}
             </div>
 
-            {data.summary && (
-              <p className="text-sm text-slate-300 mt-3 leading-snug line-clamp-2">
-                {data.summary}
-              </p>
-            )}
+            {/* File info */}
+            <div className="flex flex-col overflow-hidden flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col min-w-0">
+                  {dirPath && (
+                    <span className="text-[10px] text-text-dim font-mono truncate leading-tight mb-0.5">
+                      {dirPath}/
+                    </span>
+                  )}
+                  <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight">
+                    {data.label}
+                  </span>
+                </div>
+
+                {data.semantic_group && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
+                    {data.semantic_group}
+                  </span>
+                )}
+              </div>
+
+              {data.summary && (
+                <p className="text-xs text-text-muted mt-2 leading-relaxed line-clamp-2">
+                  {data.summary}
+                </p>
+              )}
+            </div>
           </div>
-          {data.semantic_group ? (
-            <span className="px-2 py-1 bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-blue-300 rounded-md border border-blue-500/30 text-[10px] font-bold flex items-center shadow-[0_0_10px_rgba(59,130,246,0.1)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1.5 animate-pulse"></span>
-              AI Enriched
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-slate-900 text-slate-400 rounded-md border border-slate-700 text-[10px] font-semibold uppercase tracking-wider">
-              {data.subLabel && data.subLabel !== 'File' ? data.subLabel : data.type}
-            </span>
-          )}
+
+          {/* Bottom badge */}
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-border-subtle">
+            {data.semantic_group ? (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-semibold bg-primary/10 text-primary-light border border-primary/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary-light animate-pulse" />
+                AI Enriched
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider text-text-dim border border-border-subtle bg-surface">
+                {data.subLabel && data.subLabel !== 'File' ? data.subLabel : data.type}
+              </span>
+            )}
+
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: accent.color, opacity: 0.7 }} />
+              <span className="text-[9px] text-text-dim font-medium">
+                {isBackend ? 'Backend' : data.subLabel === 'UI Component' ? 'UI' : 'Script'}
+              </span>
+            </div>
+          </div>
         </div>
+
+        {/* Source handles */}
+        <Handle
+          type="source"
+          position={isHorizontal ? Position.Right : Position.Bottom}
+          id={isHorizontal ? "right" : "bottom"}
+          className="!w-2.5 !h-2.5 !rounded-full !border-2"
+          style={{
+            background: 'var(--color-text-muted)',
+            borderColor: 'var(--color-surface)',
+            ...(isHorizontal ? { right: -6 } : { bottom: -6 }),
+          }}
+        />
+        <Handle
+          type="target"
+          position={isHorizontal ? Position.Right : Position.Bottom}
+          id={isHorizontal ? "right-target" : "bottom-target"}
+          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+          style={isHorizontal ? { right: -4 } : { bottom: -4 }}
+        />
       </div>
-      <Handle
-        type="source"
-        position={isHorizontal ? Position.Right : Position.Bottom}
-        id={isHorizontal ? "right" : "bottom"}
-        className={cn(
-          "w-3 h-3 bg-slate-300 border-2 border-slate-900 rounded-full",
-          isHorizontal ? "!-right-[7px]" : "!-bottom-[7px]"
-        )}
-      />
-      <Handle
-        type="target"
-        position={isHorizontal ? Position.Right : Position.Bottom}
-        id={isHorizontal ? "right-target" : "bottom-target"}
-        className={cn(
-          "opacity-0 w-1 h-1 pointer-events-none",
-          isHorizontal ? "!-right-[5px]" : "!-bottom-[5px]"
-        )}
-      />
     </div>
   );
 }

@@ -11,9 +11,8 @@ interface ThreeDNodeProps {
 export function ThreeDNode({ node, isSelected, isDimmed, onClick }: ThreeDNodeProps) {
   const [hovered, setHovered] = useState(false);
 
-  // File type aesthetics
   let shape = 'sphere';
-  let color = '#3b82f6'; // React Components: vibrant blue
+  let color = '#3b82f6';
   let emissive = '#1d4ed8';
 
   const group = node.group ? node.group.toLowerCase() : '';
@@ -21,15 +20,14 @@ export function ThreeDNode({ node, isSelected, isDimmed, onClick }: ThreeDNodePr
 
   if (id.includes('/api/') || id.includes('route.') || id.includes('/server/') || id.includes('/backend/') || id.includes('src-tauri')) {
     shape = 'box';
-    color = '#10b981'; // Backend/APIs: emerald green
+    color = '#10b981';
     emissive = '#047857';
   } else if (group === 'ts' || group === 'js') {
     shape = 'octahedron';
-    color = '#eab308'; // Scripts/Utilities: amber yellow
-    emissive = '#a16207';
+    color = '#f59e0b';
+    emissive = '#b45309';
   }
 
-  // Hover and selection modifiers
   const scale = isSelected ? 1.5 : hovered ? 1.3 : 1.0;
   const opacity = isDimmed ? 0.15 : 1.0;
 
@@ -70,13 +68,21 @@ export function ThreeDNode({ node, isSelected, isDimmed, onClick }: ThreeDNodePr
         />
       </mesh>
 
-      {/* Floating Glassmorphic Label on Hover or Selection */}
       {(hovered || isSelected) && (
         <Html distanceFactor={12} position={[0, 0.8, 0]} center>
-          <div className="bg-slate-950/90 border border-slate-800/80 backdrop-blur-md text-white px-3 py-1.5 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] whitespace-nowrap pointer-events-none select-none flex flex-col items-center animate-in fade-in zoom-in-95 duration-150">
-            <span className="font-bold font-sans text-xs text-slate-100 tracking-wide">{node.label}</span>
+          <div
+            className="px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none select-none flex flex-col items-center"
+            style={{
+              background: 'rgba(17,17,24,0.92)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              animation: 'nebula-fade-in 0.15s ease forwards',
+            }}
+          >
+            <span className="font-semibold font-sans text-xs text-[#e2e8f0] tracking-wide">{node.label}</span>
             {node.semantic_group && (
-              <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-wider mt-1 px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 rounded">
+              <span className="text-[8px] font-bold text-blue-400 uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
                 {node.semantic_group}
               </span>
             )}

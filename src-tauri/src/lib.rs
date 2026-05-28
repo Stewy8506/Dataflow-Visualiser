@@ -510,7 +510,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     source: l.id.clone(),
                     target: r_node.id.clone(),
                     via: None,
-                    is_data_source: false, // Layout -> Route is a control flow
+                    is_data_source: true, // Route -> Layout is a data flow
                 });
             }
         }
@@ -546,7 +546,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                             source: parent_l.id.clone(),
                             target: l_node.id.clone(),
                             via: None,
-                            is_data_source: false, // Parent Layout -> Child Layout
+                            is_data_source: true, // Child Layout -> Parent Layout
                         });
                     }
                 }
