@@ -7,9 +7,10 @@ interface HeaderProps {
   onViewModeChange: (mode: '2d' | '3d') => void;
   activeLayer: GraphLayer;
   onLayerChange: (layer: GraphLayer) => void;
+  onSettingsClick?: () => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick }: HeaderProps) {
   return (
     <header className="h-16 border-b border-slate-800 bg-[#111115]/80 backdrop-blur flex items-center justify-between px-6 z-10 flex-shrink-0">
       <div className="flex items-center space-x-6">
@@ -71,7 +72,7 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange 
       </div>
 
       <div className="flex items-center space-x-4">
-        <button className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">
+        <button onClick={onSettingsClick} className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">
           <Settings size={20} />
         </button>
         <button className="text-slate-400 hover:text-white transition-colors cursor-pointer p-2">

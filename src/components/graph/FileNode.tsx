@@ -33,8 +33,8 @@ function cn(...inputs: ClassValue[]) {
         className="w-2 h-2 bg-slate-500 border-2 border-slate-900 rounded-full !-left-1"
       />
       <div className="p-3">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-slate-800 rounded-lg shrink-0">
+        <div className="flex items-start space-x-3">
+          <div className="p-2 bg-slate-800 rounded-lg shrink-0 mt-1">
             {data.type === 'TSX' || data.type === 'JSX' ? (
               <Layout size={14} className="text-blue-400" />
             ) : data.type === 'TS' || data.type === 'JS' ? (
@@ -43,15 +43,31 @@ function cn(...inputs: ClassValue[]) {
               <FileType size={14} className="text-slate-400" />
             )}
           </div>
-          <div className="flex flex-col overflow-hidden">
-            {dirPath && (
-              <span className="text-[10px] text-slate-500 font-mono truncate max-w-[170px] leading-tight">
-                {dirPath}/
-              </span>
+          <div className="flex flex-col overflow-hidden w-full">
+            <div className="flex justify-between items-start w-full">
+              <div className="flex flex-col">
+                {dirPath && (
+                  <span className="text-[10px] text-slate-500 font-mono truncate max-w-[130px] leading-tight">
+                    {dirPath}/
+                  </span>
+                )}
+                <span className="font-semibold text-slate-200 text-sm truncate max-w-[130px]">
+                  {data.label}
+                </span>
+              </div>
+              
+              {data.semantic_group && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-2 mt-1 shrink-0">
+                  {data.semantic_group}
+                </span>
+              )}
+            </div>
+            
+            {data.summary && (
+              <p className="text-[10px] text-slate-400 mt-2 leading-snug line-clamp-2 pr-1">
+                {data.summary}
+              </p>
             )}
-            <span className="font-semibold text-slate-200 text-sm truncate max-w-[170px]">
-              {data.label}
-            </span>
           </div>
         </div>
       </div>
@@ -61,7 +77,7 @@ function cn(...inputs: ClassValue[]) {
           {data.type}
         </span>
         <span className="text-[10px] font-medium text-slate-400 tracking-wide uppercase">
-          {data.subLabel}
+          {data.semantic_group ? "AI Enriched" : data.subLabel}
         </span>
       </div>
       <Handle

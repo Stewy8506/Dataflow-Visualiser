@@ -1,9 +1,9 @@
 use ignore::{DirEntry, WalkBuilder};
 use oxc_allocator::Allocator;
+use oxc_ast::ast::ModuleDeclaration;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use oxc_ast::ast::ModuleDeclaration;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -36,21 +36,25 @@ fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ParsedNode {
     pub id: String,
     pub label: String,
     pub group: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ParsedEdge {
     pub source: String,
     pub target: String,
     pub via: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GraphData {
     pub nodes: Vec<ParsedNode>,
     pub edges: Vec<ParsedEdge>,
@@ -97,6 +101,8 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         id: id.clone(),
                         label,
                         group: ext.to_string(),
+                        semantic_group: None,
+                        summary: None,
                     });
 
                     let mut imports = Vec::new();
@@ -106,22 +112,30 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         let allocator = Allocator::default();
                         let source_type = SourceType::from_path(file_path).unwrap_or_default();
                         let ret = Parser::new(&allocator, &source_text, source_type).parse();
-                        
+
                         if ret.errors.is_empty() {
                             let program = ret.program;
                             let mut all_exports_imports = true;
                             let mut has_exports = false;
-                            
+
                             for stmt in &program.body {
                                 if let Some(decl) = stmt.as_module_declaration() {
                                     match decl {
                                         ModuleDeclaration::ImportDeclaration(import_decl) => {
                                             imports.push(import_decl.source.value.to_string());
                                         }
-                                        ModuleDeclaration::ExportNamedDeclaration(_) |
-                                        ModuleDeclaration::ExportAllDeclaration(_) |
-                                        ModuleDeclaration::ExportDefaultDeclaration(_) => {
+                                        ModuleDeclaration::ExportAllDeclaration(_) => {
                                             has_exports = true;
+                                        }
+                                        ModuleDeclaration::ExportNamedDeclaration(named) => {
+                                            if named.source.is_some() {
+                                                has_exports = true;
+                                            } else {
+                                                all_exports_imports = false;
+                                            }
+                                        }
+                                        ModuleDeclaration::ExportDefaultDeclaration(_) => {
+                                            all_exports_imports = false;
                                         }
                                         _ => {
                                             all_exports_imports = false;
@@ -131,7 +145,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                     all_exports_imports = false;
                                 }
                             }
-                            
+
                             // It's a router if it purely handles imports/exports and doesn't contain component logic
                             if all_exports_imports && has_exports {
                                 is_router = true;
@@ -174,8 +188,10 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                 for possible in possible_paths {
                     // normalize to the same format as id (forward slashes)
                     let possible_id = possible.to_string_lossy().replace('\\', "/").to_lowercase();
-                    
-                    if let Some(target_node) = nodes.iter().find(|n| n.id.to_lowercase() == possible_id) {
+
+                    if let Some(target_node) =
+                        nodes.iter().find(|n| n.id.to_lowercase() == possible_id)
+                    {
                         edges.push(ParsedEdge {
                             source: file_data.id.clone(),
                             target: target_node.id.clone(),
@@ -319,20 +335,20 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         .collect();
 
     let mut final_edges = edges;
-    
+
     for router_id in &router_ids {
         let incoming: Vec<ParsedEdge> = final_edges
             .iter()
             .filter(|e| e.target == *router_id)
             .cloned()
             .collect();
-            
+
         let outgoing: Vec<ParsedEdge> = final_edges
             .iter()
             .filter(|e| e.source == *router_id)
             .cloned()
             .collect();
-            
+
         for inc in &incoming {
             for out in &outgoing {
                 if inc.source != out.target {
@@ -342,13 +358,13 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string();
-                        
+
                     if new_via.is_none() {
                         new_via = Some(router_filename);
                     } else {
                         new_via = Some(format!("{}, {}", new_via.unwrap(), router_filename));
                     }
-                    
+
                     final_edges.push(ParsedEdge {
                         source: inc.source.clone(),
                         target: out.target.clone(),
@@ -357,16 +373,160 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                 }
             }
         }
-        
+
         final_edges.retain(|e| e.source != *router_id && e.target != *router_id);
     }
-    
+
     let final_nodes: Vec<ParsedNode> = nodes
         .into_iter()
         .filter(|n| !router_ids.contains(&n.id))
         .collect();
 
-    Ok(GraphData { nodes: final_nodes, edges: final_edges })
+    Ok(GraphData {
+        nodes: final_nodes,
+        edges: final_edges,
+    })
+}
+
+#[derive(Serialize)]
+struct GeminiRequestPart {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct GeminiRequestContent {
+    parts: Vec<GeminiRequestPart>,
+}
+
+#[derive(Serialize)]
+struct GeminiRequest {
+    contents: Vec<GeminiRequestContent>,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponseCandidate {
+    content: GeminiResponseContent,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponseContent {
+    parts: Vec<GeminiResponsePart>,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponsePart {
+    text: String,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponse {
+    candidates: Vec<GeminiResponseCandidate>,
+}
+
+#[derive(Deserialize)]
+struct AiNodeResult {
+    id: String,
+    semantic_group: String,
+    summary: String,
+}
+
+#[derive(Deserialize)]
+struct AiResult {
+    nodes: Vec<AiNodeResult>,
+}
+
+#[tauri::command]
+async fn enrich_graph_with_ai(
+    mut graph_data: GraphData,
+    api_key: String,
+) -> Result<GraphData, String> {
+    if api_key.is_empty() {
+        return Err("API key is required".to_string());
+    }
+
+    let mut prompt = String::from(
+        "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
+        Also, provide a short 1-2 sentence summary for each file.\n\n\
+        Return the result as a JSON object with the following schema:\n\
+        {\n\
+          \"nodes\": [\n\
+            {\n\
+              \"id\": \"file id (exact string match from input)\",\n\
+              \"semantic_group\": \"A short category name (e.g., 'Authentication', 'UI Components', 'Database', 'API Routes')\",\n\
+              \"summary\": \"Short explanation of what the file does\"\n\
+            }\n\
+          ]\n\
+        }\n\n\
+        Only return the JSON. Do not include markdown formatting or explanations.\n\n\
+        Input Nodes:\n",
+    );
+
+    // To prevent exceeding context limits, we only include the file name and the first 50 lines.
+    for node in &graph_data.nodes {
+        prompt.push_str(&format!("File ID: {}\n", node.id));
+        prompt.push_str(&format!("File Name: {}\n", node.label));
+        prompt.push_str("Content:\n```\n");
+        if let Ok(content) = fs::read_to_string(&node.id) {
+            let truncated = content.lines().take(50).collect::<Vec<_>>().join("\n");
+            prompt.push_str(&truncated);
+        } else {
+            prompt.push_str("// Could not read file content");
+        }
+        prompt.push_str("\n```\n\n");
+    }
+
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key={}",
+        api_key
+    );
+
+    let request_body = GeminiRequest {
+        contents: vec![GeminiRequestContent {
+            parts: vec![GeminiRequestPart { text: prompt }],
+        }],
+    };
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let gemini_response: GeminiResponse = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse Gemini response: {}\n{}", e, response_text))?;
+
+    if let Some(candidate) = gemini_response.candidates.first() {
+        if let Some(part) = candidate.content.parts.first() {
+            let text = &part.text;
+            let json_str = if text.starts_with("```json") {
+                text.trim_start_matches("```json")
+                    .trim_end_matches("```")
+                    .trim()
+            } else {
+                text.trim()
+            };
+
+            let ai_result: AiResult = serde_json::from_str(json_str)
+                .map_err(|e| format!("Failed to parse AI JSON result: {}", e))?;
+
+            for ai_node in ai_result.nodes {
+                if let Some(node) = graph_data.nodes.iter_mut().find(|n| n.id == ai_node.id) {
+                    node.semantic_group = Some(ai_node.semantic_group);
+                    node.summary = Some(ai_node.summary);
+                }
+            }
+        }
+    }
+
+    Ok(graph_data)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -374,7 +534,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![parse_codebase])
+        .invoke_handler(tauri::generate_handler![
+            parse_codebase,
+            enrich_graph_with_ai
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
