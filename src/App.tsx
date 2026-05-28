@@ -103,6 +103,7 @@ function App() {
         position: { x: 0, y: 0 },
         data: {
           label: n.label,
+          path: n.id,
           subLabel,
           group: n.group,
           type: n.group.toUpperCase(),
@@ -115,9 +116,9 @@ function App() {
       id: `e-${i}`,
       source: e.source,
       target: e.target,
-      type: 'smoothstep',
+      type: 'default',
       animated: true,
-      style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
+      style: { stroke: '#475569', strokeWidth: 2 },
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: '#475569',

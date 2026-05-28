@@ -1,7 +1,7 @@
+use ignore::{DirEntry, WalkBuilder};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, WalkDir};
 
 fn is_ignored(entry: &DirEntry) -> bool {
     entry
@@ -13,6 +13,9 @@ fn is_ignored(entry: &DirEntry) -> bool {
                 || s == "target"
                 || s == "dist"
                 || s == "build"
+                || s.starts_with("next-env")
+                || s == "next.config.ts"
+                || s == "next.config.js"
         })
         .unwrap_or(false)
 }
@@ -66,44 +69,47 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
 
     let mut files_data = Vec::new();
 
-    for entry in WalkDir::new(path_ref)
-        .into_iter()
+    for result in WalkBuilder::new(path_ref)
+        .hidden(true) // ignore hidden files/dirs (.git, .env)
+        .git_ignore(true) // respect .gitignore
         .filter_entry(|e| !is_ignored(e))
-        .filter_map(|e| e.ok())
+        .build()
     {
-        let file_path = entry.path();
-        if file_path.is_file() {
-            let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-            if ext == "js" || ext == "ts" || ext == "jsx" || ext == "tsx" {
-                let id = file_path.to_string_lossy().replace('\\', "/");
-                let label = file_path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
+        if let Ok(entry) = result {
+            let file_path = entry.path();
+            if file_path.is_file() {
+                let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if ext == "js" || ext == "ts" || ext == "jsx" || ext == "tsx" {
+                    let id = file_path.to_string_lossy().replace('\\', "/");
+                    let label = file_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
 
-                nodes.push(ParsedNode {
-                    id: id.clone(),
-                    label,
-                    group: ext.to_string(),
-                });
+                    nodes.push(ParsedNode {
+                        id: id.clone(),
+                        label,
+                        group: ext.to_string(),
+                    });
 
-                let mut imports = Vec::new();
-                if let Ok(source_text) = fs::read_to_string(file_path) {
-                    // Use regex to catch static imports, dynamic imports, require(), and re-exports
-                    let re = regex::Regex::new(r#"(?:import|export)\s+(?:[^"']*?\s+from\s+)?['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)"#).unwrap();
-                    for caps in re.captures_iter(&source_text) {
-                        if let Some(m) = caps.get(1).or_else(|| caps.get(2)) {
-                            imports.push(m.as_str().to_string());
+                    let mut imports = Vec::new();
+                    if let Ok(source_text) = fs::read_to_string(file_path) {
+                        // Use regex to catch static imports, dynamic imports, require(), and re-exports
+                        let re = regex::Regex::new(r#"(?:import|export)\s+(?:[^"']*?\s+from\s+)?['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)"#).unwrap();
+                        for caps in re.captures_iter(&source_text) {
+                            if let Some(m) = caps.get(1).or_else(|| caps.get(2)) {
+                                imports.push(m.as_str().to_string());
+                            }
                         }
                     }
-                }
 
-                files_data.push(FileData {
-                    id,
-                    path: file_path.to_path_buf(),
-                    imports,
-                });
+                    files_data.push(FileData {
+                        id,
+                        path: file_path.to_path_buf(),
+                        imports,
+                    });
+                }
             }
         }
     }
