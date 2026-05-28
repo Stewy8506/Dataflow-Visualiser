@@ -420,14 +420,22 @@ fn check_node_existence(path: &Path, node_index: &HashMap<String, usize>) -> Opt
     node_index.get(&key).copied()
 }
 
+use tauri_plugin_fs::FsExt;
+
 #[tauri::command]
-pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
+pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<GraphData, String> {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
         return Err("Path does not exist".to_string());
+    }
+
+    if let Some(scope) = app.try_fs_scope() {
+        if !scope.is_allowed(path_ref) {
+            return Err("Access denied by Tauri fs capability scope".to_string());
+        }
     }
 
     let alias_resolver = AliasResolver::new(path_ref);
@@ -453,6 +461,7 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
         id: String,
         path: PathBuf,
         imports: Vec<(String, bool)>,
+        is_barrel_file: bool,
         is_router: bool,
     }
 
@@ -486,7 +495,8 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     });
 
                     let mut imports = Vec::new();
-                    let mut is_router = false;
+                    let mut is_barrel_file = false;
+                    let is_router = false;
                     let mut function_count = 0;
 
                     if let Ok(source_text) = fs::read_to_string(file_path) {
@@ -569,7 +579,7 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                 }
 
                                 if all_exports_imports && has_exports {
-                                    is_router = true;
+                                    is_barrel_file = true;
                                 }
                             }
                         } else if matches!(ext, "py" | "rs" | "dart") {
@@ -624,6 +634,7 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         id,
                         path: file_path.to_path_buf(),
                         imports,
+                        is_barrel_file,
                         is_router,
                     });
                 }
@@ -746,6 +757,12 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
         }
     }
 
+    let barrel_ids: Vec<String> = files_data
+        .iter()
+        .filter(|f| f.is_barrel_file)
+        .map(|f| f.id.clone())
+        .collect();
+
     let router_ids: Vec<String> = files_data
         .iter()
         .filter(|f| {
@@ -756,18 +773,21 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
         .map(|f| f.id.clone())
         .collect();
 
+    let mut ids_to_bypass = barrel_ids.clone();
+    ids_to_bypass.extend(router_ids.clone());
+
     let mut final_edges = edges;
 
-    for router_id in &router_ids {
+    for bypass_id in &ids_to_bypass {
         let incoming: Vec<ParsedEdge> = final_edges
             .iter()
-            .filter(|e| e.target == *router_id)
+            .filter(|e| e.target == *bypass_id)
             .cloned()
             .collect();
 
         let outgoing: Vec<ParsedEdge> = final_edges
             .iter()
-            .filter(|e| e.source == *router_id)
+            .filter(|e| e.source == *bypass_id)
             .cloned()
             .collect();
 
@@ -775,16 +795,16 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
             for out in &outgoing {
                 if inc.source != out.target {
                     let mut new_via = inc.via.clone();
-                    let router_filename = Path::new(router_id)
+                    let proxy_filename = Path::new(bypass_id)
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string();
 
                     if new_via.is_none() {
-                        new_via = Some(router_filename);
+                        new_via = Some(proxy_filename);
                     } else {
-                        new_via = Some(format!("{}, {}", new_via.unwrap(), router_filename));
+                        new_via = Some(format!("{}, {}", new_via.unwrap(), proxy_filename));
                     }
 
                     final_edges.push(ParsedEdge {
@@ -797,12 +817,12 @@ pub async fn parse_codebase(path: String) -> Result<GraphData, String> {
             }
         }
 
-        final_edges.retain(|e| e.source != *router_id && e.target != *router_id);
+        final_edges.retain(|e| e.source != *bypass_id && e.target != *bypass_id);
     }
 
     let final_nodes: Vec<ParsedNode> = nodes
         .into_iter()
-        .filter(|n| !router_ids.contains(&n.id))
+        .filter(|n| !ids_to_bypass.contains(&n.id))
         .collect();
 
     Ok(GraphData {
