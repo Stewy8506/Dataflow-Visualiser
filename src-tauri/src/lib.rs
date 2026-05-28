@@ -6,6 +6,7 @@ use oxc_span::SourceType;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::{Emitter, Window};
 
 fn is_ignored(entry: &DirEntry) -> bool {
     entry
@@ -327,10 +328,13 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         }
     }
 
-    // Graph Reduction: Collapse Router Nodes
+    // Graph Reduction: Collapse Router Nodes and API Routes
     let router_ids: Vec<String> = files_data
         .iter()
-        .filter(|f| f.is_router)
+        .filter(|f| {
+            let is_api_route = f.id.contains("/api/") || f.id.contains("route.ts") || f.id.contains("route.js");
+            f.is_router || is_api_route
+        })
         .map(|f| f.id.clone())
         .collect();
 
@@ -399,8 +403,16 @@ struct GeminiRequestContent {
 }
 
 #[derive(Serialize)]
+struct GenerationConfig {
+    #[serde(rename = "responseMimeType")]
+    response_mime_type: String,
+}
+
+#[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<GeminiRequestContent>,
+    #[serde(rename = "generationConfig")]
+    generation_config: GenerationConfig,
 }
 
 #[derive(Deserialize)]
@@ -423,7 +435,7 @@ struct GeminiResponse {
     candidates: Vec<GeminiResponseCandidate>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct AiNodeResult {
     id: String,
     semantic_group: String,
@@ -437,96 +449,122 @@ struct AiResult {
 
 #[tauri::command]
 async fn enrich_graph_with_ai(
-    mut graph_data: GraphData,
+    window: Window,
+    graph_data: GraphData,
     api_key: String,
-) -> Result<GraphData, String> {
+    model: String,
+) -> Result<(), String> {
     if api_key.is_empty() {
         return Err("API key is required".to_string());
     }
 
-    let mut prompt = String::from(
-        "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
-        Also, provide a short 1-2 sentence summary for each file.\n\n\
-        Return the result as a JSON object with the following schema:\n\
-        {\n\
-          \"nodes\": [\n\
-            {\n\
-              \"id\": \"file id (exact string match from input)\",\n\
-              \"semantic_group\": \"A short category name (e.g., 'Authentication', 'UI Components', 'Database', 'API Routes')\",\n\
-              \"summary\": \"Short explanation of what the file does\"\n\
-            }\n\
-          ]\n\
-        }\n\n\
-        Only return the JSON. Do not include markdown formatting or explanations.\n\n\
-        Input Nodes:\n",
-    );
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+        let chunk_size = 10;
+        
+        let nodes = graph_data.nodes.clone();
+        
+        for chunk in nodes.chunks(chunk_size) {
+            let mut prompt = String::from(
+                "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
+                Also, provide a short 1-2 sentence summary for each file.\n\n\
+                Return the result as a JSON object with the following schema:\n\
+                {\n\
+                  \"nodes\": [\n\
+                    {\n\
+                      \"id\": \"file id (exact string match from input)\",\n\
+                      \"semantic_group\": \"A short category name (e.g., 'Authentication', 'UI Components', 'Database', 'API Routes')\",\n\
+                      \"summary\": \"Short explanation of what the file does\"\n\
+                    }\n\
+                  ]\n\
+                }\n\n\
+                Only return the JSON. Do not include markdown formatting or explanations.\n\n\
+                Input Nodes:\n",
+            );
 
-    // To prevent exceeding context limits, we only include the file name and the first 50 lines.
-    for node in &graph_data.nodes {
-        prompt.push_str(&format!("File ID: {}\n", node.id));
-        prompt.push_str(&format!("File Name: {}\n", node.label));
-        prompt.push_str("Content:\n```\n");
-        if let Ok(content) = fs::read_to_string(&node.id) {
-            let truncated = content.lines().take(50).collect::<Vec<_>>().join("\n");
-            prompt.push_str(&truncated);
-        } else {
-            prompt.push_str("// Could not read file content");
-        }
-        prompt.push_str("\n```\n\n");
-    }
+            for node in chunk {
+                prompt.push_str(&format!("File ID: {}\n", node.id));
+                prompt.push_str(&format!("File Name: {}\n", node.label));
+                prompt.push_str("Content:\n```\n");
+                if let Ok(content) = fs::read_to_string(&node.id) {
+                    let truncated = content.lines().take(50).collect::<Vec<_>>().join("\n");
+                    prompt.push_str(&truncated);
+                } else {
+                    prompt.push_str("// Could not read file content");
+                }
+                prompt.push_str("\n```\n\n");
+            }
 
-    let client = reqwest::Client::new();
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key={}",
-        api_key
-    );
+            // `model` is expected to be in the format "models/gemini-1.5-flash"
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
+                model, api_key
+            );
 
-    let request_body = GeminiRequest {
-        contents: vec![GeminiRequestContent {
-            parts: vec![GeminiRequestPart { text: prompt }],
-        }],
-    };
-
-    let response = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
-
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    let gemini_response: GeminiResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse Gemini response: {}\n{}", e, response_text))?;
-
-    if let Some(candidate) = gemini_response.candidates.first() {
-        if let Some(part) = candidate.content.parts.first() {
-            let text = &part.text;
-            let json_str = if text.starts_with("```json") {
-                text.trim_start_matches("```json")
-                    .trim_end_matches("```")
-                    .trim()
-            } else {
-                text.trim()
+            let request_body = GeminiRequest {
+                contents: vec![GeminiRequestContent {
+                    parts: vec![GeminiRequestPart { text: prompt }],
+                }],
+                generation_config: GenerationConfig {
+                    response_mime_type: "application/json".to_string(),
+                },
             };
 
-            let ai_result: AiResult = serde_json::from_str(json_str)
-                .map_err(|e| format!("Failed to parse AI JSON result: {}", e))?;
+            let response = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .json(&request_body)
+                .send()
+                .await;
 
-            for ai_node in ai_result.nodes {
-                if let Some(node) = graph_data.nodes.iter_mut().find(|n| n.id == ai_node.id) {
-                    node.semantic_group = Some(ai_node.semantic_group);
-                    node.summary = Some(ai_node.summary);
+            if let Ok(resp) = response {
+                if let Ok(response_text) = resp.text().await {
+                    if let Ok(gemini_response) = serde_json::from_str::<GeminiResponse>(&response_text) {
+                        if let Some(candidate) = gemini_response.candidates.first() {
+                            if let Some(part) = candidate.content.parts.first() {
+                                let text = part.text.trim();
+                                
+                                // Robust JSON extraction:
+                                let json_str = if let Some(start) = text.find("```json") {
+                                    if let Some(end) = text[start + 7..].find("```") {
+                                        &text[start + 7..start + 7 + end]
+                                    } else {
+                                        &text[start + 7..]
+                                    }
+                                } else if let Some(start) = text.find('{') {
+                                    if let Some(end) = text.rfind('}') {
+                                        &text[start..=end]
+                                    } else {
+                                        text
+                                    }
+                                } else {
+                                    text
+                                };
+                                
+                                let json_str = json_str.trim();
+
+                                if let Ok(ai_result) = serde_json::from_str::<AiResult>(json_str) {
+                                    let _ = window.emit("ai_nodes_enriched", &ai_result.nodes);
+                                } else {
+                                    eprintln!("Failed to parse AI JSON result: {}", json_str);
+                                }
+                            }
+                        }
+                    } else {
+                        eprintln!("Failed to parse Gemini response: {}", response_text);
+                    }
                 }
             }
         }
-    }
+        let _ = window.emit("ai_enrichment_complete", ());
+    });
 
-    Ok(graph_data)
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_file(path: String) -> Result<(), String> {
+    std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -536,7 +574,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             parse_codebase,
-            enrich_graph_with_ai
+            enrich_graph_with_ai,
+            delete_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

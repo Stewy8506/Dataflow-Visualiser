@@ -5,10 +5,10 @@ export function getLayoutedElements(nodes: Node[], edges: Edge[], direction = 'L
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = 240;
-  const nodeHeight = 100;
+  const nodeWidth = 260;
+  const nodeHeight = 120;
 
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 300 });
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 80, ranksep: 150 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });

@@ -10,6 +10,7 @@ import {
   Connection,
   Edge,
   NodeTypes,
+  BackgroundVariant,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
@@ -86,12 +87,12 @@ export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNod
         ...edge,
         style: {
           ...edge.style,
-          opacity: isConnected ? 1 : 0.05,
-          strokeWidth: isDirectlyConnected ? 3 : 2,
-          stroke: isDirectlyConnected ? '#3b82f6' : '#475569',
+          opacity: isConnected ? 0.6 : 0.1,
+          strokeWidth: isDirectlyConnected ? 4 : 2,
+          stroke: isDirectlyConnected ? '#38bdf8' : '#64748b',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         },
-        animated: isConnected,
+        animated: isConnected && isDirectlyConnected,
       };
     });
 
@@ -127,10 +128,12 @@ export function ReactFlowGraph({ nodes: initialNodes, edges: initialEdges, onNod
         nodeTypes={nodeTypes}
         colorMode="dark"
         fitView
+        minZoom={0.05}
+        maxZoom={4}
         className="codebase-flow"
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#334155" gap={24} size={1} />
+        <Background color="#475569" gap={20} size={1.5} variant={BackgroundVariant.Dots} />
         <Controls 
           className="bg-slate-900 border-slate-700 fill-slate-300 [&>button]:border-b-slate-700 hover:[&>button]:bg-slate-800"
         />

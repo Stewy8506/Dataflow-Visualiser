@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Sparkles } from "lucide-react";
 import "./App.css";
@@ -36,7 +37,33 @@ function App() {
   
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+  const [selectedModel, setSelectedModel] = useState(localStorage.getItem('gemini_model') || 'models/gemini-1.5-flash');
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  useEffect(() => {
+    if (showSettings && apiKey) {
+      setIsLoadingModels(true);
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.models) {
+            const generateContentModels = data.models.filter((m: any) => 
+              m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent')
+            );
+            setAvailableModels(generateContentModels);
+            if (!selectedModel || !generateContentModels.find((m: any) => m.name === selectedModel)) {
+              if (generateContentModels.length > 0) {
+                setSelectedModel(generateContentModels[0].name);
+              }
+            }
+          }
+        })
+        .catch(err => console.error("Failed to load models", err))
+        .finally(() => setIsLoadingModels(false));
+    }
+  }, [showSettings, apiKey]);
 
   const handleSelectDirectory = async () => {
     try {
@@ -53,26 +80,22 @@ function App() {
         
         const result: GraphData = await invoke("parse_codebase", { path });
         
-        let finalResult = result;
+        setRawGraphData(result);
+        setSelectedPath(path);
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
+        setIsParsing(false);
 
         if (apiKey) {
-          setLogs(prev => [...prev, `> Found API Key, enriching graph with AI...`]);
+          setLogs(prev => [...prev, `> Found API Key, starting progressive AI enrichment with ${selectedModel}...`]);
           setIsEnriching(true);
           try {
-            finalResult = await invoke("enrich_graph_with_ai", { graphData: result, apiKey });
-            setLogs(prev => [...prev, `> AI Enrichment complete.`]);
+            await invoke("enrich_graph_with_ai", { graphData: result, apiKey, model: selectedModel });
           } catch (aiErr) {
             console.error("AI Enrichment Error:", aiErr);
             setLogs(prev => [...prev, `> AI Error: ${String(aiErr)}`]);
-          } finally {
             setIsEnriching(false);
           }
         }
-        
-        setRawGraphData(finalResult);
-        setSelectedPath(path);
-        setIsParsing(false);
       }
     } catch (e) {
       console.error(e);
@@ -80,6 +103,45 @@ function App() {
       setIsParsing(false);
     }
   };
+
+  useEffect(() => {
+    const unlisten = listen("ai_nodes_enriched", (event) => {
+      const enrichedNodes = event.payload as { id: string; semantic_group: string; summary: string }[];
+      
+      setRawGraphData(prev => {
+        if (!prev) return prev;
+        
+        const newNodes = prev.nodes.map(node => {
+          const enrichment = enrichedNodes.find(en => en.id === node.id);
+          if (enrichment) {
+            return {
+              ...node,
+              semantic_group: enrichment.semantic_group,
+              summary: enrichment.summary
+            };
+          }
+          return node;
+        });
+        
+        return {
+          ...prev,
+          nodes: newNodes
+        };
+      });
+      
+      setLogs(prev => [...prev, `> AI enriched ${enrichedNodes.length} nodes.`]);
+    });
+
+    const unlistenComplete = listen("ai_enrichment_complete", () => {
+      setIsEnriching(false);
+      setLogs(prev => [...prev, `> Progressive AI Enrichment fully completed.`]);
+    });
+
+    return () => {
+      unlisten.then(f => f());
+      unlistenComplete.then(f => f());
+    };
+  }, []);
 
   useEffect(() => {
     if (!rawGraphData) return;
@@ -98,6 +160,24 @@ function App() {
     const filteredRawEdges = rawGraphData.edges.filter(e => 
       validNodeIds.has(e.source) && validNodeIds.has(e.target)
     );
+
+    // Calculate in-degrees for dead code detection
+    const inDegrees = new Map<string, number>();
+    filteredRawEdges.forEach(e => {
+      inDegrees.set(e.target, (inDegrees.get(e.target) || 0) + 1);
+    });
+
+    const handleDeleteNode = (nodeId: string, nodePath: string) => {
+      setRawGraphData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nodes: prev.nodes.filter(n => n.id !== nodeId),
+          edges: prev.edges.filter(e => e.source !== nodeId && e.target !== nodeId)
+        };
+      });
+      setLogs(prev => [...prev, `> Permanently deleted: ${nodePath}`]);
+    };
 
     const initialNodes = filteredRawNodes.map((n) => {
       let subLabel = 'File';
@@ -118,6 +198,9 @@ function App() {
         subLabel = 'Script';
       }
 
+      const isEntryPoint = /^(page|layout|route|main|index|App|middleware)\./i.test(n.label) || n.id.includes('src-tauri');
+      const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
+
       return {
         id: n.id,
         type: 'fileNode',
@@ -130,7 +213,9 @@ function App() {
           type: n.group.toUpperCase(),
           isBackend,
           semantic_group: n.semantic_group,
-          summary: n.summary
+          summary: n.summary,
+          isDeadCode,
+          onDelete: () => handleDeleteNode(n.id, n.id)
         }
       };
     });
@@ -208,9 +293,29 @@ function App() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="AIzaSy..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 mb-4"
                 />
-                <p className="text-xs text-slate-500 mt-2">Required for AI-powered graph enrichment (gemma4-31b-it).</p>
+                
+                <label className="block text-slate-400 text-sm mb-2">AI Model</label>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={isLoadingModels || !apiKey}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-500 disabled:opacity-50 appearance-none"
+                >
+                  {isLoadingModels ? (
+                    <option>Loading models...</option>
+                  ) : availableModels.length > 0 ? (
+                    availableModels.map(m => (
+                      <option key={m.name} value={m.name}>
+                        {m.displayName} ({m.name.replace('models/', '')})
+                      </option>
+                    ))
+                  ) : (
+                    <option value={selectedModel}>{selectedModel}</option>
+                  )}
+                </select>
+                <p className="text-xs text-slate-500 mt-2">API Key and Model are required for AI-powered graph enrichment.</p>
               </div>
               <div className="flex justify-end space-x-3">
                 <button
@@ -222,6 +327,7 @@ function App() {
                 <button
                   onClick={() => {
                     localStorage.setItem('gemini_api_key', apiKey);
+                    localStorage.setItem('gemini_model', selectedModel);
                     setShowSettings(false);
                   }}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
