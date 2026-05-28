@@ -28,4 +28,5 @@ oxc_ast = "0.133.0"
 oxc_span = "0.133.0"
 walkdir = "2.5.0"
 tauri-plugin-dialog = "2.7.1"
+regex = "1.12.3"
 

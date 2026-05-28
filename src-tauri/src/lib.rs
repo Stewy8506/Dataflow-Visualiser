@@ -1,7 +1,3 @@
-use oxc_allocator::Allocator;
-use oxc_parser::Parser;
-use oxc_span::SourceType;
-use oxc_ast::ast::ModuleDeclaration;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -94,15 +90,11 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
 
                 let mut imports = Vec::new();
                 if let Ok(source_text) = fs::read_to_string(file_path) {
-                    let allocator = Allocator::default();
-                    let source_type = SourceType::from_path(file_path).unwrap_or_default().with_module(true);
-                    let ret = Parser::new(&allocator, &source_text, source_type).parse();
-
-                    for stmt in &ret.program.body {
-                        if let Some(decl) = stmt.as_module_declaration() {
-                            if let ModuleDeclaration::ImportDeclaration(import_decl) = decl {
-                                imports.push(import_decl.source.value.to_string());
-                            }
+                    // Use regex to catch static imports, dynamic imports, require(), and re-exports
+                    let re = regex::Regex::new(r#"(?:import|export)\s+(?:[^"']*?\s+from\s+)?['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)"#).unwrap();
+                    for caps in re.captures_iter(&source_text) {
+                        if let Some(m) = caps.get(1).or_else(|| caps.get(2)) {
+                            imports.push(m.as_str().to_string());
                         }
                     }
                 }
@@ -119,8 +111,10 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     // Resolve imports to create edges
     for file_data in &files_data {
         let dir = file_data.path.parent().unwrap_or(Path::new(""));
-        
+
         for import_str in &file_data.imports {
+            let mut matched = false;
+
             if import_str.starts_with('.') {
                 let resolved = normalize_path(&dir.join(import_str));
                 // Try different extensions or index files
@@ -143,8 +137,128 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                             source: file_data.id.clone(),
                             target: possible_id,
                         });
+                        matched = true;
                         break;
                     }
+                }
+            }
+
+            // Fallback for path aliases (e.g., @/components/Button) or baseUrl imports
+            if !matched {
+                let clean_import = import_str
+                    .strip_prefix("@/")
+                    .or_else(|| import_str.strip_prefix("~/"))
+                    .unwrap_or(import_str);
+
+                // Ignore likely node_modules without slashes unless they match exactly
+                let suffixes = vec![
+                    format!("/{}.ts", clean_import),
+                    format!("/{}.tsx", clean_import),
+                    format!("/{}.js", clean_import),
+                    format!("/{}.jsx", clean_import),
+                    format!("/{}/index.ts", clean_import),
+                    format!("/{}/index.tsx", clean_import),
+                    format!("/{}/index.js", clean_import),
+                    format!("/{}/index.jsx", clean_import),
+                ];
+
+                for node in &nodes {
+                    let mut found = false;
+                    for suffix in &suffixes {
+                        if node.id.ends_with(suffix) {
+                            edges.push(ParsedEdge {
+                                source: file_data.id.clone(),
+                                target: node.id.clone(),
+                            });
+                            found = true;
+                            break;
+                        }
+                    }
+                    if found {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Next.js Implicit Routing Connections
+    let mut layout_nodes = Vec::new();
+    let mut route_nodes = Vec::new();
+
+    for node in &nodes {
+        if node.label.starts_with("layout.") {
+            layout_nodes.push(node);
+        } else if node.label.starts_with("page.")
+            || node.label.starts_with("loading.")
+            || node.label.starts_with("template.")
+            || node.label.starts_with("route.")
+            || node.label.starts_with("error.")
+            || node.label.starts_with("not-found.")
+        {
+            route_nodes.push(node);
+        }
+    }
+
+    // A route node connects to its closest parent layout
+    for r_node in &route_nodes {
+        let mut current_dir = Path::new(&r_node.id).parent();
+        let mut found_layout = None;
+
+        while let Some(dir) = current_dir {
+            let dir_str = dir.to_string_lossy().replace('\\', "/");
+
+            if let Some(l) = layout_nodes.iter().find(|l| {
+                Path::new(&l.id)
+                    .parent()
+                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    == Some(dir_str.clone())
+            }) {
+                found_layout = Some(l);
+                break;
+            }
+            current_dir = dir.parent();
+        }
+
+        if let Some(l) = found_layout {
+            edges.push(ParsedEdge {
+                source: l.id.clone(),
+                target: r_node.id.clone(),
+            });
+        }
+    }
+
+    // Layouts connect to their parent layout
+    for l_node in &layout_nodes {
+        let current_dir = Path::new(&l_node.id).parent();
+        if let Some(parent_dir) = current_dir.and_then(|p| p.parent()) {
+            let mut search_dir = Some(parent_dir);
+            let mut found_parent_layout = None;
+
+            while let Some(dir) = search_dir {
+                let dir_str = dir.to_string_lossy().replace('\\', "/");
+                if let Some(parent_l) = layout_nodes.iter().find(|l| {
+                    Path::new(&l.id)
+                        .parent()
+                        .map(|p| p.to_string_lossy().replace('\\', "/"))
+                        == Some(dir_str.clone())
+                }) {
+                    found_parent_layout = Some(parent_l);
+                    break;
+                }
+                search_dir = dir.parent();
+            }
+
+            if let Some(parent_l) = found_parent_layout {
+                // Ensure we don't duplicate edges if they imported it explicitly
+                let exists = edges
+                    .iter()
+                    .any(|e| e.source == parent_l.id && e.target == l_node.id);
+                if !exists {
+                    edges.push(ParsedEdge {
+                        source: parent_l.id.clone(),
+                        target: l_node.id.clone(),
+                    });
                 }
             }
         }
