@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
   Controls,
   Background,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
-  Edge,
   NodeTypes,
   BackgroundVariant,
+  ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
@@ -34,7 +31,8 @@ interface ReactFlowGraphProps {
   isLightMode: boolean;
 }
 
-export function ReactFlowGraph({
+// ─── Inner component: needs ReactFlowProvider above it ────────
+function ReactFlowInner({
   nodes: initialNodes,
   edges: initialEdges,
   onNodeSelect,
@@ -46,19 +44,50 @@ export function ReactFlowGraph({
   setDirection,
   isLightMode,
 }: ReactFlowGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const { zoomTo, getZoom } = useReactFlow();
 
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const activeNodeId = selectedNodeId;
 
+  // ── Smooth zoom ────────────────────────────────────────────────
+  // Strategy: accumulate wheel deltas into a single target, then fire
+  // one zoomTo(target, { duration: 500 }) per animation frame.
+  // d3-zoom correctly interpolates from the current mid-animation position,
+  // giving a natural ease-in (while scrolling) and ease-out (after stop).
+  const targetZoomRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Build on the last intended target so fast scrolling accumulates correctly
+    const base = targetZoomRef.current ?? getZoom();
+    const sensitivity = 0.001;
+    targetZoomRef.current = Math.min(4, Math.max(0.05, base * Math.exp(-e.deltaY * sensitivity)));
+
+    // Batch all deltas that arrive in the same frame into one zoomTo call
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const target = targetZoomRef.current;
+      if (target !== null) {
+        // 500ms lets us see both the ease-in (scroll start) and ease-out (scroll stop) tails
+        zoomTo(target, { duration: 300 });
+      }
+      // Keep targetZoomRef so next wheel event uses it as base (correct during in-flight animation)
+    });
+  }, [zoomTo, getZoom]);
+
+  // ── Blast radius ────────────────────────────────────────────────
   const blastRadius = useMemo(() => {
     if (!activeNodeId) return null;
     return calculateBlastRadius(activeNodeId, initialEdges);
   }, [activeNodeId, initialEdges]);
 
-  useEffect(() => {
-    const styledNodes = initialNodes.map(node => {
+  // ── Styled nodes (memoized — no setState, no double-render) ────
+  const styledNodes = useMemo(() => {
+    return initialNodes.map(node => {
       let isConnected = true;
       let tier = -1;
 
@@ -83,15 +112,16 @@ export function ReactFlowGraph({
         },
         style: {
           ...node.style,
-          opacity: isConnected ? 1 : 0.2,
-          filter: isConnected ? 'none' : 'grayscale(100%) blur(1px)',
+          opacity: isConnected ? 1 : 0.15,
           pointerEvents: isConnected ? 'all' : 'none',
-          transition: 'opacity 0.2s, filter 0.2s',
         }
       };
     });
+  }, [initialNodes, blastRadius, selectedNodeId]);
 
-    const styledEdges = initialEdges.map(edge => {
+  // ── Styled edges (memoized) ────────────────────────────────────
+  const styledEdges = useMemo(() => {
+    return initialEdges.map(edge => {
       const sourceTier = blastRadius?.tiers.get(edge.source) ?? -1;
       const targetTier = blastRadius?.tiers.get(edge.target) ?? -1;
 
@@ -121,24 +151,15 @@ export function ReactFlowGraph({
         ...edge,
         style: {
           ...edge.style,
-          opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.05),
+          opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.04),
           strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5),
           stroke: strokeColor,
-          transition: 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s',
         },
         markerEnd,
-        animated: isConnected && !!blastRadius,
+        animated: isDirectlyConnected && !!blastRadius,
       };
     });
-
-    setNodes(styledNodes);
-    setEdges(styledEdges);
-  }, [initialNodes, initialEdges, blastRadius, selectedNodeId, activeNodeId, setNodes, setEdges]);
-
-  const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
+  }, [initialEdges, blastRadius, activeNodeId, isLightMode]);
 
   const handleNodeClick = (_: React.MouseEvent, node: any) => {
     setSelectedNodeId(node.id);
@@ -150,14 +171,16 @@ export function ReactFlowGraph({
     onNodeSelect(null);
   };
 
+  const miniMapNodeColor = useCallback(
+    () => isLightMode ? '#94a3b8' : '#475569',
+    [isLightMode]
+  );
+
   return (
-    <div className="w-full h-full bg-background relative">
+    <div className="w-full h-full bg-background relative" onWheel={handleWheel}>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        nodes={styledNodes}
+        edges={styledEdges}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
@@ -165,7 +188,7 @@ export function ReactFlowGraph({
         fitView
         minZoom={0.05}
         maxZoom={4}
-        zoomOnScroll={true}
+        zoomOnScroll={false}
         zoomOnPinch={true}
         panOnScroll={false}
         zoomOnDoubleClick={false}
@@ -175,9 +198,7 @@ export function ReactFlowGraph({
         <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
         <Controls />
         <MiniMap
-          nodeColor={() => {
-            return isLightMode ? '#94a3b8' : '#475569';
-          }}
+          nodeColor={miniMapNodeColor}
           maskColor={isLightMode ? "rgba(255, 255, 255, 0.7)" : "rgba(10, 10, 16, 0.7)"}
         />
       </ReactFlow>
@@ -190,5 +211,14 @@ export function ReactFlowGraph({
         setDirection={setDirection}
       />
     </div>
+  );
+}
+
+// ─── Public export: wraps with provider so useReactFlow() works ─
+export function ReactFlowGraph(props: ReactFlowGraphProps) {
+  return (
+    <ReactFlowProvider>
+      <ReactFlowInner {...props} />
+    </ReactFlowProvider>
   );
 }

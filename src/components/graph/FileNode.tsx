@@ -1,3 +1,4 @@
+import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { FileCode, FileType, Layout, Trash2, Cpu } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -11,7 +12,7 @@ function getAccent(type: string, isBackend: boolean) {
   return { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' };
 }
 
-export function FileNode({ data, selected }: any) {
+export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   const isBackend = data.isBackend;
   const isHorizontal = data.direction !== 'TB';
   const accent = getAccent(data.type, isBackend);
@@ -51,11 +52,10 @@ export function FileNode({ data, selected }: any) {
     <div className="relative transition-all duration-200">
       {/* Card */}
       <div
-        className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${
-          selected
+        className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${selected
             ? 'shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 scale-[1.02]'
             : 'shadow-lg hover:shadow-xl'
-        }`}
+          }`}
         style={{
           background: 'var(--color-surface-raised)',
           borderTop: `${blastBorderWidth} solid ${blastBorder}`,
@@ -212,4 +212,15 @@ export function FileNode({ data, selected }: any) {
       </div>
     </div>
   );
-}
+  // Only re-render when fields that actually affect the visual output change.
+  // Without this, every node re-renders on every click (new object refs from styledNodes).
+}, (prev, next) =>
+  prev.selected === next.selected &&
+  prev.data.blastTier === next.data.blastTier &&
+  prev.data.blastConnected === next.data.blastConnected &&
+  prev.data.hasBlastRadius === next.data.hasBlastRadius &&
+  prev.data.isDeadCode === next.data.isDeadCode &&
+  prev.data.label === next.data.label &&
+  prev.data.semantic_group === next.data.semantic_group &&
+  prev.data.summary === next.data.summary
+);

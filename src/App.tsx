@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -271,6 +271,9 @@ function App() {
 
   const [preferredIde, setPreferredIde] = useState('code');
 
+  // Separate AI enrichment from graph structure so enrichment never triggers a full dagre relayout
+  const [enrichmentMap, setEnrichmentMap] = useState<Map<string, { semantic_group: string; summary: string }>>(new Map());
+
   useEffect(() => {
     load('settings.json', { autoSave: false, defaults: { preferredIde: 'code' } }).then(store => {
       store.get<string>('preferredIde').then(val => {
@@ -323,6 +326,7 @@ function App() {
 
         const result: GraphData = await invoke("parse_codebase", { path });
 
+        setEnrichmentMap(new Map()); // Reset enrichment for the new project
         setRawGraphData(result);
         setSelectedPath(path);
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
@@ -353,25 +357,14 @@ function App() {
     const unlisten = listen("ai_nodes_enriched", (event) => {
       const enrichedNodes = event.payload as { id: string; semantic_group: string; summary: string }[];
 
-      setRawGraphData(prev => {
-        if (!prev) return prev;
-
-        const newNodes = prev.nodes.map(node => {
-          const enrichment = enrichedNodes.find(en => en.id === node.id);
-          if (enrichment) {
-            return {
-              ...node,
-              semantic_group: enrichment.semantic_group,
-              summary: enrichment.summary
-            };
-          }
-          return node;
-        });
-
-        return {
-          ...prev,
-          nodes: newNodes
-        };
+      // Update enrichmentMap only — does NOT trigger the layout useEffect
+      setEnrichmentMap(prev => {
+        const next = new Map(prev);
+        enrichedNodes.forEach(en => next.set(en.id, {
+          semantic_group: en.semantic_group,
+          summary: en.summary,
+        }));
+        return next;
       });
 
       setLogs(prev => [...prev, `> AI enriched ${enrichedNodes.length} nodes.`]);
@@ -512,9 +505,12 @@ function App() {
       ranksep
     );
 
+    // O(1) lookup instead of O(N) .find() per edge
+    const nodeById = new Map(layoutedNodes.map(n => [n.id, n]));
+
     const styledEdges = initialEdges.map(e => {
-       const sourceNode = layoutedNodes.find(n => n.id === e.source);
-       const targetNode = layoutedNodes.find(n => n.id === e.target);
+       const sourceNode = nodeById.get(e.source);
+       const targetNode = nodeById.get(e.target);
        let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
        let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
 
@@ -538,6 +534,24 @@ function App() {
     setFlowEdges(styledEdges);
 
   }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep]);
+
+  // Merge AI enrichment metadata into flow nodes at render time.
+  // This never triggers a dagre relayout — only updates summary/group fields.
+  const enrichedFlowNodes = useMemo(() => {
+    if (enrichmentMap.size === 0) return flowNodes;
+    return flowNodes.map(node => {
+      const enrichment = enrichmentMap.get(node.id);
+      if (!enrichment) return node; // same reference = no re-render for FileNode
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          semantic_group: enrichment.semantic_group,
+          summary: enrichment.summary,
+        }
+      };
+    });
+  }, [flowNodes, enrichmentMap]);
 
   // ─── Welcome Screen ───────────────────────────────────────
 
@@ -626,7 +640,7 @@ function App() {
 
           {viewMode === '2d' ? (
             <ReactFlowGraph
-              nodes={flowNodes}
+              nodes={enrichedFlowNodes}
               edges={flowEdges}
               onNodeSelect={setSelectedNode}
               nodesep={nodesep}

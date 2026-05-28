@@ -309,11 +309,4 @@ input[type="range"]::-moz-range-thumb {
 /* ── Smooth Zoom ──────────────────────────────────────────── */
 .react-flow__viewport {
   transition: transform 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: transform;
-}
-
-/* Disable transition during active panning so it doesn't lag */
-.react-flow__pane:active ~ .react-flow__viewport,
-.react-flow__pane.dragging ~ .react-flow__viewport {
-  transition: none;
 }
