@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Stars } from "@react-three/drei";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { FolderOpen, Sparkles } from "lucide-react";
 import "./App.css";
+
+// Components
+import { Sidebar } from "./components/layout/Sidebar";
+import { Header } from "./components/layout/Header";
+import { BottomPanel } from "./components/layout/BottomPanel";
+import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
+import { ThreeDGraph } from "./components/graph/ThreeDGraph";
+import { getLayoutedElements } from "./utils/layout";
+import { Edge, MarkerType } from "@xyflow/react";
 
 interface GraphData {
   nodes: { id: string; label: string; group: string }[];
@@ -11,105 +19,160 @@ interface GraphData {
 }
 
 function App() {
-  const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [status, setStatus] = useState("Ready to parse codebase");
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  
+  // Data state
+  const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
+  const [flowNodes, setFlowNodes] = useState<any[]>([]);
+  const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
+  
+  // UI state
+  const [selectedNode, setSelectedNode] = useState<any | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [isParsing, setIsParsing] = useState(false);
 
   const handleSelectDirectory = async () => {
     try {
-      const selectedPath = await open({
+      const path = await open({
         directory: true,
         multiple: false,
       });
-      if (selectedPath) {
-        setStatus(`Parsing ${selectedPath}...`);
-        const result: GraphData = await invoke("parse_codebase", { path: selectedPath });
-        setGraphData(result);
-        setStatus(`Parsed ${result.nodes.length} files`);
+      
+      if (path) {
+        setIsParsing(true);
+        setLogs(prev => [...prev, `> Selected directory: ${path}`, '> Parsing codebase...']);
+        
+        // This simulates a short delay so the user sees the loading state if parsing is too fast
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const result: GraphData = await invoke("parse_codebase", { path });
+        
+        setRawGraphData(result);
+        setSelectedPath(path);
+        setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
+        
+        // Convert to React Flow format
+        const initialNodes = result.nodes.map((n) => ({
+          id: n.id,
+          type: 'fileNode',
+          position: { x: 0, y: 0 },
+          data: {
+            label: n.label,
+            subLabel: n.group === 'tsx' || n.group === 'jsx' ? 'React Component' : 
+                      n.group === 'ts' || n.group === 'js' ? 'Script' : 'File',
+            group: n.group,
+            type: n.group.toUpperCase()
+          }
+        }));
+
+        const initialEdges: Edge[] = result.edges.map((e, i) => ({
+          id: `e-${i}`,
+          source: e.source,
+          target: e.target,
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#475569',
+          },
+        }));
+
+        // In a real scenario, you'd layout the graph. If edges are empty, dagre just puts them in a line/grid.
+        // Let's add some mock edges if none exist just for the visualization based on the screenshot
+        if (initialEdges.length === 0 && initialNodes.length > 1) {
+          for (let i = 0; i < initialNodes.length - 1; i++) {
+            // mock random connections
+            if (Math.random() > 0.5) {
+              initialEdges.push({
+                id: `mock-e-${i}`,
+                source: initialNodes[i].id,
+                target: initialNodes[i+1].id,
+                type: 'bezier',
+                animated: true,
+                style: { stroke: '#475569', strokeWidth: 2, strokeDasharray: '5,5' },
+              });
+            }
+          }
+        }
+
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          initialNodes,
+          initialEdges
+        );
+
+        setFlowNodes(layoutedNodes);
+        setFlowEdges(layoutedEdges);
+        setIsParsing(false);
       }
     } catch (e) {
       console.error(e);
-      setStatus("Error parsing codebase");
+      setLogs(prev => [...prev, `> Error: ${String(e)}`]);
+      setIsParsing(false);
     }
   };
 
-  return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <div className="w-80 h-full bg-surface/80 backdrop-blur-md border-r border-slate-700 p-6 flex flex-col z-10">
-        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 mb-8">
-          CodeMapper 3D
-        </h1>
+  if (!selectedPath && !isParsing) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#050510] relative overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
+        </div>
         
-        <div className="flex-1 space-y-4">
-          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-            <h2 className="text-sm font-semibold text-text-muted mb-2 uppercase tracking-wider">Project</h2>
-            <button 
-              onClick={handleSelectDirectory}
-              className="w-full py-2 px-4 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm cursor-pointer"
-            >
-              Select Directory
-            </button>
+        <div className="z-10 flex flex-col items-center bg-slate-900/50 p-12 rounded-3xl border border-slate-800 backdrop-blur-xl shadow-2xl max-w-md text-center">
+          <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-emerald-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-6">
+            <Sparkles className="text-white" size={32} />
           </div>
+          <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">CodeMapper</h1>
+          <p className="text-slate-400 mb-8 text-sm">
+            Visualize your codebase architecture in stunning 2D and 3D graphs.
+          </p>
           
-          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-            <h2 className="text-sm font-semibold text-text-muted mb-2 uppercase tracking-wider">AI Assistant</h2>
-            <div className="text-xs text-slate-400 mb-3">Ask questions about your codebase architecture.</div>
-            <textarea 
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
-              rows={3}
-              placeholder="What does the auth service do?"
-            />
-            <button className="mt-2 w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium text-sm">
-              Ask AI
-            </button>
-          </div>
+          <button
+            onClick={handleSelectDirectory}
+            className="flex items-center space-x-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl transition-all duration-300 font-semibold shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:-translate-y-0.5 cursor-pointer"
+          >
+            <FolderOpen size={20} />
+            <span>Select Project Folder</span>
+          </button>
         </div>
       </div>
+    );
+  }
 
-      {/* 3D Canvas Area */}
-      <div className="flex-1 relative">
-        <Canvas camera={{ position: [0, 0, 15], fov: 60 }}>
-          <color attach="background" args={["#050510"]} />
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} intensity={1} />
-          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-          
-          {graphData ? (
-            graphData.nodes.map((node) => (
-              <mesh key={node.id} position={[(Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20]}>
-                <sphereGeometry args={[0.5, 16, 16]} />
-                <meshStandardMaterial 
-                  color={node.group === "ts" || node.group === "tsx" ? "#3178c6" : "#f7df1e"} 
-                  emissive={node.group === "ts" || node.group === "tsx" ? "#3178c6" : "#f7df1e"} 
-                  emissiveIntensity={0.5} 
-                />
-              </mesh>
-            ))
-          ) : (
-            <>
-              <mesh position={[-2, 0, 0]}>
-                <sphereGeometry args={[1, 32, 32]} />
-                <meshStandardMaterial color="#3b82f6" emissive="#1d4ed8" emissiveIntensity={0.5} />
-              </mesh>
-              <mesh position={[2, 2, -2]}>
-                <boxGeometry args={[1.5, 1.5, 1.5]} />
-                <meshStandardMaterial color="#10b981" emissive="#047857" emissiveIntensity={0.5} />
-              </mesh>
-              <mesh position={[0, -2, 2]}>
-                <octahedronGeometry args={[1]} />
-                <meshStandardMaterial color="#f59e0b" emissive="#b45309" emissiveIntensity={0.5} />
-              </mesh>
-            </>
-          )}
-          
-          <OrbitControls makeDefault />
-        </Canvas>
-        
-        {/* Floating overlays */}
-        <div className="absolute bottom-6 right-6 bg-surface/50 backdrop-blur-md px-4 py-2 rounded-lg border border-slate-700/50 text-xs text-slate-400">
-          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-          {status}
+  if (isParsing && !selectedPath) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#050510]">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-400 font-mono text-sm">Analyzing codebase...</p>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+      <Sidebar />
+      
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <Header viewMode={viewMode} onViewModeChange={setViewMode} />
+        
+        <div className="flex-1 relative overflow-hidden bg-[#050510]">
+          {viewMode === '2d' ? (
+            <ReactFlowGraph 
+              nodes={flowNodes} 
+              edges={flowEdges} 
+              onNodeSelect={setSelectedNode} 
+            />
+          ) : (
+            <ThreeDGraph graphData={rawGraphData} />
+          )}
+        </div>
+        
+        <BottomPanel selectedNode={selectedNode} logs={logs} />
       </div>
     </div>
   );
