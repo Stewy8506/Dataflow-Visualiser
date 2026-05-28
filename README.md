@@ -107,6 +107,10 @@ Dataflow-Visualiser/
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
 
+### Advanced Codebase Analysis
+- **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
+- **Fuzzy Search & Filter** — quickly navigate massive codebases with a real-time search bar that highlights matching nodes and collapses irrelevant subtrees.
+
 ### Interactive Git Integration
 - **Full History Timeline** — View commit history directly in a bottom panel.
 - **Diff Viewer Modal** — Click any commit to view a dedicated modal showing exact, line-by-line diffs per changed file.
@@ -175,6 +179,7 @@ npm run tauri build
 - [x] Fuzzy search/filter bar with canvas highlight and collapse
 - [x] Mini-map overlay for large codebases
 - [x] Monorepo / multi-root workspace support
+- [x] Dead code detection (orphaned nodes and unused exports)
 - [ ] Persistent node layout across sessions
 - [ ] Ollama + Anthropic AI panel UI
 - [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)
