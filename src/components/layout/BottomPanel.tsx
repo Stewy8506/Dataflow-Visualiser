@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronUp, Minus, X, Terminal, Search, Grid3x3 } from 'lucide-react';
+import { ChevronUp, Minus, X, Terminal, Search, Grid3x3, ExternalLink } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 
 interface BottomPanelProps {
   selectedNode: any | null;
   logs: string[];
+  preferredIde: string;
 }
 
-export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
+export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'matrix' | 'console'>('inspector');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [panelHeight, setPanelHeight] = useState(240);
@@ -124,9 +126,20 @@ export function BottomPanel({ selectedNode, logs }: BottomPanelProps) {
         {activeTab === 'inspector' && (
           <>
             <div className="w-72 border-r border-border-subtle p-4 flex flex-col overflow-y-auto">
-              <h3 className="text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-3">
-                {selectedNode ? `Selected: ${selectedNode.data?.label}` : 'No Selection'}
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">
+                  {selectedNode ? `Selected: ${selectedNode.data?.label}` : 'No Selection'}
+                </h3>
+                {selectedNode && selectedNode.data?.path && (
+                  <button
+                    onClick={() => invoke('open_in_ide', { path: selectedNode.data.path, ide: preferredIde })}
+                    className="p-1 rounded-md text-text-dim hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                    title={`Open in ${preferredIde}`}
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                )}
+              </div>
               
               {selectedNode ? (
                 <div className="space-y-0.5">

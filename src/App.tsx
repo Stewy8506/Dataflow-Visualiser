@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Sparkles, X, Eye, EyeOff, RefreshCw, Zap } from "lucide-react";
 import "./App.css";
+import { load } from '@tauri-apps/plugin-store';
 
 // Components
 import { Sidebar } from "./components/layout/Sidebar";
@@ -27,10 +28,12 @@ interface SettingsModalProps {
   setSelectedModel: (val: string) => void;
   enableAi: boolean;
   setEnableAi: (val: boolean) => void;
+  preferredIde: string;
+  setPreferredIde: (val: string) => void;
   onClose: () => void;
 }
 
-function SettingsModal({ apiKey, setApiKey, selectedModel, setSelectedModel, enableAi, setEnableAi, onClose }: SettingsModalProps) {
+function SettingsModal({ apiKey, setApiKey, selectedModel, setSelectedModel, enableAi, setEnableAi, preferredIde, setPreferredIde, onClose }: SettingsModalProps) {
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -171,6 +174,22 @@ function SettingsModal({ apiKey, setApiKey, selectedModel, setSelectedModel, ena
               />
             </div>
 
+            {/* Preferred IDE */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Preferred IDE</label>
+              <select
+                value={preferredIde}
+                onChange={(e) => setPreferredIde(e.target.value)}
+                className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-colors"
+              >
+                <option value="code">VS Code (code)</option>
+                <option value="cursor">Cursor (cursor)</option>
+                <option value="idea">IntelliJ IDEA (idea)</option>
+                <option value="webstorm">WebStorm (webstorm)</option>
+                <option value="nvim">Neovim (nvim)</option>
+              </select>
+            </div>
+
             {/* Test Connection */}
             {apiKey && (
               <button
@@ -249,6 +268,23 @@ function App() {
     const saved = localStorage.getItem('theme');
     return saved === 'light';
   });
+
+  const [preferredIde, setPreferredIde] = useState('code');
+
+  useEffect(() => {
+    load('settings.json', { autoSave: false, defaults: { preferredIde: 'code' } }).then(store => {
+      store.get<string>('preferredIde').then(val => {
+        if (val) setPreferredIde(val);
+      });
+    });
+  }, []);
+
+  const handleSetPreferredIde = async (val: string) => {
+    setPreferredIde(val);
+    const store = await load('settings.json', { autoSave: false, defaults: { preferredIde: 'code' } });
+    await store.set('preferredIde', val);
+    await store.save();
+  };
 
   useEffect(() => {
     if (isLightMode) {
@@ -547,6 +583,7 @@ function App() {
             apiKey={apiKey} setApiKey={setApiKey}
             selectedModel={selectedModel} setSelectedModel={setSelectedModel}
             enableAi={enableAi} setEnableAi={setEnableAi}
+            preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -609,7 +646,7 @@ function App() {
           )}
         </div>
 
-        <BottomPanel selectedNode={selectedNode} logs={logs} />
+        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} />
       </div>
 
       {showSettings && selectedPath && (
@@ -617,6 +654,7 @@ function App() {
           apiKey={apiKey} setApiKey={setApiKey}
           selectedModel={selectedModel} setSelectedModel={setSelectedModel}
           enableAi={enableAi} setEnableAi={setEnableAi}
+          preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
           onClose={() => setShowSettings(false)}
         />
       )}

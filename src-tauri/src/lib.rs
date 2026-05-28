@@ -1,6 +1,6 @@
 use ignore::{DirEntry, WalkBuilder};
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{ModuleDeclaration, ImportDeclarationSpecifier};
+use oxc_ast::ast::{ImportDeclarationSpecifier, ModuleDeclaration};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ fn extract_imports_with_parser(
     parser: &mut TSParser,
     source_text: &str,
     ext: &str,
-    imports: &mut Vec<(String, bool)>
+    imports: &mut Vec<(String, bool)>,
 ) {
     if let Some(tree) = parser.parse(source_text, None) {
         let mut cursor = tree.walk();
@@ -71,8 +71,12 @@ fn extract_imports_with_parser(
                 }
             }
 
-            if cursor.goto_first_child() { continue; }
-            if cursor.goto_next_sibling() { continue; }
+            if cursor.goto_first_child() {
+                continue;
+            }
+            if cursor.goto_next_sibling() {
+                continue;
+            }
             let mut retracing = true;
             while retracing {
                 if !cursor.goto_parent() {
@@ -169,7 +173,10 @@ fn resolve_import_path(
 
     // 3. Handle Rust crate imports (use crate::utils::math -> src/utils/math)
     if import_path.starts_with("crate::") {
-        let sub_path = import_path.strip_prefix("crate::").unwrap().replace("::", "/");
+        let sub_path = import_path
+            .strip_prefix("crate::")
+            .unwrap()
+            .replace("::", "/");
         import_path = format!("src/{}", sub_path);
     }
 
@@ -180,10 +187,14 @@ fn resolve_import_path(
         .replace("::", "/");
 
     // 5. Handle Python dot imports
-    if clean_import.starts_with('.') && (clean_import.ends_with(".py") || current_file_path.extension().and_then(|s| s.to_str()) == Some("py")) {
+    if clean_import.starts_with('.')
+        && (clean_import.ends_with(".py")
+            || current_file_path.extension().and_then(|s| s.to_str()) == Some("py"))
+    {
         let dots_count = clean_import.chars().take_while(|c| *c == '.').count();
         let path_part = &clean_import[dots_count..];
-        let relative_prefix = "../".repeat(dots_count - 1) + if dots_count == 1 { "./" } else { "" };
+        let relative_prefix =
+            "../".repeat(dots_count - 1) + if dots_count == 1 { "./" } else { "" };
         clean_import = format!("{}{}", relative_prefix, path_part.replace('.', "/"));
     } else if current_file_path.extension().and_then(|s| s.to_str()) == Some("py") {
         clean_import = clean_import.replace('.', "/");
@@ -373,7 +384,11 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                                     let call_pattern = format!("{}(", name);
                                                     let call_pattern_space = format!("{} (", name);
 
-                                                    if (source_text.contains(&call_pattern) || source_text.contains(&call_pattern_space)) && !source_text.contains(&jsx_pattern) {
+                                                    if (source_text.contains(&call_pattern)
+                                                        || source_text
+                                                            .contains(&call_pattern_space))
+                                                        && !source_text.contains(&jsx_pattern)
+                                                    {
                                                         is_data_source = true;
                                                         break;
                                                     }
@@ -411,13 +426,28 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                         } else if matches!(ext, "py" | "rs" | "dart") {
                             match ext {
                                 "py" => PYTHON_PARSER.with(|p| {
-                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                    );
                                 }),
                                 "rs" => RUST_PARSER.with(|p| {
-                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                    );
                                 }),
                                 "dart" => DART_PARSER.with(|p| {
-                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                    );
                                 }),
                                 _ => unreachable!(),
                             }
@@ -465,8 +495,10 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     }
 
     // Next.js Implicit Routing Connections
-    let is_nextjs = nodes.iter().any(|n| n.label.starts_with("layout.") || n.label.starts_with("page."));
-    
+    let is_nextjs = nodes
+        .iter()
+        .any(|n| n.label.starts_with("layout.") || n.label.starts_with("page."));
+
     if is_nextjs {
         let mut layout_nodes = Vec::new();
         let mut route_nodes = Vec::new();
@@ -558,7 +590,8 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     let router_ids: Vec<String> = files_data
         .iter()
         .filter(|f| {
-            let is_api_route = f.id.contains("/api/") || f.id.contains("route.ts") || f.id.contains("route.js");
+            let is_api_route =
+                f.id.contains("/api/") || f.id.contains("route.ts") || f.id.contains("route.js");
             f.is_router || is_api_route
         })
         .map(|f| f.id.clone())
@@ -688,9 +721,9 @@ async fn enrich_graph_with_ai(
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::new();
         let chunk_size = 10;
-        
+
         let nodes = graph_data.nodes.clone();
-        
+
         for chunk in nodes.chunks(chunk_size) {
             let mut prompt = String::from(
                 "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
@@ -746,11 +779,13 @@ async fn enrich_graph_with_ai(
 
             if let Ok(resp) = response {
                 if let Ok(response_text) = resp.text().await {
-                    if let Ok(gemini_response) = serde_json::from_str::<GeminiResponse>(&response_text) {
+                    if let Ok(gemini_response) =
+                        serde_json::from_str::<GeminiResponse>(&response_text)
+                    {
                         if let Some(candidate) = gemini_response.candidates.first() {
                             if let Some(part) = candidate.content.parts.first() {
                                 let text = part.text.trim();
-                                
+
                                 // Robust JSON extraction:
                                 let json_str = if let Some(start) = text.find("```json") {
                                     if let Some(end) = text[start + 7..].find("```") {
@@ -767,7 +802,7 @@ async fn enrich_graph_with_ai(
                                 } else {
                                     text
                                 };
-                                
+
                                 let json_str = json_str.trim();
 
                                 if let Ok(ai_result) = serde_json::from_str::<AiResult>(json_str) {
@@ -794,15 +829,30 @@ async fn delete_file(path: String) -> Result<(), String> {
     std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn open_in_ide(path: String, ide: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("cmd")
+        .args(["/C", &ide, &path])
+        .spawn();
+
+    #[cfg(not(target_os = "windows"))]
+    let status = std::process::Command::new(&ide).arg(&path).spawn();
+
+    status.map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             parse_codebase,
             enrich_graph_with_ai,
-            delete_file
+            delete_file,
+            open_in_ide
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

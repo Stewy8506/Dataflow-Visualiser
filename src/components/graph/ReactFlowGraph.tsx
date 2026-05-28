@@ -61,7 +61,7 @@ export function ReactFlowGraph({
     const styledNodes = initialNodes.map(node => {
       let isConnected = true;
       let tier = -1;
-      
+
       if (blastRadius) {
         if (blastRadius.tiers.has(node.id)) {
           tier = blastRadius.tiers.get(node.id)!;
@@ -94,22 +94,22 @@ export function ReactFlowGraph({
     const styledEdges = initialEdges.map(edge => {
       const sourceTier = blastRadius?.tiers.get(edge.source) ?? -1;
       const targetTier = blastRadius?.tiers.get(edge.target) ?? -1;
-      
+
       const isConnected = sourceTier >= 0 && targetTier >= 0;
       const isOutgoing = activeNodeId === edge.source;
       const isIncoming = activeNodeId === edge.target;
       const isDirectlyConnected = isOutgoing || isIncoming;
       const noActiveNode = !activeNodeId;
-      
+
       let strokeColor = isLightMode ? '#94a3b8' : '#334155';
       if (blastRadius && isConnected) {
         if (sourceTier >= 0 && targetTier > sourceTier) {
-           if (targetTier === 1) strokeColor = '#ef4444';
-           else if (targetTier === 2) strokeColor = '#f97316';
-           else if (targetTier === 3) strokeColor = '#eab308';
-           else strokeColor = isLightMode ? '#94a3b8' : '#475569';
+          if (targetTier === 1) strokeColor = '#ef4444';
+          else if (targetTier === 2) strokeColor = '#f97316';
+          else if (targetTier === 3) strokeColor = '#eab308';
+          else strokeColor = isLightMode ? '#424242ff' : '#afaeaeff';
         } else {
-           strokeColor = isLightMode ? '#94a3b8' : '#334155';
+          strokeColor = isLightMode ? '#7a7a7aff' : '#6e6e6eff';
         }
       }
 
@@ -165,12 +165,16 @@ export function ReactFlowGraph({
         fitView
         minZoom={0.05}
         maxZoom={4}
+        zoomOnScroll={true}
+        zoomOnPinch={true}
+        panOnScroll={false}
+        zoomOnDoubleClick={false}
         className="codebase-flow"
         proOptions={{ hideAttribution: true }}
       >
         <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
         <Controls />
-        <MiniMap 
+        <MiniMap
           nodeColor={() => {
             return isLightMode ? '#94a3b8' : '#475569';
           }}

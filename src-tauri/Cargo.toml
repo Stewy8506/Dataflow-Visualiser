@@ -34,6 +34,7 @@ tree-sitter = "0.26.9"
 tree-sitter-python = "0.25.0"
 tree-sitter-rust = "0.24.2"
 tree-sitter-dart = "0.2.0"
+tauri-plugin-store = "2"
 
 [profile.release]
 lto = true
