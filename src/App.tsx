@@ -698,7 +698,7 @@ function App() {
             setShowMiniMap={setShowMiniMap}
           />
 
-          {viewMode === '2d' && (
+          {viewMode === '2d' && activeTab === 'network' && (
             <SearchBar 
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

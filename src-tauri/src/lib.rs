@@ -1,16 +1,32 @@
+use git2::{Repository, StatusOptions};
 use ignore::{DirEntry, WalkBuilder};
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{ImportDeclarationSpecifier, ModuleDeclaration};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
+use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use tauri::{Emitter, Window};
+use tauri::{Emitter, State, Window};
 use tree_sitter::Parser as TSParser;
-use regex::Regex;
-use git2::{Repository, StatusOptions};
+
+struct AppState {
+    pty_writer: std::sync::Arc<std::sync::Mutex<Option<Box<dyn Write + Send>>>>,
+    pty_master: std::sync::Arc<std::sync::Mutex<Option<Box<dyn MasterPty + Send>>>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            pty_writer: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pty_master: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+}
 
 // Thread-local parsers: constructed once per thread, reused across files.
 thread_local! {
@@ -164,11 +180,13 @@ impl AliasResolver {
             let re_block = Regex::new(r"(?s)/\*.*?\*/").unwrap();
             let no_block = re_block.replace_all(&content, "");
             let no_line = re_line.replace_all(&no_block, "");
-            
+
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&no_line) {
                 if let Some(compiler_options) = json.get("compilerOptions") {
                     if let Some(paths_val) = compiler_options.get("paths") {
-                        if let Ok(paths_map) = serde_json::from_value::<HashMap<String, Vec<String>>>(paths_val.clone()) {
+                        if let Ok(paths_map) = serde_json::from_value::<HashMap<String, Vec<String>>>(
+                            paths_val.clone(),
+                        ) {
                             paths = paths_map;
                         }
                     }
@@ -181,7 +199,10 @@ impl AliasResolver {
                 let re = Regex::new(r#"["'](@/.*?)["']\s*:\s*["'](.*?)["']"#).unwrap();
                 for cap in re.captures_iter(&content) {
                     if let (Some(alias), Some(target)) = (cap.get(1), cap.get(2)) {
-                        paths.insert(alias.as_str().to_string(), vec![target.as_str().to_string()]);
+                        paths.insert(
+                            alias.as_str().to_string(),
+                            vec![target.as_str().to_string()],
+                        );
                     }
                 }
             }
@@ -193,13 +214,24 @@ impl AliasResolver {
             .build()
         {
             if let Ok(entry) = result {
-                if entry.path().is_file() && entry.path().file_name().unwrap_or_default() == "package.json" {
+                if entry.path().is_file()
+                    && entry.path().file_name().unwrap_or_default() == "package.json"
+                {
                     if let Ok(content) = fs::read_to_string(entry.path()) {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                             if let Some(name) = json.get("name").and_then(|n| n.as_str()) {
-                                if let Ok(rel_path) = entry.path().parent().unwrap().strip_prefix(workspace_root) {
+                                if let Ok(rel_path) =
+                                    entry.path().parent().unwrap().strip_prefix(workspace_root)
+                                {
                                     let rel_str = rel_path.to_string_lossy().replace('\\', "/");
-                                    monorepo_packages.insert(name.to_string(), if rel_str.is_empty() { ".".to_string() } else { rel_str });
+                                    monorepo_packages.insert(
+                                        name.to_string(),
+                                        if rel_str.is_empty() {
+                                            ".".to_string()
+                                        } else {
+                                            rel_str
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -214,7 +246,7 @@ impl AliasResolver {
             _workspace_root: workspace_root.to_path_buf(),
         }
     }
-    
+
     pub fn resolve(&self, import_str: &str) -> String {
         // Monorepo resolution
         for (pkg_name, pkg_path) in &self.monorepo_packages {
@@ -400,7 +432,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     if !path_ref.exists() {
         return Err("Path does not exist".to_string());
     }
-    
+
     let alias_resolver = AliasResolver::new(path_ref);
 
     // Try to extract Dart package name from pubspec.yaml for Flutter support
@@ -462,7 +494,10 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                     let mut function_count = 0;
 
                     if let Ok(source_text) = fs::read_to_string(file_path) {
-                        let re = Regex::new(r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)").unwrap();
+                        let re = Regex::new(
+                            r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
+                        )
+                        .unwrap();
                         function_count = re.find_iter(&source_text).count();
 
                         if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
@@ -572,7 +607,7 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                             }
                         }
                     }
-                    
+
                     let import_count = imports.len();
                     let score = if function_count > 10 || import_count > 15 {
                         "High"
@@ -998,20 +1033,26 @@ async fn get_git_status(path: String) -> Result<Vec<GitFileStatus>, String> {
     let mut opts = StatusOptions::new();
     opts.include_untracked(true).recurse_untracked_dirs(true);
     let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.to_string())?;
-    
+
     let mut result = Vec::new();
     for entry in statuses.iter() {
         let status = entry.status();
         let path = entry.path().unwrap_or("").to_string();
-        
+
         let mut staged = false;
         let mut status_str = "Unknown";
-        
-        if status.intersects(git2::Status::INDEX_NEW | git2::Status::INDEX_MODIFIED | git2::Status::INDEX_DELETED) {
+
+        if status.intersects(
+            git2::Status::INDEX_NEW | git2::Status::INDEX_MODIFIED | git2::Status::INDEX_DELETED,
+        ) {
             staged = true;
-            if status.contains(git2::Status::INDEX_NEW) { status_str = "Added"; }
-            else if status.contains(git2::Status::INDEX_DELETED) { status_str = "Deleted"; }
-            else { status_str = "Modified"; }
+            if status.contains(git2::Status::INDEX_NEW) {
+                status_str = "Added";
+            } else if status.contains(git2::Status::INDEX_DELETED) {
+                status_str = "Deleted";
+            } else {
+                status_str = "Modified";
+            }
         } else if status.contains(git2::Status::WT_NEW) {
             status_str = "Untracked";
         } else if status.contains(git2::Status::WT_MODIFIED) {
@@ -1019,12 +1060,16 @@ async fn get_git_status(path: String) -> Result<Vec<GitFileStatus>, String> {
         } else if status.contains(git2::Status::WT_DELETED) {
             status_str = "Deleted";
         }
-        
+
         if status_str != "Unknown" {
-            result.push(GitFileStatus { path, status: status_str.to_string(), staged });
+            result.push(GitFileStatus {
+                path,
+                status: status_str.to_string(),
+                staged,
+            });
         }
     }
-    
+
     Ok(result)
 }
 
@@ -1032,7 +1077,9 @@ async fn get_git_status(path: String) -> Result<Vec<GitFileStatus>, String> {
 async fn git_stage_file(workspace: String, path: String) -> Result<(), String> {
     let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
     let mut index = repo.index().map_err(|e| e.to_string())?;
-    index.add_path(Path::new(&path)).map_err(|e| e.to_string())?;
+    index
+        .add_path(Path::new(&path))
+        .map_err(|e| e.to_string())?;
     index.write().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -1040,8 +1087,13 @@ async fn git_stage_file(workspace: String, path: String) -> Result<(), String> {
 #[tauri::command]
 async fn git_unstage_file(workspace: String, path: String) -> Result<(), String> {
     let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
-    let head = repo.head().map_err(|e| e.to_string())?.peel_to_commit().map_err(|e| e.to_string())?;
-    repo.reset_default(Some(head.as_object()), std::iter::once(path.as_str())).map_err(|e| e.to_string())?;
+    let head = repo
+        .head()
+        .map_err(|e| e.to_string())?
+        .peel_to_commit()
+        .map_err(|e| e.to_string())?;
+    repo.reset_default(Some(head.as_object()), std::iter::once(path.as_str()))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1051,9 +1103,13 @@ async fn git_commit(workspace: String, message: String) -> Result<(), String> {
     let mut index = repo.index().map_err(|e| e.to_string())?;
     let oid = index.write_tree().map_err(|e| e.to_string())?;
     let signature = repo.signature().map_err(|e| e.to_string())?;
-    let parent_commit = repo.head().map_err(|e| e.to_string())?.peel_to_commit().map_err(|e| e.to_string())?;
+    let parent_commit = repo
+        .head()
+        .map_err(|e| e.to_string())?
+        .peel_to_commit()
+        .map_err(|e| e.to_string())?;
     let tree = repo.find_tree(oid).map_err(|e| e.to_string())?;
-    
+
     repo.commit(
         Some("HEAD"),
         &signature,
@@ -1061,49 +1117,151 @@ async fn git_commit(workspace: String, message: String) -> Result<(), String> {
         &message,
         &tree,
         &[&parent_commit],
-    ).map_err(|e| e.to_string())?;
-    
+    )
+    .map_err(|e| e.to_string())?;
+
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct GitCommitInfo {
+    pub id: String,
+    pub parents: Vec<String>,
+    pub author: String,
+    pub message: String,
+    pub timestamp: i64,
+}
+
+#[tauri::command]
+async fn get_git_history(workspace: String) -> Result<Vec<GitCommitInfo>, String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+    revwalk.push_head().map_err(|e| e.to_string())?;
+    revwalk
+        .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+        .unwrap_or(());
+
+    let mut commits = Vec::new();
+    for oid_res in revwalk.take(100) {
+        // Limit to 100 for performance
+        if let Ok(oid) = oid_res {
+            if let Ok(commit) = repo.find_commit(oid) {
+                let id = commit.id().to_string();
+                let author = commit.author().name().unwrap_or("Unknown").to_string();
+                let message = commit.summary().unwrap_or("").to_string();
+                let timestamp = commit.time().seconds();
+
+                let mut parents = Vec::new();
+                for parent in commit.parents() {
+                    parents.push(parent.id().to_string());
+                }
+
+                commits.push(GitCommitInfo {
+                    id,
+                    parents,
+                    author,
+                    message,
+                    timestamp,
+                });
+            }
+        }
+    }
+
+    Ok(commits)
+}
+
+#[tauri::command]
+async fn get_commit_diff(workspace: String, commit_id: String) -> Result<String, String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let oid = git2::Oid::from_str(&commit_id).map_err(|e| e.to_string())?;
+    let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+    let tree = commit.tree().map_err(|e| e.to_string())?;
+
+    let parent_tree = if commit.parent_count() > 0 {
+        let parent = commit.parent(0).map_err(|e| e.to_string())?;
+        Some(parent.tree().map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+
+    let diff = repo
+        .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)
+        .map_err(|e| e.to_string())?;
+
+    use std::sync::{Arc, Mutex};
+    let patch_string = Arc::new(Mutex::new(String::new()));
+
+    let patch_clone = patch_string.clone();
+    diff.print(git2::DiffFormat::Patch, |_, _, line| {
+        let mut patch = patch_clone.lock().unwrap();
+        let prefix = match line.origin() {
+            '+' | '-' | ' ' => format!("{}", line.origin()),
+            _ => "".to_string(),
+        };
+        patch.push_str(&prefix);
+        patch.push_str(&String::from_utf8_lossy(line.content()));
+        true
+    })
+    .map_err(|e| e.to_string())?;
+
+    let result = patch_string.lock().unwrap().clone();
+    Ok(result)
 }
 
 #[tauri::command]
 async fn watch_codebase(path: String, window: Window) -> Result<(), String> {
-    use notify::{Watcher, RecursiveMode, EventKind};
-    
+    use notify::{EventKind, RecursiveMode, Watcher};
+
     tauri::async_runtime::spawn(async move {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut watcher = notify::recommended_watcher(tx).unwrap();
-        
+
         let path_ref = Path::new(&path);
         let _ = watcher.watch(path_ref, RecursiveMode::Recursive);
-        
+
         for res in rx {
             if let Ok(event) = res {
                 if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                     for path_buf in event.paths {
-                        if !path_buf.is_file() { continue; }
+                        if !path_buf.is_file() {
+                            continue;
+                        }
                         let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
-                        if !matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") { continue; }
-                        
+                        if !matches!(ext, "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart") {
+                            continue;
+                        }
+
                         let id = path_buf.to_string_lossy().replace('\\', "/");
-                        let label = path_buf.file_name().unwrap_or_default().to_string_lossy().to_string();
-                        
+                        let label = path_buf
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+
                         let mut imports = Vec::new();
                         let mut function_count = 0;
-                        
+
                         if let Ok(source_text) = fs::read_to_string(&path_buf) {
-                            let re = Regex::new(r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)").unwrap();
+                            let re = Regex::new(
+                                r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
+                            )
+                            .unwrap();
                             function_count = re.find_iter(&source_text).count();
-                            
+
                             if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
                                 let allocator = Allocator::default();
-                                let source_type = SourceType::from_path(&path_buf).unwrap_or_default();
-                                let ret = Parser::new(&allocator, &source_text, source_type).parse();
-                                
+                                let source_type =
+                                    SourceType::from_path(&path_buf).unwrap_or_default();
+                                let ret =
+                                    Parser::new(&allocator, &source_text, source_type).parse();
+
                                 if ret.errors.is_empty() {
                                     for stmt in &ret.program.body {
                                         if let Some(decl) = stmt.as_module_declaration() {
-                                            if let ModuleDeclaration::ImportDeclaration(import_decl) = decl {
+                                            if let ModuleDeclaration::ImportDeclaration(
+                                                import_decl,
+                                            ) = decl
+                                            {
                                                 let source = import_decl.source.value.to_string();
                                                 imports.push((source, false));
                                             }
@@ -1112,41 +1270,149 @@ async fn watch_codebase(path: String, window: Window) -> Result<(), String> {
                                 }
                             } else {
                                 match ext {
-                                    "py" => PYTHON_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
-                                    "rs" => RUST_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
-                                    "dart" => DART_PARSER.with(|p| extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports)),
+                                    "py" => PYTHON_PARSER.with(|p| {
+                                        extract_imports_with_parser(
+                                            &mut p.borrow_mut(),
+                                            &source_text,
+                                            ext,
+                                            &mut imports,
+                                        )
+                                    }),
+                                    "rs" => RUST_PARSER.with(|p| {
+                                        extract_imports_with_parser(
+                                            &mut p.borrow_mut(),
+                                            &source_text,
+                                            ext,
+                                            &mut imports,
+                                        )
+                                    }),
+                                    "dart" => DART_PARSER.with(|p| {
+                                        extract_imports_with_parser(
+                                            &mut p.borrow_mut(),
+                                            &source_text,
+                                            ext,
+                                            &mut imports,
+                                        )
+                                    }),
                                     _ => {}
                                 }
                             }
                         }
-                        
+
                         let import_count = imports.len();
-                        let score = if function_count > 10 || import_count > 15 { "High" } else if function_count > 3 || import_count > 5 { "Medium" } else { "Low" };
-                        
+                        let score = if function_count > 10 || import_count > 15 {
+                            "High"
+                        } else if function_count > 3 || import_count > 5 {
+                            "Medium"
+                        } else {
+                            "Low"
+                        };
+
                         let node = ParsedNode {
                             id: id.clone(),
                             label,
                             group: ext.to_string(),
                             semantic_group: None,
                             summary: None,
-                            metrics: Some(NodeMetrics { function_count, import_count, complexity_score: score.to_string() }),
+                            metrics: Some(NodeMetrics {
+                                function_count,
+                                import_count,
+                                complexity_score: score.to_string(),
+                            }),
                         };
-                        
+
                         let alias_resolver = AliasResolver::new(path_ref);
                         let mut resolved_imports = Vec::new();
                         for (imp, is_data) in imports {
                             let resolved = alias_resolver.resolve(&imp);
-                            let clean = resolved.strip_prefix("@/").or_else(|| resolved.strip_prefix("~/")).unwrap_or(&resolved);
+                            let clean = resolved
+                                .strip_prefix("@/")
+                                .or_else(|| resolved.strip_prefix("~/"))
+                                .unwrap_or(&resolved);
                             resolved_imports.push((clean.to_string(), is_data));
                         }
-                        
-                        let _ = window.emit("node_updated", NodeUpdatedPayload { node, resolved_imports });
+
+                        let _ = window.emit(
+                            "node_updated",
+                            NodeUpdatedPayload {
+                                node,
+                                resolved_imports,
+                            },
+                        );
                     }
                 }
             }
         }
     });
-    
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn spawn_pty(
+    shell: String,
+    window: Window,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let pty_system = NativePtySystem::default();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| e.to_string())?;
+
+    let cmd = CommandBuilder::new(&shell);
+    let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+
+    let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+
+    *state.pty_writer.lock().unwrap() = Some(writer);
+    *state.pty_master.lock().unwrap() = Some(pair.master);
+
+    std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut buf = [0u8; 1024];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let data = buf[..n].to_vec();
+                    let _ = window.emit("pty-data", data);
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn write_pty(data: String, state: State<'_, AppState>) -> Result<(), String> {
+    if let Some(writer) = state.pty_writer.lock().unwrap().as_mut() {
+        writer
+            .write_all(data.as_bytes())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn resize_pty(rows: u16, cols: u16, state: State<'_, AppState>) -> Result<(), String> {
+    if let Some(master) = state.pty_master.lock().unwrap().as_mut() {
+        master
+            .resize(portable_pty::PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -1156,6 +1422,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             parse_codebase,
             enrich_graph_with_ai,
@@ -1165,7 +1432,12 @@ pub fn run() {
             get_git_status,
             git_stage_file,
             git_unstage_file,
-            git_commit
+            git_commit,
+            get_git_history,
+            get_commit_diff,
+            spawn_pty,
+            write_pty,
+            resize_pty
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

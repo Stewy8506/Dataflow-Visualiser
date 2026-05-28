@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronUp, Minus, X, Terminal, Search, Grid3x3, ExternalLink } from 'lucide-react';
+import { ChevronUp, Minus, X, Terminal as TerminalIcon, Search, Grid3x3, ExternalLink } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { Terminal } from './Terminal';
 
 interface BottomPanelProps {
   selectedNode: any | null;
@@ -9,7 +10,8 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelProps) {
-  const [activeTab, setActiveTab] = useState<'inspector' | 'matrix' | 'console'>('inspector');
+  const [activeTab, setActiveTab] = useState<'inspector' | 'console' | 'terminal' | 'matrix'>('inspector');
+  const [shell, setShell] = useState('powershell.exe');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [panelHeight, setPanelHeight] = useState(240);
   const isDragging = useRef(false);
@@ -51,7 +53,8 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
 
   const tabs = [
     { id: 'inspector' as const, label: 'Inspector', icon: Search },
-    { id: 'console' as const, label: 'Console', icon: Terminal },
+    { id: 'console' as const, label: 'Output Logs', icon: TerminalIcon },
+    { id: 'terminal' as const, label: 'Terminal', icon: TerminalIcon },
     { id: 'matrix' as const, label: 'Matrix', icon: Grid3x3 },
   ];
 
@@ -103,8 +106,20 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
             );
           })}
         </div>
-        <div className="flex items-center gap-0.5">
-          <button 
+        <div className="flex items-center gap-2">
+          {activeTab === 'terminal' && (
+            <select 
+              value={shell}
+              onChange={(e) => setShell(e.target.value)}
+              className="bg-surface-raised border border-border text-xs text-text-main rounded px-2 py-1 outline-none mr-2 focus:border-primary transition-colors"
+            >
+              <option value="powershell.exe">PowerShell</option>
+              <option value="cmd.exe">Command Prompt</option>
+              <option value="bash">Bash (Mac/Linux/WSL)</option>
+              <option value="zsh">Zsh (Mac/Linux)</option>
+            </select>
+          )}
+          <button  
             className="p-1.5 text-text-dim hover:text-text-muted rounded-md hover:bg-surface-raised transition-colors cursor-pointer"
             onClick={() => setIsCollapsed(true)}
             title="Minimize"
@@ -214,6 +229,12 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
             ) : (
               <div className="text-text-dim">No log entries yet.</div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'terminal' && (
+          <div className="flex-1 w-full h-full overflow-hidden bg-[#0a0a0a]">
+            <Terminal key={shell} shell={shell} />
           </div>
         )}
 
