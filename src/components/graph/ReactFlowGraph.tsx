@@ -47,9 +47,8 @@ export function ReactFlowGraph({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  const activeNodeId = hoveredNodeId || selectedNodeId;
+  const activeNodeId = selectedNodeId;
 
   const blastRadius = useMemo(() => {
     if (!activeNodeId) return null;
@@ -101,7 +100,7 @@ export function ReactFlowGraph({
           opacity: isConnected ? 1 : 0.2,
           filter: isConnected ? 'none' : 'grayscale(100%) blur(1px)',
           pointerEvents: isConnected ? 'all' : 'none',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'opacity 0.2s, border-color 0.2s, box-shadow 0.2s',
         }
       };
     });
@@ -138,10 +137,10 @@ export function ReactFlowGraph({
           opacity: noActiveNode ? 0.15 : (isConnected ? 0.8 : 0.05),
           strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1),
           stroke: strokeColor,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s',
         },
         markerEnd,
-        animated: isConnected && blastRadius,
+        animated: isConnected && !!blastRadius,
       };
     });
 
@@ -173,8 +172,6 @@ export function ReactFlowGraph({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
-        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
-        onNodeMouseLeave={() => setHoveredNodeId(null)}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         colorMode="dark"

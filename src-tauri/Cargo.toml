@@ -26,9 +26,7 @@ oxc_parser = "0.133.0"
 oxc_allocator = "0.133.0"
 oxc_ast = "0.133.0"
 oxc_span = "0.133.0"
-walkdir = "2.5.0"
 tauri-plugin-dialog = "2.7.1"
-regex = "1.12.3"
 ignore = "0.4.25"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
@@ -36,3 +34,10 @@ tree-sitter = "0.26.9"
 tree-sitter-python = "0.25.0"
 tree-sitter-rust = "0.24.2"
 tree-sitter-dart = "0.2.0"
+
+[profile.release]
+lto = true
+opt-level = "z"
+codegen-units = 1
+strip = true
+

@@ -10,6 +10,19 @@ export function calculateBlastRadius(
   const tiers = new Map<string, number>();
   tiers.set(targetNodeId, 0);
 
+  // Pre-build reverse adjacency map: target -> list of sources importing it
+  const reverseAdjacency = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge && edge.target && edge.source) {
+      let list = reverseAdjacency.get(edge.target);
+      if (!list) {
+        list = [];
+        reverseAdjacency.set(edge.target, list);
+      }
+      list.push(edge.source);
+    }
+  }
+
   let queue = [targetNodeId];
   let currentTier = 0;
 
@@ -18,13 +31,13 @@ export function calculateBlastRadius(
     currentTier++;
 
     for (const current of queue) {
-      // Find all files that import `current` (Reverse Dependency)
-      // An edge goes from A (importer) -> B (imported)
-      // So if edge.target === current, then edge.source is importing `current`.
-      for (const edge of edges) {
-        if (edge.target === current && !tiers.has(edge.source)) {
-          tiers.set(edge.source, currentTier);
-          nextQueue.push(edge.source);
+      const importers = reverseAdjacency.get(current);
+      if (importers) {
+        for (const source of importers) {
+          if (!tiers.has(source)) {
+            tiers.set(source, currentTier);
+            nextQueue.push(source);
+          }
         }
       }
     }

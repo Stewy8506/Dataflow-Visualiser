@@ -202,13 +202,18 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
     return connected;
   }, [selectedNode, graphData]);
 
+  // Fast O(1) map for looking up node positions by ID in the 3D space
+  const nodesMap = useMemo(() => {
+    return new Map(nodes3D.map(n => [n.id, n]));
+  }, [nodes3D]);
+
   // Target coordinates for selected camera focus
   const cameraTarget = useMemo(() => {
     if (!selectedNode || nodes3D.length === 0) return null;
-    const matched = nodes3D.find(n => n.id === selectedNode.id);
+    const matched = nodesMap.get(selectedNode.id);
     if (!matched) return null;
     return new THREE.Vector3(matched.x, matched.y, matched.z);
-  }, [selectedNode, nodes3D]);
+  }, [selectedNode, nodesMap]);
 
   const handleNodeClick = (node: Node3D) => {
     // Reconstruct ReactFlow format matching the rest of the application
@@ -253,8 +258,8 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
 
         {/* Edge Connections */}
         {nodes3D.length > 0 && graphData?.edges?.map((edge: any, idx: number) => {
-          const u = nodes3D.find(n => n.id === edge.source);
-          const v = nodes3D.find(n => n.id === edge.target);
+          const u = nodesMap.get(edge.source);
+          const v = nodesMap.get(edge.target);
           if (!u || !v) return null;
 
           const isDirect = selectedNode && (edge.source === selectedNode.id || edge.target === selectedNode.id);

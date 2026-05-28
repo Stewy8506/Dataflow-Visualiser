@@ -4,28 +4,45 @@ use oxc_ast::ast::{ModuleDeclaration, ImportDeclarationSpecifier};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
 use tree_sitter::Parser as TSParser;
 
-fn extract_imports_ts(
-    language: tree_sitter::Language,
+// Thread-local parsers: constructed once per thread, reused across files.
+thread_local! {
+    static PYTHON_PARSER: std::cell::RefCell<TSParser> = {
+        let mut p = TSParser::new();
+        p.set_language(&tree_sitter::Language::from(tree_sitter_python::LANGUAGE)).unwrap();
+        std::cell::RefCell::new(p)
+    };
+    static RUST_PARSER: std::cell::RefCell<TSParser> = {
+        let mut p = TSParser::new();
+        p.set_language(&tree_sitter::Language::from(tree_sitter_rust::LANGUAGE)).unwrap();
+        std::cell::RefCell::new(p)
+    };
+    static DART_PARSER: std::cell::RefCell<TSParser> = {
+        let mut p = TSParser::new();
+        p.set_language(&tree_sitter::Language::from(tree_sitter_dart::LANGUAGE)).unwrap();
+        std::cell::RefCell::new(p)
+    };
+}
+
+fn extract_imports_with_parser(
+    parser: &mut TSParser,
     source_text: &str,
     ext: &str,
     imports: &mut Vec<(String, bool)>
 ) {
-    let mut parser = TSParser::new();
-    parser.set_language(&language).unwrap();
     if let Some(tree) = parser.parse(source_text, None) {
         let mut cursor = tree.walk();
         let mut reached_root = false;
         while !reached_root {
             let node = cursor.node();
             let kind = node.kind();
-            
-            let mut target_node = None;
 
+            let mut target_node = None;
             if ext == "py" && (kind == "import_statement" || kind == "import_from_statement") {
                 target_node = Some(node);
             } else if ext == "rs" && kind == "use_declaration" {
@@ -36,24 +53,26 @@ fn extract_imports_ts(
 
             if let Some(n) = target_node {
                 if let Ok(text) = n.utf8_text(source_text.as_bytes()) {
-                    // Very simple string extraction for demonstration.
-                    // A true AST parser would walk children to find the exact module name node.
-                    // For now, we extract the whole statement and rely on the regex fallback for module name,
-                    // or just use regex on the AST node's text.
-                    let clean = text.replace("import ", "").replace("from ", "").replace("use ", "").replace(";", "").replace("'", "").replace("\"", "");
+                    let clean = text
+                        .replace("import ", "")
+                        .replace("from ", "")
+                        .replace("use ", "")
+                        .replace(';', "")
+                        .replace('\'', "")
+                        .replace('"', "");
                     let parts: Vec<&str> = clean.split_whitespace().collect();
-                    if let Some(module) = parts.first() {
+                    if parts.len() >= 2 {
+                        // e.g. from .utils import math -> push both ".utils/math" and ".utils"
+                        imports.push((format!("{}/{}", parts[0], parts[1]), false));
+                        imports.push((parts[0].to_string(), false));
+                    } else if let Some(module) = parts.first() {
                         imports.push((module.to_string(), false));
                     }
                 }
             }
 
-            if cursor.goto_first_child() {
-                continue;
-            }
-            if cursor.goto_next_sibling() {
-                continue;
-            }
+            if cursor.goto_first_child() { continue; }
+            if cursor.goto_next_sibling() { continue; }
             let mut retracing = true;
             while retracing {
                 if !cursor.goto_parent() {
@@ -121,6 +140,134 @@ pub struct GraphData {
     pub edges: Vec<ParsedEdge>,
 }
 
+fn resolve_import_path(
+    current_file_path: &Path,
+    workspace_root: &Path,
+    import_str: &str,
+    package_name: Option<&str>,
+    node_index: &HashMap<String, usize>,
+    nodes: &[ParsedNode],
+) -> Option<usize> {
+    // 1. Clean import path
+    let mut import_path = import_str.replace('\\', "/");
+
+    // 2. Handle Dart package imports (e.g., package:my_project/src/utils/math.dart)
+    if import_path.starts_with("package:") {
+        if let Some(pkg) = package_name {
+            let prefix = format!("package:{}/", pkg);
+            if import_path.starts_with(&prefix) {
+                // Local Dart package import! Maps to lib/src/utils/math.dart
+                let sub_path = import_path.strip_prefix(&prefix).unwrap();
+                import_path = format!("lib/{}", sub_path);
+            } else {
+                return None; // External package
+            }
+        } else {
+            return None; // Unknown package name
+        }
+    }
+
+    // 3. Handle Rust crate imports (use crate::utils::math -> src/utils/math)
+    if import_path.starts_with("crate::") {
+        let sub_path = import_path.strip_prefix("crate::").unwrap().replace("::", "/");
+        import_path = format!("src/{}", sub_path);
+    }
+
+    // 4. Handle Rust super:: / self:: imports
+    let mut clean_import = import_path
+        .replace("super::", "../")
+        .replace("self::", "./")
+        .replace("::", "/");
+
+    // 5. Handle Python dot imports
+    if clean_import.starts_with('.') && (clean_import.ends_with(".py") || current_file_path.extension().and_then(|s| s.to_str()) == Some("py")) {
+        let dots_count = clean_import.chars().take_while(|c| *c == '.').count();
+        let path_part = &clean_import[dots_count..];
+        let relative_prefix = "../".repeat(dots_count - 1) + if dots_count == 1 { "./" } else { "" };
+        clean_import = format!("{}{}", relative_prefix, path_part.replace('.', "/"));
+    } else if current_file_path.extension().and_then(|s| s.to_str()) == Some("py") {
+        clean_import = clean_import.replace('.', "/");
+    }
+
+    let clean_import = clean_import
+        .strip_prefix("@/")
+        .or_else(|| clean_import.strip_prefix("~/"))
+        .unwrap_or(&clean_import);
+
+    // Candidates checklist
+    let mut candidates = Vec::new();
+
+    // Candidate A: Relative path (if starts with .)
+    if clean_import.starts_with('.') {
+        if let Some(dir) = current_file_path.parent() {
+            let resolved = normalize_path(&dir.join(clean_import));
+            candidates.push(resolved);
+        }
+    } else {
+        // Candidate B: Relative to workspace root directly
+        candidates.push(workspace_root.join(clean_import));
+        // Candidate C: Relative to workspace_root/src/
+        candidates.push(workspace_root.join("src").join(clean_import));
+        // Candidate D: Relative to workspace_root/lib/
+        candidates.push(workspace_root.join("lib").join(clean_import));
+    }
+
+    const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart"];
+
+    // Probe candidates
+    for base in &candidates {
+        // Try direct file path
+        if let Some(idx) = check_node_existence(base, node_index) {
+            return Some(idx);
+        }
+
+        // Try with extensions
+        for ext in ALL_EXTENSIONS {
+            let with_ext = base.with_extension(*ext);
+            if let Some(idx) = check_node_existence(&with_ext, node_index) {
+                return Some(idx);
+            }
+        }
+
+        // Try as directory (e.g., dir/index.ext or dir/mod.rs)
+        for ext in ALL_EXTENSIONS {
+            let index_file = base.join(format!("index.{}", ext));
+            if let Some(idx) = check_node_existence(&index_file, node_index) {
+                return Some(idx);
+            }
+            let mod_file = base.join(format!("mod.{}", ext));
+            if let Some(idx) = check_node_existence(&mod_file, node_index) {
+                return Some(idx);
+            }
+        }
+    }
+
+    // 6. Suffix match fallback (O(N) search over all nodes, safe fallback)
+    let clean_lower = clean_import.to_lowercase();
+    for (i, node) in nodes.iter().enumerate() {
+        let node_id_lower = node.id.to_lowercase();
+        for ext in ALL_EXTENSIONS {
+            let suffix_file = format!("/{}.{}", clean_lower, ext);
+            let suffix_dir = format!("/{}/index.{}", clean_lower, ext);
+            let suffix_mod = format!("/{}/mod.{}", clean_lower, ext);
+            if node_id_lower.ends_with(&suffix_file)
+                || node_id_lower.ends_with(&suffix_dir)
+                || node_id_lower.ends_with(&suffix_mod)
+                || node_id_lower.ends_with(&format!("/{}", clean_lower))
+            {
+                return Some(i);
+            }
+        }
+    }
+
+    None
+}
+
+fn check_node_existence(path: &Path, node_index: &HashMap<String, usize>) -> Option<usize> {
+    let key = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    node_index.get(&key).copied()
+}
+
 #[tauri::command]
 async fn parse_codebase(path: String) -> Result<GraphData, String> {
     let mut nodes = Vec::new();
@@ -129,6 +276,24 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
         return Err("Path does not exist".to_string());
+    }
+
+    // Try to extract Dart package name from pubspec.yaml for Flutter support
+    let mut package_name = None;
+    let pubspec_path = path_ref.join("pubspec.yaml");
+    if pubspec_path.exists() {
+        if let Ok(content) = fs::read_to_string(pubspec_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("name:") {
+                    let parts: Vec<&str> = trimmed.split(':').collect();
+                    if parts.len() >= 2 {
+                        package_name = Some(parts[1].trim().to_string());
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     struct FileData {
@@ -244,13 +409,18 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
                                 }
                             }
                         } else if matches!(ext, "py" | "rs" | "dart") {
-                            let language = match ext {
-                                "py" => tree_sitter::Language::from(tree_sitter_python::LANGUAGE),
-                                "rs" => tree_sitter::Language::from(tree_sitter_rust::LANGUAGE),
-                                "dart" => tree_sitter::Language::from(tree_sitter_dart::LANGUAGE),
+                            match ext {
+                                "py" => PYTHON_PARSER.with(|p| {
+                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                }),
+                                "rs" => RUST_PARSER.with(|p| {
+                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                }),
+                                "dart" => DART_PARSER.with(|p| {
+                                    extract_imports_with_parser(&mut p.borrow_mut(), &source_text, ext, &mut imports);
+                                }),
                                 _ => unreachable!(),
-                            };
-                            extract_imports_ts(language, &source_text, ext, &mut imports);
+                            }
                         }
                     }
 
@@ -265,83 +435,31 @@ async fn parse_codebase(path: String) -> Result<GraphData, String> {
         }
     }
 
+    // ── Build O(1) lookup structures before edge resolution ──────────────────
+    // node_index: lowercase id → index in `nodes`
+    let node_index: HashMap<String, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.to_lowercase(), i))
+        .collect();
+
     // Resolve imports to create edges
     for file_data in &files_data {
-        let dir = file_data.path.parent().unwrap_or(Path::new(""));
-
         for import_str in &file_data.imports {
-            let mut matched = false;
-
-            if import_str.0.starts_with('.') {
-                let resolved = normalize_path(&dir.join(&import_str.0));
-                // Try different extensions or index files
-                let possible_paths = vec![
-                    resolved.with_extension("ts"),
-                    resolved.with_extension("tsx"),
-                    resolved.with_extension("js"),
-                    resolved.with_extension("jsx"),
-                    resolved.join("index.ts"),
-                    resolved.join("index.tsx"),
-                    resolved.join("index.js"),
-                    resolved.join("index.jsx"),
-                ];
-
-                for possible in possible_paths {
-                    // normalize to the same format as id (forward slashes)
-                    let possible_id = possible.to_string_lossy().replace('\\', "/").to_lowercase();
-
-                    if let Some(target_node) =
-                        nodes.iter().find(|n| n.id.to_lowercase() == possible_id)
-                    {
-                        edges.push(ParsedEdge {
-                            source: file_data.id.clone(),
-                            target: target_node.id.clone(),
-                            via: None,
-                            is_data_source: import_str.1,
-                        });
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-
-            // Fallback for path aliases (e.g., @/components/Button) or baseUrl imports
-            if !matched {
-                let clean_import = import_str.0
-                    .strip_prefix("@/")
-                    .or_else(|| import_str.0.strip_prefix("~/"))
-                    .unwrap_or(&import_str.0);
-
-                // Ignore likely node_modules without slashes unless they match exactly
-                let suffixes = vec![
-                    format!("/{}.ts", clean_import),
-                    format!("/{}.tsx", clean_import),
-                    format!("/{}.js", clean_import),
-                    format!("/{}.jsx", clean_import),
-                    format!("/{}/index.ts", clean_import),
-                    format!("/{}/index.tsx", clean_import),
-                    format!("/{}/index.js", clean_import),
-                    format!("/{}/index.jsx", clean_import),
-                ];
-
-                for node in &nodes {
-                    let mut found = false;
-                    for suffix in &suffixes {
-                        if node.id.to_lowercase().ends_with(&suffix.to_lowercase()) {
-                            edges.push(ParsedEdge {
-                                source: file_data.id.clone(),
-                                target: node.id.clone(),
-                                via: None,
-                                is_data_source: import_str.1,
-                            });
-                            found = true;
-                            break;
-                        }
-                    }
-                    if found {
-                        break;
-                    }
-                }
+            if let Some(idx) = resolve_import_path(
+                &file_data.path,
+                path_ref,
+                &import_str.0,
+                package_name.as_deref(),
+                &node_index,
+                &nodes,
+            ) {
+                edges.push(ParsedEdge {
+                    source: file_data.id.clone(),
+                    target: nodes[idx].id.clone(),
+                    via: None,
+                    is_data_source: import_str.1,
+                });
             }
         }
     }

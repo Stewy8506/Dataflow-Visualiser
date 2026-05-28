@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -50,6 +50,18 @@ function App() {
     const saved = localStorage.getItem('enable_ai_summary');
     return saved === null ? true : saved === 'true';
   });
+
+  const handleDeleteNode = useCallback((nodeId: string, nodePath: string) => {
+    setRawGraphData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        nodes: prev.nodes.filter(n => n.id !== nodeId),
+        edges: prev.edges.filter(e => e.source !== nodeId && e.target !== nodeId)
+      };
+    });
+    setLogs(prev => [...prev, `> Permanently deleted: ${nodePath}`]);
+  }, []);
 
   useEffect(() => {
     if (showSettings && apiKey) {
@@ -179,17 +191,7 @@ function App() {
       validNodeIds.has(e.source) && validNodeIds.has(e.target)
     );
 
-    const handleDeleteNode = (nodeId: string, nodePath: string) => {
-      setRawGraphData(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          nodes: prev.nodes.filter(n => n.id !== nodeId),
-          edges: prev.edges.filter(e => e.source !== nodeId && e.target !== nodeId)
-        };
-      });
-      setLogs(prev => [...prev, `> Permanently deleted: ${nodePath}`]);
-    };
+    // stable handleDeleteNode is called here
 
 
     const initialNodes = filteredRawNodes.map((n) => {
@@ -213,7 +215,7 @@ function App() {
       }
 
       // Flag common entry point files across frameworks (Next.js, Vite, React Native, Flutter, etc.)
-      const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|middleware|sitemap)\./i.test(n.label) || n.id.includes('src-tauri');
+      const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|lib|app|middleware|sitemap)\./i.test(n.label) || n.id.includes('src-tauri');
       const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
 
       // Calculate architectural taxonomy hierarchy
@@ -260,7 +262,7 @@ function App() {
         source: sourceId,
         target: targetId,
         type: 'default',
-        animated: true,
+        animated: false,
         label: e.via ? `via ${e.via}` : undefined,
         labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
         labelBgStyle: { fill: '#1e293b', fillOpacity: 0.9, stroke: '#334155', strokeWidth: 1 },
