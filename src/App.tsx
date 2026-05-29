@@ -511,7 +511,13 @@ function App() {
 
     // Filter nodes based on active layer
     let filteredRawNodes = rawGraphData.nodes.filter(n => {
-      if (n.id.startsWith('ext:') && !showExternalDeps) return false;
+      if (n.id.startsWith('ext:')) {
+        if (!showExternalDeps) return false;
+        // Hide disconnected default dependencies (like eslint, typescript) to reduce clutter
+        const pkgName = n.id.replace('ext:', '');
+        const isDefaultTooling = /^(eslint|typescript|tailwindcss|postcss|autoprefixer|vite|prettier|jest|vitest|playwright|cypress|nodemon|ts-node|husky|lint-staged|react|react-dom|next|vue|svelte|@types\/.*|@eslint\/.*|@typescript-eslint\/.*|eslint-.*|@tailwindcss\/.*)$/.test(pkgName);
+        if ((inDegrees.get(n.id) || 0) === 0 && isDefaultTooling) return false;
+      }
 
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
       if (activeLayer === 'ui') return !isBackend && !n.id.startsWith('ext:');
@@ -588,6 +594,7 @@ function App() {
           group: n.group,
           type: n.group.toUpperCase(),
           isBackend,
+          isExternal: n.id.startsWith('ext:'),
           semantic_group: n.semantic_group,
           summary: n.summary,
           isDeadCode,
@@ -671,7 +678,7 @@ function App() {
     setFlowNodes(layoutedNodes);
     setFlowEdges(styledEdges);
 
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps]);
 
   // Merge AI enrichment metadata into flow nodes at render time.
   // This never triggers a dagre relayout — only updates summary/group fields.

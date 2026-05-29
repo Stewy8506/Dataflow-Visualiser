@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2, Cpu, ChevronDown, ChevronUp, Box } from 'lucide-react';
+import { FileCode, FileType, Layout, Trash2, Cpu, ChevronDown, ChevronUp, Box, Package } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
 // Vibrant accent colors for zoomed-out visibility
-function getAccent(type: string, isBackend: boolean) {
+function getAccent(type: string, isBackend: boolean, isExternal: boolean) {
+  if (isExternal) return { color: '#d946ef', bg: 'rgba(217, 70, 239, 0.15)' }; // Fuchsia
   if (isBackend) return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
   if (type === 'TSX' || type === 'JSX') return { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' };
   if (type === 'TS' || type === 'JS' || type === 'PY') return { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
@@ -19,7 +20,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   const isDimmed = data.isDimmed ?? false;
   const isBackend = data.isBackend;
   const isHorizontal = data.direction !== 'TB';
-  const accent = getAccent(data.type, isBackend);
+  const accent = getAccent(data.type, isBackend, data.isExternal);
 
   const pathParts = data.path ? data.path.split('/') : [];
   const dirPath = pathParts.length > 1
@@ -50,6 +51,81 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
       blastShadow = '0 0 5px rgba(148, 163, 184, 0.1)';
       blastBorderWidth = '1px';
     }
+  }
+
+  if (data.isExternal) {
+    return (
+      <div className="relative transition-all duration-200 group">
+        <div
+          className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all duration-200 ${
+            selected
+              ? 'shadow-[0_0_20px_rgba(217,70,239,0.4)] z-10 scale-[1.05] border-fuchsia-500'
+              : 'shadow-md hover:shadow-lg border-fuchsia-500/30 hover:border-fuchsia-500/60'
+          } ${isSearchMatch ? '' : 'opacity-50'} ${isDimmed ? 'opacity-30' : ''} ${
+            data.isDeadCode ? 'border-dashed !border-red-500/50 hover:!border-red-500' : ''
+          }`}
+          style={{ background: data.isDeadCode ? '#450a0a' : 'var(--color-surface)' }}
+        >
+          <Package size={14} style={{ color: data.isDeadCode ? '#ef4444' : accent.color }} />
+          <span className={`text-[11px] font-bold tracking-wide truncate max-w-[150px] ${data.isDeadCode ? 'text-red-400 line-through' : 'text-text-main'}`}>
+            {data.label}
+          </span>
+          {data.isDeadCode && (
+            <span className="text-[9px] uppercase tracking-wider font-black text-red-500 bg-red-500/20 px-1.5 py-0.5 rounded-md ml-1">
+              Unused
+            </span>
+          )}
+        </div>
+        
+        {!selected && (
+          <div className="absolute left-1/2 -top-2 -translate-x-1/2 -translate-y-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-auto whitespace-nowrap px-3 py-2 rounded-xl bg-surface border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl pointer-events-none delay-300">
+            <div className="flex items-center gap-2">
+              <Package size={14} style={{ color: data.isDeadCode ? '#ef4444' : accent.color }} />
+              <span className="text-xs font-semibold text-text-main">
+                {data.isDeadCode ? `Unused Package: ${data.label}` : `External Package: ${data.label}`}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <Handle
+          type="target"
+          position={isHorizontal ? Position.Left : Position.Top}
+          id={isHorizontal ? "left" : "top"}
+          className="!w-2 !h-2 !rounded-full !border-2"
+          style={{
+            background: 'var(--color-text-muted)',
+            borderColor: 'var(--color-surface)',
+            ...(isHorizontal ? { left: -5 } : { top: -5 }),
+          }}
+        />
+        <Handle
+          type="source"
+          position={isHorizontal ? Position.Left : Position.Top}
+          id={isHorizontal ? "left-source" : "top-source"}
+          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+          style={isHorizontal ? { left: -4 } : { top: -4 }}
+        />
+        <Handle
+          type="source"
+          position={isHorizontal ? Position.Right : Position.Bottom}
+          id={isHorizontal ? "right" : "bottom"}
+          className="!w-2 !h-2 !rounded-full !border-2"
+          style={{
+            background: 'var(--color-text-muted)',
+            borderColor: 'var(--color-surface)',
+            ...(isHorizontal ? { right: -5 } : { bottom: -5 }),
+          }}
+        />
+        <Handle
+          type="target"
+          position={isHorizontal ? Position.Right : Position.Bottom}
+          id={isHorizontal ? "right-target" : "bottom-target"}
+          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+          style={isHorizontal ? { right: -4 } : { bottom: -4 }}
+        />
+      </div>
+    );
   }
 
   return (
@@ -307,6 +383,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   prev.data.blastConnected === next.data.blastConnected &&
   prev.data.hasBlastRadius === next.data.hasBlastRadius &&
   prev.data.isDeadCode === next.data.isDeadCode &&
+  prev.data.isExternal === next.data.isExternal &&
   prev.data.label === next.data.label &&
   prev.data.semantic_group === next.data.semantic_group &&
   prev.data.summary === next.data.summary

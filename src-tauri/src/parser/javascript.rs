@@ -17,11 +17,19 @@ pub fn extract_javascript_imports(
     let mut has_exports = false;
     let mut all_exports_imports = true;
 
-    // Extract API calls using a comprehensive regex for custom clients and Tauri's invoke
     let api_re = Regex::new(r#"(?:invoke|fetch|axios|request|client|api|trpc(?:\.(?:get|post|put|delete|patch|request|useQuery|useMutation))?)\s*\(\s*[`"']([^`"'\?]+)[`"'\?]"#).unwrap();
     for cap in api_re.captures_iter(source_text) {
         if let Some(url) = cap.get(1) {
             api_calls.push(url.as_str().to_string());
+        }
+    }
+
+    // Extract dynamic imports and CommonJS requires
+    let dyn_import_re = Regex::new(r#"(?:require|import)\s*\(\s*[`"']([^`"'\?]+)[`"'\?]"#).unwrap();
+    for cap in dyn_import_re.captures_iter(source_text) {
+        if let Some(url) = cap.get(1) {
+            let src = url.as_str().to_string();
+            imports.push((src, false));
         }
     }
 

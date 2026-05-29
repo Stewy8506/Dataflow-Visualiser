@@ -34,7 +34,7 @@ interface ReactFlowGraphProps {
   isLightMode: boolean;
   preferredIde: string;
   searchQuery?: string;
-  searchMode?: 'node' | 'path';
+  searchMode?: 'highlight' | 'collapse';
   showMiniMap?: boolean;
   propTrace?: any;
   diffOverlay?: any;
@@ -54,7 +54,7 @@ function ReactFlowInner({
   isLightMode,
   preferredIde,
   searchQuery = '',
-  searchMode = 'node',
+  searchMode = 'highlight',
   showMiniMap = false,
   propTrace = null,
   diffOverlay = null,
@@ -129,7 +129,7 @@ function ReactFlowInner({
       }
 
       let isSearchMatch = true;
-      if (searchQuery && searchMode === 'node') {
+      if (searchQuery && searchMode === 'highlight') {
          const query = searchQuery.toLowerCase();
          const semanticGroup = node.data.semantic_group || '';
          const summary = node.data.summary || '';
@@ -183,6 +183,7 @@ function ReactFlowInner({
       const importer = edge.data?.originalSource || edge.source;
       const imported = edge.data?.originalTarget || edge.target;
       const isCircular = cycleResult.edgesInCycles.has(`${importer}->${imported}`);
+      const isExternalEdge = edge.source.startsWith('ext:') || edge.target.startsWith('ext:');
 
       if (diffOverlay) {
         const isAdded = diffOverlay.added_edges.some(([s, t]: [string, string]) => s === edge.source && t === edge.target);
@@ -228,6 +229,9 @@ function ReactFlowInner({
         strokeDasharray = '8 4';
         isAnimated = true;
         label = '⚠ Circular';
+      } else if (isExternalEdge) {
+        strokeColor = isLightMode ? '#c026d3' : '#d946ef';
+        strokeDasharray = '4 4';
       } else if (blastRadius && isConnected) {
         if (sourceTier >= 0 && targetTier > sourceTier) {
           if (targetTier === 1) strokeColor = '#ef4444';
@@ -249,8 +253,8 @@ function ReactFlowInner({
         label,
         style: {
           ...edge.style,
-          opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.04),
-          strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5),
+          opacity: isExternalEdge ? (noActiveNode ? 0.4 : (isConnected ? 0.6 : 0.04)) : (noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.04)),
+          strokeWidth: isExternalEdge ? 1 : (isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5)),
           stroke: strokeColor,
           strokeDasharray,
         },

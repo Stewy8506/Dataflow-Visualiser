@@ -93,7 +93,7 @@ Dataflow-Visualiser/
 ## Key Features
 
 ### Multi-Language AST Ingestion
-- **JS/TS**: Uses `oxc-parser` in Rust for native-speed ingestion (10–50× faster than Node-based parsers), extracting exact imported variables and distinguishing between data sources vs sinks.
+- **JS/TS**: Uses `oxc-parser` in Rust for native-speed ingestion (10–50× faster than Node-based parsers), extracting exact imported variables, resolving dynamic `import()` and `require()` calls, and distinguishing between data sources vs sinks.
 - **Python, Rust, Dart, C, & C++**: Leverages `tree-sitter` for rapid dependency extraction across primary backend, mobile, and embedded languages. Supports smart resolution of `pubspec.yaml`, Rust module hierarchies, and complex `#include` parsing for embedded frameworks like ESP-IDF.
 
 ### Interactive Spatial Canvas
@@ -111,7 +111,7 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
 - **Circular Dependency Detection** — automatically detects and highlights import cycles via Depth First Search, mapping out circular paths in bright rose.
 - **Component Prop Tracing** — track specific React/JSX props down the component tree to visualize and debug prop-drilling patterns.
-- **External Dependency Mapping** — surfaces third-party `npm` and `pub` packages as nodes, tracking external coupling and flagging wasted/unused package installations.
+- **External Dependency Mapping & Pruning** — surfaces third-party `npm` and `pub` packages as distinct pill-shaped nodes natively decoupled from the main grid to map them with the shortest possible connections. The engine automatically filters out zero-connection default tooling (like `eslint` or `typescript`) to prevent canvas clutter, while actively flagging genuinely unused project packages with a striking red `UNUSED` badge so you can safely prune your `package.json`.
 - **Complexity Heatmap** — visually maps code complexity (such as function density, import counts, and file sizes) across nodes using a color gradient, enabling developers to instantly locate maintainability hotspots and risky refactor targets.
 - **Fuzzy Search & Filter** — quickly navigate massive codebases with a real-time search bar that highlights matching nodes and collapses irrelevant subtrees.
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.

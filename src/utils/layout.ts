@@ -19,13 +19,20 @@ export function getLayoutedElements(
   const inDegree = new Map<string, number>();
   const outDegree = new Map<string, number>();
 
-  nodes.forEach((node) => {
+  const regularNodes = nodes.filter(n => !n.id.startsWith('ext:'));
+  const extNodes = nodes.filter(n => n.id.startsWith('ext:'));
+  const regularNodeIds = new Set(regularNodes.map(n => n.id));
+
+  const regularEdges = edges.filter(e => regularNodeIds.has(e.source) && regularNodeIds.has(e.target));
+  const extEdges = edges.filter(e => !regularNodeIds.has(e.source) || !regularNodeIds.has(e.target));
+
+  regularNodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
     inDegree.set(node.id, 0);
     outDegree.set(node.id, 0);
   });
 
-  edges.forEach((edge) => {
+  regularEdges.forEach((edge) => {
     dagreGraph.setEdge(edge.source, edge.target);
     outDegree.set(edge.source, (outDegree.get(edge.source) || 0) + 1);
     inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
@@ -37,7 +44,7 @@ export function getLayoutedElements(
   const isLR = direction === 'LR';
   const rankGroups = new Map<number, any[]>();
 
-  const dagreNodes = nodes.map((node) => {
+  const dagreNodes = regularNodes.map((node) => {
     const pos = dagreGraph.node(node.id);
     return { ...node, dagreX: pos.x, dagreY: pos.y };
   });
@@ -169,6 +176,70 @@ export function getLayoutedElements(
       currentOffset += lines * (nodeHeight + intraRankGap) - intraRankGap + ranksep;
     }
   }
+
+  // Position external dependency nodes outside of the grid
+  const posMap = new Map(finalNodes.map(n => [n.id, n.position]));
+  const occupiedSpots = new Map<string, number>();
+
+  extNodes.forEach((extNode) => {
+    const incomingEdges = extEdges.filter(e => e.target === extNode.id || e.source === extNode.id);
+    let avgX = 0;
+    let avgY = 0;
+    let count = 0;
+
+    incomingEdges.forEach(e => {
+      const sourcePos = posMap.get(e.source);
+      if (sourcePos && e.target === extNode.id) {
+         avgX += sourcePos.x;
+         avgY += sourcePos.y;
+         count++;
+      }
+      const targetPos = posMap.get(e.target);
+      if (targetPos && e.source === extNode.id) {
+         avgX += targetPos.x;
+         avgY += targetPos.y;
+         count++;
+      }
+    });
+
+    if (count > 0) {
+      avgX /= count;
+      avgY /= count;
+    } else {
+      // Fallback if disconnected
+      avgX = isLR ? currentOffset : 0;
+      avgY = isLR ? 0 : currentOffset;
+    }
+
+    // Base position slightly offset from the center of importers
+    const baseX = avgX + (isLR ? 350 : 0);
+    const baseY = avgY + (isLR ? 0 : 250);
+
+    const key = `${Math.round(baseX / 10)},${Math.round(baseY / 10)}`;
+    const collisionCount = occupiedSpots.get(key) || 0;
+    occupiedSpots.set(key, collisionCount + 1);
+
+    // Spread them out dynamically if multiple dependencies share the exact same origin
+    let finalX = baseX;
+    let finalY = baseY;
+
+    if (!isLR) { // TB direction
+      // spread horizontally below
+      finalX = baseX + (collisionCount % 2 === 0 ? 1 : -1) * Math.ceil(collisionCount / 2) * 160;
+      finalY = baseY + Math.floor(collisionCount / 4) * 60; // push down if row gets too wide
+    } else { // LR direction
+      // spread vertically to the right
+      finalY = baseY + (collisionCount % 2 === 0 ? 1 : -1) * Math.ceil(collisionCount / 2) * 60;
+      finalX = baseX + Math.floor(collisionCount / 4) * 160; // push right if column gets too tall
+    }
+
+    finalNodes.push({
+      ...extNode,
+      position: { x: finalX, y: finalY },
+      width: 150,
+      height: 40,
+    });
+  });
 
   return { nodes: finalNodes, edges };
 }
