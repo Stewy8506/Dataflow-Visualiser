@@ -4,9 +4,9 @@ pub mod dart;
 pub mod graph_builder;
 pub mod javascript;
 pub mod nextjs;
+pub mod props;
 pub mod python;
 pub mod rust;
-pub mod props;
 pub mod tree_sitter_utils;
 pub mod unused_exports;
 pub mod utils;
@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
-use tauri_plugin_fs::FsExt;
 
 use cpp::{CPP_PARSER, C_PARSER};
 use dart::DART_PARSER;
@@ -227,7 +226,7 @@ pub struct GraphData {
 }
 
 #[tauri::command]
-pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<GraphData, String> {
+pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<GraphData, String> {
     let mut nodes = Vec::new();
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
@@ -239,7 +238,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
     let mut package_name = None;
     let pubspec_path = path_ref.join("pubspec.yaml");
     let is_flutter = pubspec_path.exists();
-    
+
     let mut filter_mobile_platforms = is_flutter;
     if !filter_mobile_platforms {
         let package_json_path = path_ref.join("package.json");
@@ -274,10 +273,14 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
             if let Ok(content) = fs::read_to_string(&package_json_path) {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
-                        for k in deps.keys() { ext_deps.insert(k.clone()); }
+                        for k in deps.keys() {
+                            ext_deps.insert(k.clone());
+                        }
                     }
                     if let Some(deps) = json.get("devDependencies").and_then(|v| v.as_object()) {
-                        for k in deps.keys() { ext_deps.insert(k.clone()); }
+                        for k in deps.keys() {
+                            ext_deps.insert(k.clone());
+                        }
                     }
                 }
             }
@@ -305,7 +308,11 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         nodes.push(ParsedNode {
             id: format!("ext:{}", dep),
             label: dep.clone(),
-            group: if is_flutter { "pub".to_string() } else { "npm".to_string() },
+            group: if is_flutter {
+                "pub".to_string()
+            } else {
+                "npm".to_string()
+            },
             semantic_group: None,
             summary: None,
             unused_exports: Vec::new(),
