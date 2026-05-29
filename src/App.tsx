@@ -733,7 +733,7 @@ function App() {
           )}
         </div>
 
-        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} />
+        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} workspacePath={selectedPath} />
       </div>
 
       {showSettings && selectedPath && (

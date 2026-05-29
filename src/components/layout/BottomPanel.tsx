@@ -7,9 +7,10 @@ interface BottomPanelProps {
   selectedNode: any | null;
   logs: string[];
   preferredIde: string;
+  workspacePath: string | null;
 }
 
-export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelProps) {
+export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'console' | 'terminal' | 'matrix'>('inspector');
   const [shell, setShell] = useState('powershell.exe');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -234,7 +235,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde }: BottomPanelPro
 
         {activeTab === 'terminal' && (
           <div className="flex-1 w-full h-full overflow-hidden bg-[#0a0a0a]">
-            <Terminal key={shell} shell={shell} />
+            <Terminal key={shell} shell={shell} workspacePath={workspacePath} />
           </div>
         )}
 

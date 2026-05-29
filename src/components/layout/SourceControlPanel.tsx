@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { GitCommit, Plus, Minus, Check, User, Clock, X, FileText } from 'lucide-react';
+import { GitCommit, Plus, Minus, Check, User, Clock, X, FileText, RefreshCw } from 'lucide-react';
 
 interface GitFileStatus {
   path: String;
@@ -110,6 +110,14 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
     setLoading(false);
   };
 
+  const handleSync = async () => {
+    if (!workspacePath) return;
+    setLoading(true);
+    // Fake sync delay since backend doesn't implement git pull/push yet
+    await new Promise(r => setTimeout(r, 1000));
+    setLoading(false);
+  };
+
   const handleCommitClick = async (commit: GitCommitInfo) => {
     setSelectedCommit(commit);
     if (!workspacePath) return;
@@ -165,6 +173,7 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
 
   const stagedFiles = files.filter(f => f.staged);
   const unstagedFiles = files.filter(f => !f.staged);
+  const isSyncMode = stagedFiles.length === 0 && unstagedFiles.length === 0;
 
   const parsedDiffs = useMemo(() => {
     if (!commitDiff) return [];
@@ -200,11 +209,17 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
             rows={3}
           />
           <button
-            onClick={handleCommit}
-            disabled={loading || stagedFiles.length === 0 || !message.trim()}
+            onClick={isSyncMode ? handleSync : handleCommit}
+            disabled={loading || (!isSyncMode && (stagedFiles.length === 0 || !message.trim()))}
             className="w-full bg-text-main text-background py-1.5 rounded text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity cursor-pointer flex items-center justify-center gap-1"
           >
-            {loading ? 'Committing...' : <><Check size={14} /> Commit</>}
+            {loading ? (
+              isSyncMode ? 'Syncing...' : 'Committing...'
+            ) : isSyncMode ? (
+              <><RefreshCw size={14} /> Sync to main</>
+            ) : (
+              <><Check size={14} /> Commit</>
+            )}
           </button>
         </div>
 

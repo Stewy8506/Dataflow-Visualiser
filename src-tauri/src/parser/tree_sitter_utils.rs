@@ -1,3 +1,4 @@
+use regex::Regex;
 use tree_sitter::Parser as TSParser;
 
 pub fn extract_imports_with_parser(
@@ -5,7 +6,17 @@ pub fn extract_imports_with_parser(
     source_text: &str,
     ext: &str,
     imports: &mut Vec<(String, bool)>,
+    api_endpoints: &mut Vec<String>,
 ) {
+    if ext == "py" {
+        let endpoint_re = Regex::new(r#"@(?:app|router|bp)\.(?:get|post|put|delete|patch|route)\(\s*["']([^"'\?]+)["']"#).unwrap();
+        for cap in endpoint_re.captures_iter(source_text) {
+            if let Some(route) = cap.get(1) {
+                api_endpoints.push(route.as_str().to_string());
+            }
+        }
+    }
+
     if let Some(tree) = parser.parse(source_text, None) {
         let mut cursor = tree.walk();
         let mut reached_root = false;

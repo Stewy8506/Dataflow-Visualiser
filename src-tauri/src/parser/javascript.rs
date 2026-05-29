@@ -2,16 +2,26 @@ use oxc_allocator::Allocator;
 use oxc_ast::ast::{ImportDeclarationSpecifier, ModuleDeclaration};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
+use regex::Regex;
 use std::path::Path;
 
 pub fn extract_javascript_imports(
     source_text: &str,
     file_path: &Path,
     imports: &mut Vec<(String, bool)>,
+    api_calls: &mut Vec<String>,
 ) -> (bool, bool) {
     let mut is_barrel_file = false;
     let mut has_exports = false;
     let mut all_exports_imports = true;
+
+    // Extract API calls using a comprehensive regex for custom clients
+    let api_re = Regex::new(r#"(?:fetch|axios|request|client|api|trpc(?:\.(?:get|post|put|delete|patch|request|useQuery|useMutation))?)\s*\(\s*[`"']([^`"'\?]+)[`"'\?]"#).unwrap();
+    for cap in api_re.captures_iter(source_text) {
+        if let Some(url) = cap.get(1) {
+            api_calls.push(url.as_str().to_string());
+        }
+    }
 
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(file_path).unwrap_or_default();

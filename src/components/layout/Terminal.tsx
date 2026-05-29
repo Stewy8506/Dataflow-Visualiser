@@ -7,9 +7,10 @@ import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
   shell: string;
+  workspacePath: string | null;
 }
 
-export function Terminal({ shell }: TerminalProps) {
+export function Terminal({ shell, workspacePath }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -41,7 +42,7 @@ export function Terminal({ shell }: TerminalProps) {
     const setupTerminal = async () => {
       try {
         // Spawn PTY on backend
-        await invoke('spawn_pty', { shell });
+        await invoke('spawn_pty', { shell, workspacePath });
         
         // Tell backend about initial size
         await invoke('resize_pty', { 

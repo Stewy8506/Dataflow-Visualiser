@@ -6,6 +6,7 @@ use tauri::{Emitter, State, Window};
 #[tauri::command]
 pub async fn spawn_pty(
     shell: String,
+    workspace_path: Option<String>,
     window: Window,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -19,7 +20,10 @@ pub async fn spawn_pty(
         })
         .map_err(|e| e.to_string())?;
 
-    let cmd = CommandBuilder::new(&shell);
+    let mut cmd = CommandBuilder::new(&shell);
+    if let Some(path) = workspace_path {
+        cmd.cwd(std::path::Path::new(&path));
+    }
     let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;

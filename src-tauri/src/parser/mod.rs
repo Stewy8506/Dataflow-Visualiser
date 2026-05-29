@@ -1,3 +1,4 @@
+pub mod cmake;
 pub mod cpp;
 pub mod dart;
 pub mod javascript;
@@ -247,6 +248,8 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         id: String,
         path: PathBuf,
         imports: Vec<(String, bool)>,
+        api_calls: Vec<String>,
+        api_endpoints: Vec<String>,
         is_barrel_file: bool,
         is_router: bool,
     }
@@ -296,6 +299,8 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                     });
 
                     let mut imports = Vec::new();
+                    let mut api_calls = Vec::new();
+                    let mut api_endpoints = Vec::new();
                     let mut is_barrel_file = false;
                     let is_router = false;
                     let mut function_count = 0;
@@ -308,8 +313,12 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                         function_count = re.find_iter(&source_text).count();
 
                         if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
-                            let (barrel, _exports) =
-                                extract_javascript_imports(&source_text, &file_path, &mut imports);
+                            let (barrel, _exports) = extract_javascript_imports(
+                                &source_text,
+                                &file_path,
+                                &mut imports,
+                                &mut api_calls,
+                            );
                             is_barrel_file = barrel;
                         } else if matches!(
                             ext,
@@ -322,6 +331,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                         &source_text,
                                         ext,
                                         &mut imports,
+                                        &mut api_endpoints,
                                     );
                                 }),
                                 "rs" => RUST_PARSER.with(|p| {
@@ -330,6 +340,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                         &source_text,
                                         ext,
                                         &mut imports,
+                                        &mut api_endpoints,
                                     );
                                 }),
                                 "dart" => DART_PARSER.with(|p| {
@@ -338,6 +349,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                         &source_text,
                                         ext,
                                         &mut imports,
+                                        &mut api_endpoints,
                                     );
                                 }),
                                 "c" | "h" => C_PARSER.with(|p| {
@@ -346,6 +358,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                         &source_text,
                                         ext,
                                         &mut imports,
+                                        &mut api_endpoints,
                                     );
                                 }),
                                 "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
@@ -354,6 +367,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                         &source_text,
                                         ext,
                                         &mut imports,
+                                        &mut api_endpoints,
                                     );
                                 }),
                                 _ => unreachable!(),
@@ -382,6 +396,8 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                         id,
                         path: file_path.to_path_buf(),
                         imports,
+                        api_calls,
+                        api_endpoints,
                         is_barrel_file,
                         is_router,
                     });
@@ -396,8 +412,24 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         .map(|(i, n)| (n.id.to_lowercase(), i))
         .collect();
 
+    let mut header_index = HashMap::new();
+    for n in &nodes {
+        if n.group == "h" || n.group == "hpp" || n.group == "hxx" {
+            let file_name = Path::new(&n.id)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            header_index.insert(file_name, n.id.clone());
+        }
+    }
+
+    let cmake_data = cmake::parse_cmake_projects(path_ref);
+
     for file_data in &files_data {
         for import_str in &file_data.imports {
+            let mut target_id = None;
+
             if let Some(idx) = resolve_import_path(
                 &file_data.path,
                 path_ref,
@@ -407,12 +439,121 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                 &nodes,
                 &alias_resolver,
             ) {
+                target_id = Some(nodes[idx].id.clone());
+            } else if import_str.0.ends_with(".h") || import_str.0.ends_with(".hpp") {
+                let file_name = Path::new(&import_str.0)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+
+                let mut resolved_header_id = None;
+
+                let mut search_dir = file_data.path.parent();
+                while let Some(dir) = search_dir {
+                    if let Some(inc_dirs) = cmake_data.include_dirs.get(dir) {
+                        for inc in inc_dirs {
+                            let possible_path = dir.join(inc).join(&import_str.0);
+                            let possible_id = possible_path.to_string_lossy().replace('\\', "/");
+                            if node_index.contains_key(&possible_id.to_lowercase()) {
+                                resolved_header_id = Some(possible_id);
+                                break;
+                            }
+                        }
+                    }
+                    if resolved_header_id.is_some() || dir == path_ref {
+                        break;
+                    }
+                    search_dir = dir.parent();
+                }
+
+                if resolved_header_id.is_none() {
+                    if let Some(header_id) = header_index.get(&file_name) {
+                        resolved_header_id = Some(header_id.clone());
+                    }
+                }
+
+                if let Some(header_id) = resolved_header_id {
+                    target_id = Some(header_id);
+                }
+            }
+
+            if let Some(target) = target_id {
+                let mut source_node = file_data.id.clone();
+                let mut target_node = target.clone();
+
+                let is_c_cpp = source_node.ends_with(".c")
+                    || source_node.ends_with(".cpp")
+                    || source_node.ends_with(".cc")
+                    || source_node.ends_with(".cxx");
+                    
+                let is_main = source_node.ends_with("main.c")
+                    || source_node.ends_with("main.cpp")
+                    || source_node.ends_with("app_main.c");
+
+                if is_c_cpp && !is_main {
+                    source_node = target;
+                    target_node = file_data.id.clone();
+                }
+
                 edges.push(ParsedEdge {
-                    source: file_data.id.clone(),
-                    target: nodes[idx].id.clone(),
+                    source: source_node,
+                    target: target_node,
                     via: None,
                     is_data_source: import_str.1,
                 });
+            }
+        }
+    }
+
+    let url_base_re = Regex::new(r#"^https?://[^/]+"#).unwrap();
+    let param_re = Regex::new(r#"\{[^}]+\}|<[^>]+>|:[^/]+"#).unwrap();
+
+    for frontend_file in &files_data {
+        for api_call in &frontend_file.api_calls {
+            let clean_api = url_base_re.replace(api_call, "");
+            let clean_api = clean_api.split('?').next().unwrap_or(&clean_api);
+
+            for backend_file in &files_data {
+                for endpoint in &backend_file.api_endpoints {
+                    let endpoint_pattern = param_re.replace_all(endpoint, "[^/]+");
+                    let endpoint_regex_str = format!("(?i){}$", endpoint_pattern.replace("?", "\\?"));
+                    
+                    let matched = if let Ok(re) = Regex::new(&endpoint_regex_str) {
+                        re.is_match(clean_api)
+                    } else {
+                        clean_api.contains(endpoint) || endpoint.contains(clean_api)
+                    };
+
+                    if matched {
+                        edges.push(ParsedEdge {
+                            source: frontend_file.id.clone(),
+                            target: backend_file.id.clone(),
+                            via: Some("API Call".to_string()),
+                            is_data_source: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    for (cmake_dir, deps) in &cmake_data.component_deps {
+        let cmake_dir_str = cmake_dir.to_string_lossy().replace('\\', "/");
+        let comp_nodes: Vec<_> = nodes
+            .iter()
+            .filter(|n| n.id.starts_with(&cmake_dir_str))
+            .collect();
+        if let Some(main_node) = comp_nodes.first() {
+            for dep in deps {
+                if let Some(dep_node) = nodes.iter().find(|n| n.id.contains(dep)) {
+                    edges.push(ParsedEdge {
+                        source: main_node.id.clone(),
+                        target: dep_node.id.clone(),
+                        via: Some(format!("CMake Requires {}", dep)),
+                        is_data_source: false,
+                    });
+                }
             }
         }
     }
@@ -545,6 +686,8 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                             .to_string();
 
                         let mut imports = Vec::new();
+                        let mut api_calls = Vec::new();
+                        let mut api_endpoints = Vec::new();
                         let mut function_count = 0;
 
                         if let Ok(source_text) = fs::read_to_string(&path_buf) {
@@ -559,6 +702,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                     &source_text,
                                     &path_buf,
                                     &mut imports,
+                                    &mut api_calls,
                                 );
                             } else {
                                 match ext {
@@ -568,6 +712,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut api_endpoints,
                                         )
                                     }),
                                     "rs" => RUST_PARSER.with(|p| {
@@ -576,6 +721,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut api_endpoints,
                                         )
                                     }),
                                     "dart" => DART_PARSER.with(|p| {
@@ -584,6 +730,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut api_endpoints,
                                         )
                                     }),
                                     "c" | "h" => C_PARSER.with(|p| {
@@ -592,6 +739,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut api_endpoints,
                                         )
                                     }),
                                     "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
@@ -600,6 +748,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut api_endpoints,
                                         )
                                     }),
                                     _ => {}
