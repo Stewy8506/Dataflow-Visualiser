@@ -12,6 +12,35 @@ use state::AppState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            let args: Vec<String> = std::env::args().collect();
+            if let Some(pos) = args.iter().position(|x| x == "--export-graph") {
+                if pos + 1 < args.len() {
+                    let workspace = args[pos + 1].clone();
+                    let handle = app.handle().clone();
+                    
+                    tauri::async_runtime::block_on(async move {
+                        println!("Parsing codebase at {}", workspace);
+                        match parser::parse_codebase(handle, workspace.clone()).await {
+                            Ok(graph_data) => {
+                                let snapshot_name = "ci-export";
+                                if let Err(e) = snapshots::save_snapshot(workspace.clone(), snapshot_name.to_string(), graph_data).await {
+                                    eprintln!("Failed to save snapshot: {}", e);
+                                    std::process::exit(1);
+                                }
+                                println!("Successfully exported dependency graph to {}/.codemapper/snapshots/{}.data.json", workspace, snapshot_name);
+                                std::process::exit(0);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to parse codebase: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    });
+                }
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -29,6 +58,7 @@ pub fn run() {
             git::git_commit,
             git::get_git_history,
             git::get_commit_diff,
+            git::get_git_churn,
             pty::spawn_pty,
             pty::write_pty,
             pty::resize_pty,

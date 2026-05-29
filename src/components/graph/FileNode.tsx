@@ -30,6 +30,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   const isBlastMode = data.hasBlastRadius;
   const isBlastConnected = data.blastConnected;
   const tier = data.blastTier;
+  const churnCount = data.churnCount || 0;
 
   let blastBorder = 'var(--color-border)';
   let blastShadow: string | undefined = undefined;
@@ -50,6 +51,21 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
       blastBorder = 'var(--color-border-subtle)';
       blastShadow = '0 0 5px rgba(148, 163, 184, 0.1)';
       blastBorderWidth = '1px';
+    }
+  } else if (churnCount > 0) {
+    blastBorderWidth = '2px';
+    if (churnCount > 20) {
+      blastBorder = '#ef4444'; // Red for very high churn
+      blastShadow = '0 0 15px rgba(239, 68, 68, 0.4)';
+    } else if (churnCount > 10) {
+      blastBorder = '#f97316'; // Orange for high churn
+      blastShadow = '0 0 12px rgba(249, 115, 22, 0.35)';
+    } else if (churnCount > 5) {
+      blastBorder = '#eab308'; // Yellow for medium churn
+      blastShadow = '0 0 10px rgba(234, 179, 8, 0.3)';
+    } else {
+      blastBorder = '#fcd34d'; // Amber-300 for low churn
+      blastShadow = '0 0 5px rgba(252, 211, 77, 0.2)';
     }
   }
 
@@ -161,6 +177,12 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                 <span className="text-text-dim">Type:</span>
                 <span className="text-text-muted">{data.subLabel || data.type}</span>
               </div>
+              {churnCount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-orange-400/80">Git Churn:</span>
+                  <span className="text-orange-400 font-bold">{churnCount} modifications</span>
+                </div>
+              )}
             </div>
             {data.summary && (
               <div className="mt-2 pt-2 border-t border-border-subtle">
@@ -384,6 +406,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   prev.data.hasBlastRadius === next.data.hasBlastRadius &&
   prev.data.isDeadCode === next.data.isDeadCode &&
   prev.data.isExternal === next.data.isExternal &&
+  prev.data.churnCount === next.data.churnCount &&
   prev.data.label === next.data.label &&
   prev.data.semantic_group === next.data.semantic_group &&
   prev.data.summary === next.data.summary

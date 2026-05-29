@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Info, X } from 'lucide-react';
+import { Info, X, Image as ImageIcon } from 'lucide-react';
 
 const legendItems = [
   { color: '#3b82f6', label: 'UI Component', desc: 'TSX / JSX files' },
@@ -22,18 +22,29 @@ const badgeLegend = [
   { label: 'Cx: Low', color: 'text-emerald-400', desc: 'Low complexity' },
 ];
 
-export function GraphLegend() {
+export function GraphLegend({ onExportPng }: { onExportPng?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="absolute bottom-6 right-4 z-20 w-9 h-9 flex items-center justify-center rounded-xl glass-panel text-text-dim hover:text-text-main transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
-        title="Show Legend"
-      >
-        <Info size={16} />
-      </button>
+      <div className="absolute bottom-6 right-4 z-20 flex flex-col gap-2">
+        {onExportPng && (
+          <button
+            onClick={onExportPng}
+            className="w-9 h-9 flex items-center justify-center rounded-xl glass-panel text-text-dim hover:text-text-main transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
+            title="Export as PNG"
+          >
+            <ImageIcon size={16} />
+          </button>
+        )}
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-xl glass-panel text-text-dim hover:text-text-main transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
+          title="Show Legend"
+        >
+          <Info size={16} />
+        </button>
+      </div>
     );
   }
 

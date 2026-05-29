@@ -16,6 +16,7 @@ import { ReactFlowGraph } from './components/graph/ReactFlowGraph';
 import { ThreeDGraph } from './components/graph/ThreeDGraph';
 import { RefactorPreview } from './features/refactor/RefactorPreview';
 import { SnapshotPanel, SnapshotDiff } from './features/snapshots/SnapshotPanel';
+import { invoke } from '@tauri-apps/api/core';
 
 // Hooks
 import { useSettings } from './hooks/useSettings';
@@ -60,6 +61,8 @@ function App() {
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [showExternalDeps, setShowExternalDeps] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [churnData, setChurnData] = useState<Record<string, number> | null>(null);
   const [refactorTarget, setRefactorTarget] = useState<string | null>(null);
   const [propTrace, setPropTrace] = useState<any | null>(null);
   const [diffOverlay, setDiffOverlay] = useState<SnapshotDiff | null>(null);
@@ -70,7 +73,7 @@ function App() {
   const [searchMode, setSearchMode] = useState<SearchMode>('highlight');
 
   // ─── Graph Layout ────────────────────────────────────────────
-  const { flowEdges, enrichedFlowNodes } = useGraphLayout({
+  const { flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange } = useGraphLayout({
     rawGraphData,
     activeLayer,
     layoutDirection,
@@ -81,6 +84,7 @@ function App() {
     enrichmentMap,
     showExternalDeps,
     onDeleteNode: handleDeleteNode,
+    workspacePath: selectedPath,
   });
 
   // ─── Keyboard Shortcut ───────────────────────────────────────
@@ -94,6 +98,25 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // ─── Git Churn Fetch ──────────────────────────────────────────
+  useEffect(() => {
+    if (showHeatmap && !churnData && selectedPath) {
+      invoke('get_git_churn', { workspace: selectedPath, limit: 100 })
+        .then((data: any) => {
+          const absoluteChurn: Record<string, number> = {};
+          const normalizedWorkspace = selectedPath.replace(/\\/g, '/');
+          for (const [key, value] of Object.entries(data)) {
+            absoluteChurn[`${normalizedWorkspace}/${key}`] = value as number;
+            absoluteChurn[`${selectedPath}\\${key.replace(/\//g, '\\')}`] = value as number;
+          }
+          setChurnData(absoluteChurn);
+        })
+        .catch(err => {
+          console.error("Failed to fetch git churn:", err);
+        });
+    }
+  }, [showHeatmap, selectedPath, churnData]);
 
   // ─── Welcome Screen ──────────────────────────────────────────
   if (!selectedPath && !isParsing) {
@@ -225,6 +248,8 @@ function App() {
             setShowExternalDeps={setShowExternalDeps}
             showSnapshots={showSnapshots}
             setShowSnapshots={setShowSnapshots}
+            showHeatmap={showHeatmap}
+            setShowHeatmap={setShowHeatmap}
           />
 
           {selectedPath && (
@@ -244,6 +269,8 @@ function App() {
             <ReactFlowGraph
               nodes={enrichedFlowNodes}
               edges={flowEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
               onNodeSelect={setSelectedNode}
               nodesep={nodesep}
               setNodesep={setNodesep}
@@ -258,6 +285,7 @@ function App() {
               showMiniMap={showMiniMap}
               propTrace={propTrace}
               diffOverlay={diffOverlay}
+              churnData={showHeatmap ? churnData : null}
             />
           ) : (
             <ThreeDGraph

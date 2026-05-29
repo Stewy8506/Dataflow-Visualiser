@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Edge, MarkerType } from '@xyflow/react';
+import { Edge, MarkerType, applyNodeChanges, NodeChange, applyEdgeChanges, EdgeChange } from '@xyflow/react';
 import { getLayoutedElements } from '../utils/layout';
 import type { GraphData, GraphLayer, LayoutDirection, SearchMode, EnrichmentEntry } from '../types';
 
@@ -14,6 +14,7 @@ interface UseGraphLayoutOptions {
   enrichmentMap: Map<string, EnrichmentEntry>;
   showExternalDeps: boolean;
   onDeleteNode: (nodeId: string, nodePath: string) => void;
+  workspacePath: string | null;
 }
 
 const DEFAULT_TOOLING_REGEX = /^(eslint|typescript|tailwindcss|postcss|autoprefixer|vite|prettier|jest|vitest|playwright|cypress|nodemon|ts-node|husky|lint-staged|react|react-dom|next|vue|svelte|@types\/.*|@eslint\/.*|@typescript-eslint\/.*|eslint-.*|@tailwindcss\/.*)$/;
@@ -29,9 +30,22 @@ export function useGraphLayout({
   enrichmentMap,
   showExternalDeps,
   onDeleteNode,
+  workspacePath,
 }: UseGraphLayoutOptions) {
   const [flowNodes, setFlowNodes] = useState<any[]>([]);
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
+
+  // Load saved positions synchronously from localStorage
+  const savedPositions = useMemo(() => {
+    if (!workspacePath) return {};
+    try {
+      const data = localStorage.getItem(`layout-${workspacePath}`);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      console.error("Failed to parse saved positions", e);
+      return {};
+    }
+  }, [workspacePath]);
 
   useEffect(() => {
     if (!rawGraphData) return;
@@ -150,7 +164,16 @@ export function useGraphLayout({
 
     const { nodes: layoutedNodes } = getLayoutedElements(initialNodes, dagreEdges, layoutDirection, nodesep, ranksep);
 
-    const nodeById = new Map(layoutedNodes.map(n => [n.id, n]));
+    // Apply saved positions overriding dagre
+    const nodesWithSavedPositions = layoutedNodes.map((n: any) => {
+      const savedPos = savedPositions[n.id];
+      if (savedPos) {
+        return { ...n, position: savedPos };
+      }
+      return n;
+    });
+
+    const nodeById = new Map(nodesWithSavedPositions.map(n => [n.id, n]));
     const styledEdges = initialEdges.map(e => {
       const sourceNode = nodeById.get(e.source);
       const targetNode = nodeById.get(e.target);
@@ -171,9 +194,9 @@ export function useGraphLayout({
       return { ...e, sourceHandle, targetHandle };
     });
 
-    setFlowNodes(layoutedNodes);
+    setFlowNodes(nodesWithSavedPositions);
     setFlowEdges(styledEdges);
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, onDeleteNode]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, onDeleteNode, savedPositions]);
 
   // Merge AI enrichment into nodes without triggering dagre relayout
   const enrichedFlowNodes = useMemo(() => {
@@ -192,5 +215,42 @@ export function useGraphLayout({
     });
   }, [flowNodes, enrichmentMap]);
 
-  return { flowNodes, flowEdges, enrichedFlowNodes };
+  const onNodesChange = (changes: NodeChange[]) => {
+    setFlowNodes((nds) => {
+      const updatedNodes = applyNodeChanges(changes, nds);
+      
+      // Save positions for nodes that were moved
+      const positionChanges = changes.filter(c => c.type === 'position' && c.dragging === false);
+      if (positionChanges.length > 0 && workspacePath) {
+        try {
+          const currentSaved = JSON.parse(localStorage.getItem(`layout-${workspacePath}`) || '{}');
+          let modified = false;
+          
+          updatedNodes.forEach(node => {
+            if (positionChanges.some(pc => (pc as any).id === node.id)) {
+              currentSaved[node.id] = node.position;
+              modified = true;
+            }
+          });
+          
+          if (modified) {
+            localStorage.setItem(`layout-${workspacePath}`, JSON.stringify(currentSaved));
+            // Note: We don't update the savedPositions useMemo state here 
+            // because we don't want to trigger a full recalculation/relayout of everything
+            // just from a drag. The updatedNodes state already has the new position.
+          }
+        } catch (e) {
+          console.error("Failed to save positions", e);
+        }
+      }
+      
+      return updatedNodes;
+    });
+  };
+
+  const onEdgesChange = (changes: EdgeChange[]) => {
+    setFlowEdges((eds) => applyEdgeChanges(changes, eds));
+  };
+
+  return { flowNodes, flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange };
 }

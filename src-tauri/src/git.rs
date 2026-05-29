@@ -1,5 +1,6 @@
 use git2::{Repository, StatusOptions};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Serialize)]
@@ -187,4 +188,39 @@ pub async fn get_commit_diff(workspace: String, commit_id: String) -> Result<Str
 
     let result = patch_string.lock().unwrap().clone();
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_git_churn(workspace: String, limit: usize) -> Result<HashMap<String, usize>, String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+    revwalk.push_head().map_err(|e| e.to_string())?;
+    
+    let mut churn_map: HashMap<String, usize> = HashMap::new();
+    
+    for oid_res in revwalk.take(limit) {
+        if let Ok(oid) = oid_res {
+            if let Ok(commit) = repo.find_commit(oid) {
+                let tree = commit.tree().map_err(|e| e.to_string())?;
+                
+                let parent_tree = if commit.parent_count() > 0 {
+                    let parent = commit.parent(0).map_err(|e| e.to_string())?;
+                    Some(parent.tree().map_err(|e| e.to_string())?)
+                } else {
+                    None
+                };
+                
+                if let Ok(diff) = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
+                    for delta in diff.deltas() {
+                        if let Some(path) = delta.new_file().path() {
+                            let path_str = path.to_string_lossy().into_owned();
+                            *churn_map.entry(path_str).or_insert(0) += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(churn_map)
 }

@@ -137,6 +137,8 @@ Dataflow-Visualiser/
 - **Edge Weight & Opacity** — scaled to actual import frequency from AST data.
 - **Smart Dynamic Handle Routing** — post-Dagre layout resolves bezier handle direction per edge to eliminate crossing lines.
 - **Color-Coded Directionality** — blue (incoming), green (outgoing) with matching arrowheads.
+- **Persistent Layout Storage** — securely saves custom node drag positions to `localStorage` seamlessly bridging between automated layout and manual curation.
+- **High-Quality PNG Export** — export the interactive graph directly to a clean, transparent PNG image file.
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
@@ -151,6 +153,8 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.
 - **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
 - **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
+- **Git Churn Heatmap Overlay** — analyzes up to the last 100 commits to paint the graph with a red/orange volatility heatmap, letting you instantly spot highly modified, bug-prone components.
+- **Headless CI Dependency Export** — invoke the binary via the CLI (`--export-graph`) to silently parse the project and dump a deterministic JSON graph snapshot for PR diffing in GitHub Actions.
 
 ### Interactive Command Palette
 Press **`Ctrl+K`** (or **`Cmd+K`** on macOS) at any time to open the global **Command Palette** overlay. Fully keyboard-driven, it lets you:
@@ -269,10 +273,10 @@ npm run tauri build
 - [x] Configurable IDE editor launcher in settings (VS Code, Cursor, WebStorm, IntelliJ, Neovim)
 - [x] Light Mode and Dark Mode support
 - [x] Welcome dashboard with Recent Projects listing
-- [ ] Persistent node layout across sessions
-- [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)
-- [ ] PNG canvas export
-- [ ] JSON dependency graph export for CI diffing
+- [x] Persistent node layout across sessions
+- [x] `git2` crate — file churn overlay (volatility heatmap on nodes)
+- [x] PNG canvas export
+- [x] JSON dependency graph export for CI diffing
 
 ---
 

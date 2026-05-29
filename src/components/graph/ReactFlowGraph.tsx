@@ -8,6 +8,8 @@ import {
   BackgroundVariant,
   ReactFlowProvider,
   useReactFlow,
+  NodeChange,
+  EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
@@ -16,6 +18,9 @@ import { GraphLegend } from './GraphLegend';
 import { calculateBlastRadius } from '../../utils/blastRadius';
 import { detectCycles } from '../../utils/cycleDetection';
 import { invoke } from '@tauri-apps/api/core';
+import { toPng } from 'html-to-image';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 const nodeTypes: NodeTypes = {
   fileNode: FileNode,
@@ -24,6 +29,8 @@ const nodeTypes: NodeTypes = {
 interface ReactFlowGraphProps {
   nodes: any[];
   edges: any[];
+  onNodesChange: (changes: NodeChange[]) => void;
+  onEdgesChange: (changes: EdgeChange[]) => void;
   onNodeSelect: (node: any) => void;
   nodesep: number;
   setNodesep: (val: number) => void;
@@ -38,12 +45,15 @@ interface ReactFlowGraphProps {
   showMiniMap?: boolean;
   propTrace?: any;
   diffOverlay?: any;
+  churnData?: Record<string, number> | null;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
 function ReactFlowInner({
   nodes: initialNodes,
   edges: initialEdges,
+  onNodesChange,
+  onEdgesChange,
   onNodeSelect,
   nodesep,
   setNodesep,
@@ -58,6 +68,7 @@ function ReactFlowInner({
   showMiniMap = false,
   propTrace = null,
   diffOverlay = null,
+  churnData = null,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom } = useReactFlow();
 
@@ -142,6 +153,12 @@ function ReactFlowInner({
       const isSelected = selectedNodeId === node.id;
       const isInCycle = cycleResult.nodesInCycles.has(node.id);
 
+      let churnCount = 0;
+      if (churnData) {
+         const nodePath = node.data?.path?.replace(/\\/g, '/');
+         churnCount = churnData[nodePath] || 0;
+      }
+
       return {
         ...node,
         selected: isSelected,
@@ -153,6 +170,7 @@ function ReactFlowInner({
           isSearchMatch,
           isInCycle,
           diffStatus,
+          churnCount,
         },
         style: {
           ...node.style,
@@ -161,7 +179,7 @@ function ReactFlowInner({
         }
       };
     });
-  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay]);
+  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay, churnData]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -279,12 +297,41 @@ function ReactFlowInner({
     onNodeSelect(null);
   };
 
+  const handleExportPng = useCallback(async () => {
+    const flowElement = document.querySelector('.codebase-flow') as HTMLElement;
+    if (!flowElement) return;
+    try {
+      const dataUrl = await toPng(flowElement, { 
+          backgroundColor: isLightMode ? '#f8fafc' : '#0f0f14',
+          quality: 1,
+      });
+      const savePath = await save({
+        filters: [{ name: 'Image', extensions: ['png'] }],
+        defaultPath: 'dataflow-export.png',
+      });
+      if (savePath) {
+        const base64Data = dataUrl.split(',')[1];
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+           bytes[i] = binaryString.charCodeAt(i);
+        }
+        await writeFile(savePath, bytes);
+      }
+    } catch (err) {
+      console.error("Failed to export graph", err);
+    }
+  }, [isLightMode]);
+
 
   return (
     <div className="w-full h-full bg-background relative" onWheel={handleWheel}>
       <ReactFlow
         nodes={styledNodes}
         edges={styledEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onPaneClick={handlePaneClick}
@@ -325,7 +372,7 @@ function ReactFlowInner({
         direction={direction}
         setDirection={setDirection}
       />
-      <GraphLegend />
+      <GraphLegend onExportPng={handleExportPng} />
     </div>
   );
 }
