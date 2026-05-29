@@ -210,14 +210,14 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
               
               {data.metrics && (
                 <div 
-                  className={`group relative px-2 py-0.5 rounded text-[9px] font-semibold tracking-wider uppercase border cursor-help ${
+                  className={`group/metrics relative px-2 py-0.5 rounded text-[9px] font-semibold tracking-wider uppercase border cursor-help ${
                     data.metrics.complexity_score === 'High' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
                     data.metrics.complexity_score === 'Medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                     'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   }`}
                 >
                   Cx: {data.metrics.complexity_score}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block w-max bg-[#1a1a24] text-text-main text-[10px] p-2 rounded border border-border-subtle shadow-xl z-50">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/metrics:block w-max bg-[#1a1a24] text-text-main text-[10px] p-2 rounded border border-border-subtle shadow-xl z-50">
                     <div className="font-bold border-b border-border-subtle pb-1 mb-1">Metrics</div>
                     <div>Functions: {data.metrics.function_count}</div>
                     <div>Imports: {data.metrics.import_count}</div>

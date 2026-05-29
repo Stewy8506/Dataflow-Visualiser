@@ -72,6 +72,21 @@ export function getLayoutedElements(
     // Nodes with more incoming than outgoing go on the left (lower index).
     // Nodes with more outgoing than incoming go on the right (higher index).
     group.sort((a, b) => {
+      // 1. Group by domain (Backend vs Frontend) to strictly separate them
+      const isBackendA = a.id.includes('src-tauri');
+      const isBackendB = b.id.includes('src-tauri');
+      if (isBackendA !== isBackendB) {
+        return isBackendA ? 1 : -1; // Put backend on the right (or bottom)
+      }
+
+      // 2. Group by directory path to keep related files together
+      const dirA = a.id.substring(0, a.id.lastIndexOf('/')) || '';
+      const dirB = b.id.substring(0, b.id.lastIndexOf('/')) || '';
+      if (dirA !== dirB) {
+        return dirA.localeCompare(dirB);
+      }
+
+      // 3. Fallback to degree ratio
       const inA = inDegree.get(a.id) || 0;
       const outA = outDegree.get(a.id) || 0;
       const totalA = inA + outA;
@@ -97,8 +112,25 @@ export function getLayoutedElements(
     for (let lineIndex = 0; lineIndex < lines; lineIndex++) {
       const rowNodes = group.slice(lineIndex * maxItemsPerLine, (lineIndex + 1) * maxItemsPerLine);
       
-      // 1. Sort nodes within the row by Dagre's optimized coordinates to minimize crossing
-      rowNodes.sort((a, b) => isLR ? a.dagreY - b.dagreY : a.dagreX - b.dagreX);
+      // 1. Sort nodes within the row
+      rowNodes.sort((a, b) => {
+        // 1. Group by domain
+        const isBackendA = a.id.includes('src-tauri');
+        const isBackendB = b.id.includes('src-tauri');
+        if (isBackendA !== isBackendB) {
+          return isBackendA ? 1 : -1;
+        }
+
+        // 2. Group by directory path
+        const dirA = a.id.substring(0, a.id.lastIndexOf('/')) || '';
+        const dirB = b.id.substring(0, b.id.lastIndexOf('/')) || '';
+        if (dirA !== dirB) {
+          return dirA.localeCompare(dirB);
+        }
+
+        // 3. Crossing minimization
+        return isLR ? a.dagreY - b.dagreY : a.dagreX - b.dagreX;
+      });
 
       // 2. Calculate center alignment offset for short rows
       const itemsInThisLine = rowNodes.length;
