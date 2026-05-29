@@ -102,15 +102,20 @@ Dataflow-Visualiser/
 │   │   │   ├── ReactFlowGraph.tsx# 2D flow canvas
 │   │   │   ├── ThreeDGraph.tsx   # 3D force-directed canvas
 │   │   │   └── ...               # Legend, layout controls
-│   │   └── layout/               # IDE chrome
-│   │       ├── panels/           # BottomPanel sub-panels
-│   │       │   ├── InspectorPanel.tsx  # Node metadata, prop tracer, dependency list
-│   │       │   └── MatrixPanel.tsx     # Adjacency matrix view
+│   │   └── layout/               # IDE chrome layout structure
 │   │       ├── BottomPanel.tsx   # Resizable panel shell with tab routing
 │   │       ├── Header.tsx        # Top toolbar (view mode, layers, toggles)
-│   │       ├── SettingsModal.tsx # API key, model, IDE configuration
-│   │       ├── SourceControlPanel.tsx
-│   │       └── ...               # Other layout components
+│   │       └── ...               # Sidebar, WorkspaceBreadcrumb, etc.
+│   ├── features/                 # Modular application features
+│   │   ├── explorer/             # File explorer & workspace tree
+│   │   ├── inspector/            # Detailed file & symbol inspection
+│   │   ├── matrix/               # Adjacency matrix visualization
+│   │   ├── refactor/             # Blast-radius refactoring impact preview
+│   │   ├── search/               # Global search & Command Palette (Ctrl+K)
+│   │   ├── settings/             # User settings & API configurations
+│   │   ├── snapshots/            # SQLite graph snapshotting & diffing
+│   │   ├── source-control/       # Stage, diff, commit changes
+│   │   └── terminal/             # Integrated PTY terminal
 │   ├── types.ts                  # Shared TypeScript interfaces
 │   ├── App.tsx                   # Root composition
 │   └── utils/                    # Pure utility functions
