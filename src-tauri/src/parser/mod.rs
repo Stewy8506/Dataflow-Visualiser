@@ -234,12 +234,6 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         return Err("Path does not exist".to_string());
     }
 
-    if let Some(scope) = app.try_fs_scope() {
-        if !scope.is_allowed(path_ref) {
-            return Err("Access denied by Tauri fs capability scope".to_string());
-        }
-    }
-
     let alias_resolver = AliasResolver::new(path_ref);
 
     let mut package_name = None;

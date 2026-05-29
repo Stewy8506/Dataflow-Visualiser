@@ -128,6 +128,9 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel }: UseProject
       console.error(e);
       setLogs(prev => [...prev, `> Error: ${String(e)}`]);
       setIsParsing(false);
+      import('@tauri-apps/plugin-dialog').then(({ message }) => {
+        message(`Failed to load project: ${String(e)}`, { title: 'Project Load Error', kind: 'error' });
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, enableAi, selectedModel, recentProjects]);

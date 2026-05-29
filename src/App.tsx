@@ -3,8 +3,10 @@ import { FolderOpen, Sparkles, Clock, FolderGit2 } from 'lucide-react';
 import './App.css';
 
 // Components
+import { TitleBar } from './components/layout/TitleBar';
+import { EditorToolbar } from './components/layout/EditorToolbar';
+import { StatusBar } from './components/layout/StatusBar';
 import { Sidebar } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
 import { BottomPanel } from './components/layout/BottomPanel';
 import { SearchBar } from './features/search/SearchBar';
 import { SourceControlPanel } from './features/source-control/SourceControlPanel';
@@ -99,6 +101,50 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // ─── Global Menu Actions ─────────────────────────────────────
+  useEffect(() => {
+    const handleAppAction = (e: Event) => {
+      const action = (e as CustomEvent).detail;
+      switch (action) {
+        case 'OPEN_FOLDER':
+          handleSelectDirectory();
+          break;
+        case 'OPEN_SETTINGS':
+          setShowSettings(true);
+          break;
+        case 'EXIT':
+          import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().close());
+          break;
+        case 'OPEN_COMMAND_PALETTE':
+          setShowCommandPalette(true);
+          break;
+        case 'TOGGLE_VIEW_MODE':
+          setViewMode(prev => prev === '2d' ? '3d' : '2d');
+          break;
+        case 'TOGGLE_MINIMAP':
+          setShowMiniMap(prev => !prev);
+          break;
+        case 'TOGGLE_EXTERNAL_DEPS':
+          setShowExternalDeps(prev => !prev);
+          break;
+        case 'TOGGLE_HEATMAP':
+          setShowHeatmap(prev => !prev);
+          break;
+        case 'TOGGLE_SNAPSHOTS':
+          setShowSnapshots(prev => !prev);
+          break;
+        case 'TOGGLE_THEME':
+          setIsLightMode(prev => !prev);
+          break;
+        case 'RELOAD_WINDOW':
+          window.location.reload();
+          break;
+      }
+    };
+    window.addEventListener('app:action', handleAppAction);
+    return () => window.removeEventListener('app:action', handleAppAction);
+  }, [handleSelectDirectory]);
+
   // ─── Git Churn Fetch ──────────────────────────────────────────
   useEffect(() => {
     if (showHeatmap && !churnData && selectedPath) {
@@ -121,69 +167,80 @@ function App() {
   // ─── Welcome Screen ──────────────────────────────────────────
   if (!selectedPath && !isParsing) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background relative overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
-          <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-primary/5 rounded-full blur-3xl animate-welcome-glow-2" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/[0.02] rounded-full blur-3xl animate-welcome-glow-3" />
+      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
+        <TitleBar />
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-fuchsia-600/5 rounded-full blur-3xl animate-welcome-glow-2" />
         </div>
 
-        <div className="z-10 flex flex-col items-center max-w-lg w-full px-4">
-          <div className="flex flex-col items-center nebula-glass p-10 rounded-2xl w-full text-center shadow-2xl nebula-slide-up">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-6">
-              <Sparkles className="text-white" size={28} />
+        <div className="flex-1 flex flex-col md:flex-row overflow-y-auto z-10">
+          {/* Left Hero Section */}
+          <div className="flex-1 flex flex-col justify-center px-12 lg:px-24 py-12">
+            <div className="max-w-xl nebula-slide-up">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-8">
+                <Sparkles className="text-white" size={28} />
+              </div>
+              <h1 className="text-5xl font-sans font-bold text-text-main mb-4 tracking-tight">CodeMapper</h1>
+              <p className="text-text-muted mb-10 text-lg leading-relaxed font-sans">
+                Visualize your codebase architecture in stunning 2D and 3D graphs. Discover dependencies, analyze complexity, and refactor with AI-powered insights.
+              </p>
+              
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleSelectDirectory}
+                  className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 cursor-pointer"
+                >
+                  <FolderOpen size={20} />
+                  <span>Open Project Folder</span>
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="px-6 py-4 rounded-xl font-semibold text-text-main bg-surface hover:bg-surface-raised border border-border transition-all duration-200 cursor-pointer"
+                >
+                  Settings
+                </button>
+              </div>
             </div>
-            <h1 className="text-4xl font-serif font-medium text-text-main mb-3 tracking-tight">CodeMapper</h1>
-            <p className="text-text-muted mb-8 text-[15px] leading-relaxed font-serif">
-              Visualize your codebase architecture in stunning 2D and 3D graphs.
-            </p>
-            <button
-              onClick={handleSelectDirectory}
-              className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 cursor-pointer mb-4"
-            >
-              <FolderOpen size={18} />
-              <span>Select Project Folder</span>
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="text-text-dim hover:text-text-muted transition-colors text-sm cursor-pointer underline underline-offset-2"
-            >
-              Configure API Key
-            </button>
           </div>
 
-          {recentProjects.length > 0 && (
-            <div className="w-full mt-4 nebula-slide-up" style={{ animationDelay: '0.1s' }}>
-              <div className="flex items-center gap-2 mb-2.5 px-1">
-                <Clock size={12} className="text-text-dim" />
-                <span className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">Recent Projects</span>
-              </div>
-              <div className="space-y-1.5">
-                {recentProjects.map((projectPath, i) => {
+          {/* Right Recent Projects Section */}
+          <div className="w-full md:w-[400px] lg:w-[500px] border-t md:border-t-0 md:border-l border-border bg-surface/30 backdrop-blur-md flex flex-col px-8 py-12">
+            <div className="flex items-center gap-3 mb-8">
+              <Clock size={16} className="text-blue-400" />
+              <h2 className="text-lg font-semibold text-text-main tracking-tight">Recent Projects</h2>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+              {recentProjects.length === 0 ? (
+                <div className="text-sm text-text-muted italic bg-surface/50 rounded-xl p-6 border border-border-subtle text-center">
+                  No recent projects found. Open a folder to get started.
+                </div>
+              ) : (
+                recentProjects.map((projectPath, i) => {
                   const normalized = projectPath.replace(/\\/g, '/');
                   const segments = normalized.split('/').filter(Boolean);
                   const projectName = segments[segments.length - 1] || projectPath;
-                  const parentPath = segments.slice(-3, -1).join('/');
+                  const parentPath = segments.slice(0, -1).join('/');
                   return (
                     <button
                       key={i}
                       onClick={() => handleOpenRecentProject(projectPath)}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl glass-panel hover:bg-surface-raised/80 transition-all duration-200 cursor-pointer group text-left"
+                      className="w-full flex items-start gap-4 p-4 rounded-xl glass-panel hover:bg-surface-raised transition-all duration-200 cursor-pointer group text-left border border-border hover:border-blue-500/30 hover:shadow-md"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-surface-raised border border-border flex items-center justify-center shrink-0 group-hover:border-blue-500/30 transition-colors">
-                        <FolderGit2 size={14} className="text-text-dim group-hover:text-blue-400 transition-colors" />
+                      <div className="w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center shrink-0 group-hover:bg-blue-500/10 group-hover:border-blue-500/30 transition-colors mt-0.5">
+                        <FolderGit2 size={18} className="text-text-dim group-hover:text-blue-400 transition-colors" />
                       </div>
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-semibold text-text-main truncate">{projectName}</span>
-                        {parentPath && <span className="text-[10px] text-text-dim font-mono truncate">{parentPath}/</span>}
+                      <div className="flex flex-col min-w-0 flex-1 gap-1">
+                        <span className="text-[15px] font-semibold text-text-main truncate">{projectName}</span>
+                        {parentPath && <span className="text-xs text-text-dim font-mono truncate" title={parentPath}>{parentPath}</span>}
                       </div>
-                      <FolderOpen size={14} className="text-text-dim/0 group-hover:text-text-dim transition-all shrink-0" />
                     </button>
                   );
-                })}
-              </div>
+                })
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {showSettings && (
@@ -202,12 +259,15 @@ function App() {
   // ─── Loading Screen ──────────────────────────────────────────
   if (isParsing && !selectedPath) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center nebula-slide-up">
-          <div className="w-12 h-12 border-4 border-surface-raised border-t-primary rounded-full animate-spin mb-4" />
-          <p className="text-text-muted font-mono text-sm">
-            {isEnriching ? 'Enriching with AI...' : 'Analyzing codebase...'}
-          </p>
+      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
+        <TitleBar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center nebula-slide-up">
+            <div className="w-12 h-12 border-4 border-surface-raised border-t-primary rounded-full animate-spin mb-4" />
+            <p className="text-text-muted font-mono text-sm">
+              {isEnriching ? 'Enriching with AI...' : 'Analyzing codebase...'}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -215,31 +275,32 @@ function App() {
 
   // ─── Main Workspace ──────────────────────────────────────────
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background relative text-text-main font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background text-text-main font-sans">
+      <TitleBar />
 
-      {activeTab === 'source-control' && <SourceControlPanel workspacePath={selectedPath} />}
+      <div className="flex flex-1 overflow-hidden relative">
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab === 'explorer' && (
-        <ExplorerPanel
-          nodes={enrichedFlowNodes}
-          onNodeFocus={(nodeId) => {
-            const node = enrichedFlowNodes.find(n => n.id.replace(/\\/g, '/').endsWith(nodeId));
-            if (node) setSelectedNode(node);
-          }}
-          selectedNodeId={selectedNode?.id || null}
-        />
-      )}
+        {activeTab === 'source-control' && <SourceControlPanel workspacePath={selectedPath} />}
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 relative overflow-hidden bg-background">
-          <Header
+        {activeTab === 'explorer' && (
+          <ExplorerPanel
+            nodes={enrichedFlowNodes}
+            onNodeFocus={(nodeId) => {
+              const node = enrichedFlowNodes.find(n => n.id.replace(/\\/g, '/').endsWith(nodeId));
+              if (node) setSelectedNode(node);
+            }}
+            selectedNodeId={selectedNode?.id || null}
+          />
+        )}
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-surface-raised border-l border-border">
+          <EditorToolbar
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             activeLayer={activeLayer}
             onLayerChange={setActiveLayer}
             onSettingsClick={() => setShowSettings(true)}
-            onChangeDirectory={handleSelectDirectory}
             isLightMode={isLightMode}
             setIsLightMode={setIsLightMode}
             showMiniMap={showMiniMap}
@@ -256,56 +317,66 @@ function App() {
             <WorkspaceBreadcrumb path={selectedPath} onChangeDirectory={handleSelectDirectory} />
           )}
 
-          {viewMode === '2d' && activeTab === 'network' && (
-            <SearchBar
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              searchMode={searchMode}
-              setSearchMode={setSearchMode}
-            />
-          )}
+          <div className="flex-1 relative overflow-hidden bg-background">
+            {viewMode === '2d' && activeTab === 'network' && (
+              <SearchBar
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                searchMode={searchMode}
+                setSearchMode={setSearchMode}
+              />
+            )}
 
-          {viewMode === '2d' ? (
-            <ReactFlowGraph
-              nodes={enrichedFlowNodes}
-              edges={flowEdges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeSelect={setSelectedNode}
-              nodesep={nodesep}
-              setNodesep={setNodesep}
-              ranksep={ranksep}
-              setRanksep={setRanksep}
-              direction={layoutDirection}
-              setDirection={setLayoutDirection}
-              isLightMode={isLightMode}
-              preferredIde={preferredIde}
-              searchQuery={searchQuery}
-              searchMode={searchMode}
-              showMiniMap={showMiniMap}
-              propTrace={propTrace}
-              diffOverlay={diffOverlay}
-              churnData={showHeatmap ? churnData : null}
-            />
-          ) : (
-            <ThreeDGraph
-              graphData={rawGraphData}
-              selectedNode={selectedNode}
-              onNodeSelect={setSelectedNode}
-            />
-          )}
+            {viewMode === '2d' ? (
+              <ReactFlowGraph
+                nodes={enrichedFlowNodes}
+                edges={flowEdges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeSelect={setSelectedNode}
+                nodesep={nodesep}
+                setNodesep={setNodesep}
+                ranksep={ranksep}
+                setRanksep={setRanksep}
+                direction={layoutDirection}
+                setDirection={setLayoutDirection}
+                isLightMode={isLightMode}
+                preferredIde={preferredIde}
+                searchQuery={searchQuery}
+                searchMode={searchMode}
+                showMiniMap={showMiniMap}
+                propTrace={propTrace}
+                diffOverlay={diffOverlay}
+                churnData={showHeatmap ? churnData : null}
+              />
+            ) : (
+              <ThreeDGraph
+                graphData={rawGraphData}
+                selectedNode={selectedNode}
+                onNodeSelect={setSelectedNode}
+              />
+            )}
+          </div>
+          
+          <BottomPanel
+            selectedNode={selectedNode}
+            logs={logs}
+            preferredIde={preferredIde}
+            workspacePath={selectedPath}
+            edges={flowEdges}
+            onRefactorClick={setRefactorTarget}
+            onPropTrace={setPropTrace}
+          />
         </div>
-
-        <BottomPanel
-          selectedNode={selectedNode}
-          logs={logs}
-          preferredIde={preferredIde}
-          workspacePath={selectedPath}
-          edges={flowEdges}
-          onRefactorClick={setRefactorTarget}
-          onPropTrace={setPropTrace}
-        />
       </div>
+
+      <StatusBar
+        workspacePath={selectedPath}
+        logsCount={logs.length}
+        isParsing={isParsing}
+        isEnriching={isEnriching}
+        preferredIde={preferredIde}
+      />
 
       {showSettings && selectedPath && (
         <SettingsModal

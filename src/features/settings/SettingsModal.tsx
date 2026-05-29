@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, RefreshCw, X, Zap } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Zap, Settings2, Sparkles, LayoutGrid, Keyboard, GitBranch } from 'lucide-react';
 
 interface SettingsModalProps {
   apiKey: string;
@@ -12,6 +12,8 @@ interface SettingsModalProps {
   setPreferredIde: (val: string) => void;
   onClose: () => void;
 }
+
+type SettingsTab = 'general' | 'graph' | 'ai' | 'editor' | 'keybindings';
 
 interface GeminiModel {
   name: string;
@@ -26,10 +28,17 @@ export function SettingsModal({
   preferredIde, setPreferredIde,
   onClose,
 }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [availableModels, setAvailableModels] = useState<GeminiModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+
+  // Mocked state for new settings
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [layoutDir, setLayoutDir] = useState('TB');
+  const [nodeSep, setNodeSep] = useState(70);
+  const [rankSep, setRankSep] = useState(400);
 
   useEffect(() => {
     if (apiKey) loadModels();
@@ -73,126 +82,262 @@ export function SettingsModal({
     localStorage.setItem('gemini_api_key', apiKey);
     localStorage.setItem('gemini_model', selectedModel);
     localStorage.setItem('enable_ai_summary', String(enableAi));
+    
+    // Theme saving requires page reload for now as it's hooked into useSettings
+    if (theme !== (localStorage.getItem('theme') || 'dark')) {
+      localStorage.setItem('theme', theme);
+      window.location.reload();
+    }
+    
     onClose();
   };
 
+  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
+    { id: 'general', label: 'General', icon: Settings2 },
+    { id: 'graph', label: 'Graph Engine', icon: LayoutGrid },
+    { id: 'ai', label: 'AI Capabilities', icon: Sparkles },
+    { id: 'editor', label: 'Editor & Git', icon: GitBranch },
+    { id: 'keybindings', label: 'Keybindings', icon: Keyboard },
+  ];
+
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center nebula-fade-in">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg mx-4 nebula-slide-up">
-        <div className="bg-surface border border-border rounded-2xl p-6 shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-text-main">Settings</h2>
-            <button onClick={onClose} className="p-1.5 text-text-dim hover:text-text-main hover:bg-surface-raised rounded-lg transition-colors cursor-pointer">
-              <X size={18} />
-            </button>
+    <div className="absolute inset-0 z-[100] flex items-center justify-center nebula-fade-in">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative w-full max-w-4xl h-[600px] flex rounded-xl border border-border bg-surface shadow-2xl overflow-hidden nebula-slide-up">
+        {/* Settings Sidebar */}
+        <div className="w-56 bg-surface-raised border-r border-border flex flex-col">
+          <div className="p-4 border-b border-border">
+            <h2 className="text-sm font-bold text-text-main tracking-tight">Settings</h2>
           </div>
-
-          <div className="space-y-5">
-            {/* API Key */}
-            <div className="space-y-2">
-              <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">API Key</label>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 pr-10 font-mono placeholder:text-text-dim/40 transition-colors"
-                />
+          <div className="p-2 space-y-1 flex-1 overflow-y-auto">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
                 <button
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-muted transition-colors cursor-pointer"
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    activeTab === tab.id 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-text-dim hover:text-text-main hover:bg-surface'
+                  }`}
                 >
-                  {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                  <Icon size={16} />
+                  <span>{tab.label}</span>
                 </button>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        </div>
 
-            {/* Model Selector */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase">AI Model</label>
-                <button
-                  onClick={loadModels}
-                  disabled={!apiKey || isLoadingModels}
-                  className="p-1 text-text-dim hover:text-blue-400 disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                  title="Refresh models"
-                >
-                  <RefreshCw size={13} className={isLoadingModels ? 'animate-spin' : ''} />
-                </button>
+        {/* Settings Content */}
+        <div className="flex-1 flex flex-col bg-background">
+          <div className="flex-1 overflow-y-auto p-8">
+            <h3 className="text-xl font-bold text-text-main mb-6">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </h3>
+
+            {activeTab === 'general' && (
+              <div className="space-y-6 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Theme</label>
+                  <select
+                    value={theme}
+                    onChange={e => setTheme(e.target.value)}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="dark">Dark Mode</option>
+                    <option value="light">Light Mode</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Startup Behavior</label>
+                  <select
+                    disabled
+                    className="w-full bg-surface-raised/50 border border-border rounded-lg px-4 py-2.5 text-sm text-text-dim outline-none cursor-not-allowed"
+                  >
+                    <option>Restore last workspace</option>
+                    <option>Show Welcome Screen</option>
+                  </select>
+                </div>
               </div>
-              <select
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                disabled={isLoadingModels || !apiKey}
-                className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 disabled:opacity-40 appearance-none cursor-pointer transition-colors"
-              >
-                {isLoadingModels ? (
-                  <option>Loading models...</option>
-                ) : availableModels.length > 0 ? (
-                  availableModels.map(m => (
-                    <option key={m.name} value={m.name}>
-                      {m.displayName} ({m.name.replace('models/', '')})
-                    </option>
-                  ))
-                ) : (
-                  <option value={selectedModel}>{selectedModel}</option>
+            )}
+
+            {activeTab === 'graph' && (
+              <div className="space-y-6 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Layout Direction</label>
+                  <select
+                    value={layoutDir}
+                    onChange={e => setLayoutDir(e.target.value)}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="TB">Top to Bottom (Vertical)</option>
+                    <option value="LR">Left to Right (Horizontal)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase flex justify-between">
+                    <span>Node Separation</span>
+                    <span className="text-text-main">{nodeSep}px</span>
+                  </label>
+                  <input 
+                    type="range" min="30" max="200" step="10"
+                    value={nodeSep} onChange={e => setNodeSep(Number(e.target.value))}
+                    className="w-full accent-blue-500 cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase flex justify-between">
+                    <span>Rank Separation</span>
+                    <span className="text-text-main">{rankSep}px</span>
+                  </label>
+                  <input 
+                    type="range" min="100" max="800" step="50"
+                    value={rankSep} onChange={e => setRankSep(Number(e.target.value))}
+                    className="w-full accent-blue-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'ai' && (
+              <div className="space-y-6 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Google AI API Key</label>
+                  <div className="relative">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={e => setApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 pr-10 font-mono placeholder:text-text-dim/40"
+                    />
+                    <button
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                    >
+                      {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase">AI Model</label>
+                    <button
+                      onClick={loadModels}
+                      disabled={!apiKey || isLoadingModels}
+                      className="p-1 text-text-dim hover:text-blue-400 disabled:opacity-30 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw size={13} className={isLoadingModels ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                  <select
+                    value={selectedModel}
+                    onChange={e => setSelectedModel(e.target.value)}
+                    disabled={isLoadingModels || !apiKey}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 disabled:opacity-40 appearance-none cursor-pointer"
+                  >
+                    {isLoadingModels ? (
+                      <option>Loading models...</option>
+                    ) : availableModels.length > 0 ? (
+                      availableModels.map(m => (
+                        <option key={m.name} value={m.name}>
+                          {m.displayName} ({m.name.replace('models/', '')})
+                        </option>
+                      ))
+                    ) : (
+                      <option value={selectedModel}>{selectedModel}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-surface-raised border border-border">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-text-main">AI Summarization</span>
+                    <span className="text-xs text-text-dim mt-1">Automatically enrich nodes with AI insights</span>
+                  </div>
+                  <div onClick={() => setEnableAi(!enableAi)} className={`nebula-switch ${enableAi ? 'active' : ''}`} />
+                </div>
+
+                {apiKey && (
+                  <button
+                    onClick={handleTestConnection}
+                    disabled={testStatus === 'testing'}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border ${
+                      testStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : testStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-surface border-border hover:border-blue-500/30 text-text-muted hover:text-text-main'
+                    }`}
+                  >
+                    <Zap size={14} />
+                    {testStatus === 'testing' ? 'Testing Connection...'
+                      : testStatus === 'success' ? 'Connection Successful!'
+                      : testStatus === 'error' ? 'Connection Failed'
+                      : 'Test Connection'}
+                  </button>
                 )}
-              </select>
-            </div>
-
-            {/* AI Toggle */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-surface-raised border border-border-subtle">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-text-main">AI Summary Generation</span>
-                <span className="text-[11px] text-text-dim mt-0.5">Automatically enrich nodes with AI analysis</span>
               </div>
-              <div onClick={() => setEnableAi(!enableAi)} className={`nebula-switch ${enableAi ? 'active' : ''}`} />
-            </div>
+            )}
 
-            {/* Preferred IDE */}
-            <div className="space-y-2">
-              <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Preferred IDE</label>
-              <select
-                value={preferredIde}
-                onChange={e => setPreferredIde(e.target.value)}
-                className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-colors"
-              >
-                <option value="code">VS Code (code)</option>
-                <option value="cursor">Cursor (cursor)</option>
-                <option value="idea">IntelliJ IDEA (idea)</option>
-                <option value="webstorm">WebStorm (webstorm)</option>
-                <option value="nvim">Neovim (nvim)</option>
-              </select>
-            </div>
+            {activeTab === 'editor' && (
+              <div className="space-y-6 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Preferred IDE</label>
+                  <select
+                    value={preferredIde}
+                    onChange={e => setPreferredIde(e.target.value)}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="code">VS Code (code)</option>
+                    <option value="cursor">Cursor (cursor)</option>
+                    <option value="idea">IntelliJ IDEA (idea)</option>
+                    <option value="webstorm">WebStorm (webstorm)</option>
+                    <option value="nvim">Neovim (nvim)</option>
+                  </select>
+                  <p className="text-xs text-text-dim mt-1.5">This IDE will be used when opening files from the visualizer.</p>
+                </div>
 
-            {/* Test Connection */}
-            {apiKey && (
-              <button
-                onClick={handleTestConnection}
-                disabled={testStatus === 'testing'}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border ${
-                  testStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : testStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-surface-raised border-border hover:border-blue-500/30 text-text-muted hover:text-text-main'
-                }`}
-              >
-                <Zap size={14} />
-                {testStatus === 'testing' ? 'Testing...'
-                  : testStatus === 'success' ? 'Connection Successful!'
-                  : testStatus === 'error' ? 'Connection Failed'
-                  : 'Test Connection'}
-              </button>
+                <div className="p-4 rounded-xl bg-surface-raised border border-border border-dashed">
+                  <h4 className="text-sm font-semibold text-text-main mb-2">Git Integration</h4>
+                  <p className="text-xs text-text-dim mb-4">Git features are automatically detected from the workspace root.</p>
+                  <div className="flex items-center justify-between opacity-50 cursor-not-allowed">
+                    <span className="text-sm">Auto-fetch Churn Data</span>
+                    <div className="nebula-switch active pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'keybindings' && (
+              <div className="space-y-4 max-w-2xl">
+                <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-surface-raised border border-border">
+                  <div className="text-sm text-text-main">Command Palette</div>
+                  <div className="text-right"><kbd className="px-2 py-1 bg-surface border border-border rounded text-xs text-text-muted font-mono">Ctrl/Cmd + K</kbd></div>
+                  
+                  <div className="text-sm text-text-main">Search Nodes</div>
+                  <div className="text-right"><kbd className="px-2 py-1 bg-surface border border-border rounded text-xs text-text-muted font-mono">Ctrl/Cmd + F</kbd></div>
+
+                  <div className="text-sm text-text-main">Toggle Settings</div>
+                  <div className="text-right"><kbd className="px-2 py-1 bg-surface border border-border rounded text-xs text-text-muted font-mono">Ctrl/Cmd + ,</kbd></div>
+                </div>
+                <p className="text-xs text-text-dim italic">Custom keybindings are coming soon.</p>
+              </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border-subtle">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-text-muted hover:text-text-main transition-colors cursor-pointer rounded-lg">
+          {/* Footer Actions */}
+          <div className="p-4 border-t border-border bg-surface flex justify-end gap-3">
+            <button onClick={onClose} className="px-5 py-2.5 text-sm text-text-muted hover:text-text-main transition-colors rounded-lg">
               Cancel
             </button>
-            <button onClick={handleSave} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer">
-              Save
+            <button onClick={handleSave} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5">
+              Save Changes
             </button>
           </div>
         </div>
