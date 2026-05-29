@@ -10,6 +10,8 @@ pub fn extract_javascript_imports(
     file_path: &Path,
     imports: &mut Vec<(String, bool)>,
     api_calls: &mut Vec<String>,
+    exported_symbols: &mut Vec<String>,
+    import_specifiers: &mut Vec<(String, String)>,
 ) -> (bool, bool) {
     let mut is_barrel_file = false;
     let mut has_exports = false;
@@ -41,12 +43,15 @@ pub fn extract_javascript_imports(
                                 match spec {
                                     ImportDeclarationSpecifier::ImportSpecifier(s) => {
                                         local_names.push(s.local.name.to_string());
+                                        import_specifiers.push((source.clone(), s.imported.name().to_string()));
                                     }
                                     ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
                                         local_names.push(s.local.name.to_string());
+                                        import_specifiers.push((source.clone(), "default".to_string()));
                                     }
                                     ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
                                         local_names.push(s.local.name.to_string());
+                                        import_specifiers.push((source.clone(), "*".to_string()));
                                     }
                                 }
                             }
@@ -93,6 +98,36 @@ pub fn extract_javascript_imports(
 
         if all_exports_imports && has_exports {
             is_barrel_file = true;
+        }
+    }
+
+    // Use regex to catch all exports reliably without exhaustive AST matching
+    let export_re = Regex::new(r"(?m)^export\s+(?:const|let|var|function|class|default\s+(?:function|class)?)\s*([a-zA-Z0-9_$]*)").unwrap();
+    for cap in export_re.captures_iter(source_text) {
+        if let Some(name) = cap.get(1) {
+            let n = name.as_str().to_string();
+            if !n.is_empty() {
+                exported_symbols.push(n);
+            } else if cap.get(0).unwrap().as_str().contains("default") {
+                exported_symbols.push("default".to_string());
+            }
+        }
+    }
+
+    let export_list_re = Regex::new(r"(?m)^export\s*\{([^}]+)\}").unwrap();
+    for cap in export_list_re.captures_iter(source_text) {
+        if let Some(list) = cap.get(1) {
+            for item in list.as_str().split(',') {
+                let item = item.trim();
+                if !item.is_empty() {
+                    let parts: Vec<&str> = item.split_whitespace().collect();
+                    if parts.len() == 3 && parts[1] == "as" {
+                        exported_symbols.push(parts[2].to_string());
+                    } else if let Some(first) = parts.first() {
+                        exported_symbols.push(first.to_string());
+                    }
+                }
+            }
         }
     }
 

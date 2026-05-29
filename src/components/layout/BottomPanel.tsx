@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronUp, Minus, X, Terminal as TerminalIcon, Search, Grid3x3, ExternalLink, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { ChevronUp, Minus, X, Terminal as TerminalIcon, Search, Grid3x3, ExternalLink, ArrowUpRight, ArrowDownLeft, FileEdit, Link2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Terminal } from './Terminal';
 
@@ -8,13 +8,17 @@ interface BottomPanelProps {
   logs: string[];
   preferredIde: string;
   workspacePath: string | null;
-  edges?: any[];
+  edges: any[];
+  onRefactorClick?: (path: string) => void;
+  onPropTrace?: (trace: any) => void;
 }
 
-export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, edges = [] }: BottomPanelProps) {
+export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, edges, onRefactorClick, onPropTrace }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'console' | 'terminal' | 'matrix'>('inspector');
   const [shell, setShell] = useState('powershell.exe');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [propToTrace, setPropToTrace] = useState('');
+  const [isTracingProp, setIsTracingProp] = useState(false);
   const [panelHeight, setPanelHeight] = useState(240);
   const isDragging = useRef(false);
   const startY = useRef(0);
@@ -62,7 +66,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
 
   if (isCollapsed) {
     return (
-      <div 
+      <div
         className="h-8 border-t border-border bg-surface flex items-center justify-center px-4 z-10 flex-shrink-0 cursor-pointer hover:bg-surface-raised transition-colors group"
         onClick={() => setIsCollapsed(false)}
       >
@@ -96,18 +100,16 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
-                  activeTab === tab.id
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${activeTab === tab.id
                     ? 'bg-surface-raised text-text-main border border-border'
                     : 'text-text-dim hover:text-text-muted border border-transparent'
-                }`}
+                  }`}
               >
                 <Icon size={12} />
                 <span>{tab.label}</span>
                 {tab.badge && (
-                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono leading-none ${
-                    activeTab === tab.id ? 'bg-blue-500/20 text-blue-400' : 'bg-surface border border-border text-text-muted'
-                  }`}>
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono leading-none ${activeTab === tab.id ? 'bg-blue-500/20 text-blue-400' : 'bg-surface border border-border text-text-muted'
+                    }`}>
                     {tab.badge}
                   </span>
                 )}
@@ -117,7 +119,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
         </div>
         <div className="flex items-center gap-2">
           {activeTab === 'terminal' && (
-            <select 
+            <select
               value={shell}
               onChange={(e) => setShell(e.target.value)}
               className="bg-surface-raised border border-border text-xs text-text-main rounded px-2 py-1 outline-none mr-2 focus:border-primary transition-colors"
@@ -128,14 +130,14 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
               <option value="zsh">Zsh (Mac/Linux)</option>
             </select>
           )}
-          <button  
+          <button
             className="p-1.5 text-text-dim hover:text-text-muted rounded-md hover:bg-surface-raised transition-colors cursor-pointer"
             onClick={() => setIsCollapsed(true)}
             title="Minimize"
           >
             <Minus size={12} />
           </button>
-          <button 
+          <button
             className="p-1.5 text-text-dim hover:text-text-muted rounded-md hover:bg-surface-raised transition-colors cursor-pointer"
             onClick={() => setIsCollapsed(true)}
             title="Close"
@@ -154,17 +156,28 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                 <h3 className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">
                   {selectedNode ? `Selected: ${selectedNode.data?.label}` : 'No Selection'}
                 </h3>
-                {selectedNode && selectedNode.data?.path && (
-                  <button
-                    onClick={() => invoke('open_in_ide', { path: selectedNode.data.path, ide: preferredIde })}
-                    className="p-1 rounded-md text-text-dim hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
-                    title={`Open in ${preferredIde}`}
-                  >
-                    <ExternalLink size={14} />
-                  </button>
-                )}
+                <div className="flex items-center gap-1">
+                  {selectedNode && selectedNode.data?.path && onRefactorClick && (
+                    <button
+                      onClick={() => onRefactorClick(selectedNode.data.path)}
+                      className="p-1 rounded-md text-text-dim hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                      title="Preview Refactor Impact"
+                    >
+                      <FileEdit size={14} />
+                    </button>
+                  )}
+                  {selectedNode && selectedNode.data?.path && (
+                    <button
+                      onClick={() => invoke('open_in_ide', { path: selectedNode.data.path, ide: preferredIde })}
+                      className="p-1 rounded-md text-text-dim hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                      title={`Open in ${preferredIde}`}
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
-              
+
               {selectedNode ? (
                 <div className="space-y-0.5">
                   {[
@@ -188,6 +201,63 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                     </div>
                   )}
 
+                  {/* Prop Tracing */}
+                  {(selectedNode.data?.group === 'tsx' || selectedNode.data?.group === 'jsx') && workspacePath && onPropTrace && (
+                    <div className="pt-2 mt-1 border-t border-border-subtle">
+                      <span className="text-[10px] text-text-dim uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                        <Link2 size={10} /> Trace Prop Flow
+                      </span>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          value={propToTrace}
+                          onChange={(e) => setPropToTrace(e.target.value)}
+                          placeholder="e.g. userId"
+                          className="flex-1 bg-background border border-border rounded px-2 py-1 text-[11px] text-text-main outline-none focus:border-blue-500/50"
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter' && propToTrace) {
+                              setIsTracingProp(true);
+                              try {
+                                const result = await invoke('trace_prop', {
+                                  workspacePath,
+                                  filePath: selectedNode.data.path,
+                                  propName: propToTrace
+                                });
+                                onPropTrace(result);
+                              } catch (err) {
+                                console.error('Prop trace failed', err);
+                              } finally {
+                                setIsTracingProp(false);
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          disabled={!propToTrace || isTracingProp}
+                          onClick={async () => {
+                            if (!propToTrace) return;
+                            setIsTracingProp(true);
+                            try {
+                              const result = await invoke('trace_prop', {
+                                workspacePath,
+                                filePath: selectedNode.data.path,
+                                propName: propToTrace
+                              });
+                              onPropTrace(result);
+                            } catch (err) {
+                              console.error('Prop trace failed', err);
+                            } finally {
+                              setIsTracingProp(false);
+                            }
+                          }}
+                          className="px-2 py-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded text-[10px] font-medium transition-colors disabled:opacity-50"
+                        >
+                          {isTracingProp ? '...' : 'Trace'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Dependencies & Dependents */}
                   {edges.length > 0 && selectedNode && (() => {
                     const nodeId = selectedNode.id;
@@ -201,8 +271,44 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                       .map(e => e.data?.originalSource)
                       .filter(Boolean) as string[];
 
+                    const circularDeps = edges
+                      .filter(e => (e.data?.originalSource === nodeId || e.data?.originalTarget === nodeId) && e.style?.strokeDasharray === '8 4')
+                      .map(e => e.data?.originalSource === nodeId ? e.data?.originalTarget : e.data?.originalSource)
+                      .filter(Boolean) as string[];
+
                     return (
                       <>
+                        {circularDeps.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-border-subtle">
+                            <span className="text-[10px] text-rose-400 uppercase tracking-wider flex items-center gap-1 mb-1.5 font-bold">
+                              ⚠ Circular Dependencies ({circularDeps.length})
+                            </span>
+                            <div className="space-y-0.5">
+                              {circularDeps.map((dep, i) => {
+                                const name = dep.split('/').pop() || dep;
+                                return (
+                                  <div key={i} className="text-[10px] text-rose-300/80 font-mono truncate py-0.5">
+                                    {name}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {selectedNode.data?.unused_exports && selectedNode.data.unused_exports.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-border-subtle">
+                            <span className="text-[10px] text-amber-400 uppercase tracking-wider flex items-center gap-1 mb-1.5 font-bold">
+                              ⚠ Unused Exports ({selectedNode.data.unused_exports.length})
+                            </span>
+                            <div className="space-y-0.5">
+                              {selectedNode.data.unused_exports.map((exp: string, i: number) => (
+                                <div key={i} className="text-[10px] text-amber-300/80 font-mono truncate py-0.5">
+                                  {exp}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {dependencies.length > 0 && (
                           <div className="pt-2 mt-1 border-t border-border-subtle">
                             <span className="text-[10px] text-text-dim uppercase tracking-wider flex items-center gap-1 mb-1.5">
@@ -247,7 +353,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                 </div>
               )}
             </div>
-            
+
             <div className="flex-1 p-4 bg-background font-mono text-[11px] overflow-y-auto border-l border-border">
               {logs.length > 0 ? (
                 <div className="space-y-0.5">
@@ -255,12 +361,10 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                     const isError = log.toLowerCase().includes('error');
                     const isSuccess = log.includes('successfully') || log.includes('completed');
                     return (
-                      <div key={i} className={`flex items-start gap-2 py-0.5 ${
-                        isError ? 'text-red-400' : isSuccess ? 'text-emerald-400' : 'text-text-dim'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${
-                          isError ? 'bg-red-400' : isSuccess ? 'bg-emerald-400' : 'bg-text-dim/40'
-                        }`} />
+                      <div key={i} className={`flex items-start gap-2 py-0.5 ${isError ? 'text-red-400' : isSuccess ? 'text-emerald-400' : 'text-text-dim'
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${isError ? 'bg-red-400' : isSuccess ? 'bg-emerald-400' : 'bg-text-dim/40'
+                          }`} />
                         <span>{log}</span>
                       </div>
                     );
@@ -304,7 +408,7 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
           <div className="flex-1 overflow-auto p-4 bg-background">
             {edges.length > 0 ? (() => {
               const nodes = Array.from(new Set(edges.flatMap(e => [e.data?.originalSource || e.source, e.data?.originalTarget || e.target]).filter(Boolean))).slice(0, 30);
-              
+
               if (nodes.length === 0) return <div className="text-text-dim text-xs">No dependencies found.</div>;
 
               return (
@@ -328,13 +432,13 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, e
                           {rowName}
                         </div>
                         {nodes.map(colNode => {
-                          const hasEdge = edges.some(e => 
+                          const hasEdge = edges.some(e =>
                             (e.data?.originalSource === rowNode && e.data?.originalTarget === colNode) ||
                             (e.source === rowNode && e.target === colNode)
                           );
                           return (
-                            <div 
-                              key={`${rowNode}-${colNode}`} 
+                            <div
+                              key={`${rowNode}-${colNode}`}
                               className={`w-4 h-4 rounded-sm ${hasEdge ? 'bg-blue-500' : 'bg-surface-raised'} hover:bg-blue-400 transition-colors cursor-pointer`}
                               title={`${rowName} → ${colNode.split('/').pop() || colNode}`}
                             />

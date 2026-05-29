@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2, Cpu } from 'lucide-react';
+import { FileCode, FileType, Layout, Trash2, Cpu, ChevronDown, ChevronUp, Box } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
@@ -13,6 +13,10 @@ function getAccent(type: string, isBackend: boolean) {
 }
 
 export const FileNode = React.memo(function FileNode({ data, selected }: any) {
+  const isSearchMatch = data.isSearchMatch ?? true;
+  const diffStatus = data.diffStatus; // 'added' | 'removed' | null
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isDimmed = data.isDimmed ?? false;
   const isBackend = data.isBackend;
   const isHorizontal = data.direction !== 'TB';
   const accent = getAccent(data.type, isBackend);
@@ -55,7 +59,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
         className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${selected
             ? 'shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 scale-[1.02]'
             : 'shadow-lg hover:shadow-xl'
-          }`}
+          } ${isSearchMatch ? '' : 'opacity-50'} ${isDimmed ? 'opacity-30' : ''} ${diffStatus === 'added' ? 'ring-2 ring-emerald-500/50' : ''}`}
         style={{
           background: 'var(--color-surface-raised)',
           borderTop: `${blastBorderWidth} solid ${blastBorder}`,
@@ -174,9 +178,23 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                       {dirPath}/
                     </span>
                   )}
-                  <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight">
-                    {data.label}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight max-w-[140px]">
+                      {data.label}
+                    </span>
+                    {data.exports && data.exports.length > 0 && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsExpanded(!isExpanded);
+                        }}
+                        className="p-0.5 rounded bg-surface border border-border-subtle hover:bg-surface-raised text-text-dim hover:text-text-main transition-colors ml-auto shadow-sm"
+                        title="Toggle Symbols"
+                      >
+                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {data.semantic_group && (
@@ -233,6 +251,30 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
               </span>
             </div>
           </div>
+
+          {/* Symbol Drill-Down (Expanded State) */}
+          {isExpanded && data.exports && data.exports.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-1.5 max-h-[160px] overflow-y-auto custom-scrollbar">
+              {data.exports.map((exp: any, i: number) => {
+                const isUnused = data.unused_exports?.includes(exp.name);
+                return (
+                  <div key={i} className="flex items-center justify-between text-[10px] px-2 py-1.5 rounded-lg bg-surface/80 border border-border-subtle hover:border-border transition-colors group/sym">
+                    <div className="flex items-center gap-2 truncate">
+                      <Box size={10} className="text-text-muted group-hover/sym:text-blue-400 transition-colors shrink-0" />
+                      <span className={`font-mono truncate ${isUnused ? 'text-amber-500 line-through opacity-70' : 'text-text-dim'}`} title={exp.name}>
+                        {exp.name}
+                      </span>
+                    </div>
+                    {exp.is_default && (
+                      <span className="text-[8px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ml-2">
+                        DEF
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Source handles */}

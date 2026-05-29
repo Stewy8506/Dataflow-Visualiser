@@ -42,6 +42,7 @@ portable-pty = "0.9.0"
 tauri-plugin-fs = "2.0.0"
 tree-sitter-c = "0.23.2"
 tree-sitter-cpp = "0.23.4"
+chrono = "0.4.44"
 
 [profile.release]
 lto = true

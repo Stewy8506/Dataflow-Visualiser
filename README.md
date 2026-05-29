@@ -109,9 +109,14 @@ Select any node and simulate a structural change. The engine traces dependencies
 
 ### Advanced Codebase Analysis
 - **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
+- **Circular Dependency Detection** — automatically detects and highlights import cycles via Depth First Search, mapping out circular paths in bright rose.
+- **Component Prop Tracing** — track specific React/JSX props down the component tree to visualize and debug prop-drilling patterns.
+- **External Dependency Mapping** — surfaces third-party `npm` and `pub` packages as nodes, tracking external coupling and flagging wasted/unused package installations.
 - **Complexity Heatmap** — visually maps code complexity (such as function density, import counts, and file sizes) across nodes using a color gradient, enabling developers to instantly locate maintainability hotspots and risky refactor targets.
 - **Fuzzy Search & Filter** — quickly navigate massive codebases with a real-time search bar that highlights matching nodes and collapses irrelevant subtrees.
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.
+- **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
+- **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
 
 ### Native OS Security & Capabilities
 - **Strict Capability Auditing** — Rust backend operations explicitly enforce the Tauri `fs_scope()`. Even when circumventing frontend layers, the execution sandbox rejects access to files not explicitly authorized by the native OS directory picker.
@@ -196,6 +201,12 @@ npm run tauri build
 - [x] Mini-map overlay for large codebases
 - [x] Monorepo / multi-root workspace support
 - [x] Dead code detection (orphaned nodes and unused exports)
+- [x] Circular dependency detection and highlighting
+- [x] External dependency mapping and wasted import flagging
+- [x] Refactor impact preview (exact file list and line change estimates)
+- [x] Component prop tracing across React/JSX hierarchies
+- [x] Snapshot diffing and version drifting visualization
+- [x] Symbol-level drill-down inside file nodes
 - [ ] Persistent node layout across sessions
 - [ ] Ollama + Anthropic AI panel UI
 - [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)

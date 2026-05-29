@@ -86,6 +86,23 @@ export function GraphLegend() {
           </div>
         </div>
 
+        {/* Metrics */}
+        <div className="col-span-1 space-y-3">
+          <h4 className="text-[9px] font-bold text-text-dim tracking-wider uppercase mb-2">Metrics & Flow</h4>
+          <div className="flex items-center gap-2">
+            <div className="px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Cx: Low</div>
+            <span className="text-[10px] text-text-muted">Low Complexity</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider uppercase bg-red-500/10 text-red-400 border border-red-500/20">Cx: High</div>
+            <span className="text-[10px] text-text-muted">High Complexity</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0 border-t border-dashed border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></div>
+            <span className="text-[10px] text-text-muted">Circular Dep</span>
+          </div>
+        </div>
+
         {/* Badges */}
         <div>
           <span className="text-[9px] font-semibold text-text-dim uppercase tracking-wider block mb-2">Badges</span>

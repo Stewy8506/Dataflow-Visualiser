@@ -14,6 +14,7 @@ import { FileNode } from './FileNode';
 import { LayoutController } from './LayoutController';
 import { GraphLegend } from './GraphLegend';
 import { calculateBlastRadius } from '../../utils/blastRadius';
+import { detectCycles } from '../../utils/cycleDetection';
 import { invoke } from '@tauri-apps/api/core';
 
 const nodeTypes: NodeTypes = {
@@ -33,8 +34,10 @@ interface ReactFlowGraphProps {
   isLightMode: boolean;
   preferredIde: string;
   searchQuery?: string;
-  searchMode?: 'highlight' | 'collapse';
+  searchMode?: 'node' | 'path';
   showMiniMap?: boolean;
+  propTrace?: any;
+  diffOverlay?: any;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
@@ -50,9 +53,11 @@ function ReactFlowInner({
   setDirection,
   isLightMode,
   preferredIde,
-  searchQuery,
-  searchMode,
-  showMiniMap,
+  searchQuery = '',
+  searchMode = 'node',
+  showMiniMap = false,
+  propTrace = null,
+  diffOverlay = null,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom } = useReactFlow();
 
@@ -60,10 +65,6 @@ function ReactFlowInner({
   const activeNodeId = selectedNodeId;
 
   // ── Smooth zoom ────────────────────────────────────────────────
-  // Strategy: accumulate wheel deltas into a single target, then fire
-  // one zoomTo(target, { duration: 500 }) per animation frame.
-  // d3-zoom correctly interpolates from the current mid-animation position,
-  // giving a natural ease-in (while scrolling) and ease-out (after stop).
   const targetZoomRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
 
@@ -71,21 +72,17 @@ function ReactFlowInner({
     e.preventDefault();
     e.stopPropagation();
 
-    // Build on the last intended target so fast scrolling accumulates correctly
     const base = targetZoomRef.current ?? getZoom();
     const sensitivity = 0.001;
     targetZoomRef.current = Math.min(4, Math.max(0.05, base * Math.exp(-e.deltaY * sensitivity)));
 
-    // Batch all deltas that arrive in the same frame into one zoomTo call
     if (frameRef.current !== null) return;
     frameRef.current = requestAnimationFrame(() => {
       frameRef.current = null;
       const target = targetZoomRef.current;
       if (target !== null) {
-        // 500ms lets us see both the ease-in (scroll start) and ease-out (scroll stop) tails
         zoomTo(target, { duration: 300 });
       }
-      // Keep targetZoomRef so next wheel event uses it as base (correct during in-flight animation)
     });
   }, [zoomTo, getZoom]);
 
@@ -95,13 +92,35 @@ function ReactFlowInner({
     return calculateBlastRadius(activeNodeId, initialEdges);
   }, [activeNodeId, initialEdges]);
 
+  // ── Circular Dependencies ───────────────────────────────────────
+  const cycleResult = useMemo(() => {
+    return detectCycles(initialEdges);
+  }, [initialEdges]);
+
   // ── Styled nodes (memoized — no setState, no double-render) ────
   const styledNodes = useMemo(() => {
     return initialNodes.map(node => {
       let isConnected = true;
       let tier = -1;
+      let diffStatus: 'added' | 'removed' | null = null;
 
-      if (blastRadius) {
+      if (diffOverlay) {
+        if (diffOverlay.added_nodes.includes(node.id)) {
+          diffStatus = 'added';
+        } else if (diffOverlay.removed_nodes.includes(node.id)) {
+          diffStatus = 'removed';
+        }
+      }
+
+      if (propTrace && propTrace.involved_files) {
+        const nodePath = node.data?.path?.replace(/\\/g, '/');
+        const isParticipating = propTrace.involved_files.some((f: string) => f.replace(/\\/g, '/') === nodePath);
+        
+        // Let the node handle its own dimming state via props
+        if (!isParticipating) {
+          node.data = { ...node.data, isDimmed: true };
+        }
+      } if (blastRadius && !propTrace) {
         if (blastRadius.tiers.has(node.id)) {
           tier = blastRadius.tiers.get(node.id)!;
         } else {
@@ -110,7 +129,7 @@ function ReactFlowInner({
       }
 
       let isSearchMatch = true;
-      if (searchQuery && searchMode === 'highlight') {
+      if (searchQuery && searchMode === 'node') {
          const query = searchQuery.toLowerCase();
          const semanticGroup = node.data.semantic_group || '';
          const summary = node.data.summary || '';
@@ -121,6 +140,7 @@ function ReactFlowInner({
       }
 
       const isSelected = selectedNodeId === node.id;
+      const isInCycle = cycleResult.nodesInCycles.has(node.id);
 
       return {
         ...node,
@@ -131,6 +151,8 @@ function ReactFlowInner({
           blastConnected: isConnected,
           hasBlastRadius: !!blastRadius,
           isSearchMatch,
+          isInCycle,
+          diffStatus,
         },
         style: {
           ...node.style,
@@ -139,7 +161,7 @@ function ReactFlowInner({
         }
       };
     });
-  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode]);
+  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -154,7 +176,59 @@ function ReactFlowInner({
       const noActiveNode = !activeNodeId;
 
       let strokeColor = isLightMode ? '#94a3b8' : '#334155';
-      if (blastRadius && isConnected) {
+      let strokeDasharray: string | undefined = undefined;
+      let label: string | undefined = edge.label;
+      let isAnimated = isConnected;
+
+      const importer = edge.data?.originalSource || edge.source;
+      const imported = edge.data?.originalTarget || edge.target;
+      const isCircular = cycleResult.edgesInCycles.has(`${importer}->${imported}`);
+
+      if (diffOverlay) {
+        const isAdded = diffOverlay.added_edges.some(([s, t]: [string, string]) => s === edge.source && t === edge.target);
+        if (isAdded) {
+          return {
+            ...edge,
+            animated: true,
+            label: 'Added',
+            style: { ...edge.style, stroke: '#10b981', strokeWidth: 3, opacity: 1 }, // emerald-500
+            markerEnd: { ...edge.markerEnd, color: '#10b981' }
+          };
+        }
+      }
+
+      // Prop Trace Edges
+      if (propTrace && propTrace.involved_files) {
+        const sourceParticipating = propTrace.involved_files.some((f: string) => f.replace(/\\/g, '/') === edge.data?.originalSource?.replace(/\\/g, '/'));
+        const targetParticipating = propTrace.involved_files.some((f: string) => f.replace(/\\/g, '/') === edge.data?.originalTarget?.replace(/\\/g, '/'));
+        
+        if (sourceParticipating && targetParticipating) {
+          return {
+            ...edge,
+            animated: true,
+            label: `prop: ${propTrace.prop_name}`,
+            style: {
+              ...edge.style,
+              stroke: '#06b6d4', // cyan-500
+              strokeWidth: 3,
+              opacity: 1
+            },
+            markerEnd: { ...edge.markerEnd, color: '#06b6d4' }
+          };
+        } else {
+          return {
+            ...edge,
+            style: { ...edge.style, stroke: '#475569', opacity: 0.1 }
+          };
+        }
+      }
+
+      if (isCircular) {
+        strokeColor = '#f43f5e';
+        strokeDasharray = '8 4';
+        isAnimated = true;
+        label = '⚠ Circular';
+      } else if (blastRadius && isConnected) {
         if (sourceTier >= 0 && targetTier > sourceTier) {
           if (targetTier === 1) strokeColor = '#ef4444';
           else if (targetTier === 2) strokeColor = '#f97316';
@@ -171,17 +245,19 @@ function ReactFlowInner({
 
       return {
         ...edge,
-        animated: isConnected,
+        animated: isAnimated,
+        label,
         style: {
           ...edge.style,
           opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.04),
           strokeWidth: isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5),
           stroke: strokeColor,
+          strokeDasharray,
         },
         markerEnd,
       };
     });
-  }, [initialEdges, blastRadius, activeNodeId, isLightMode]);
+  }, [initialEdges, blastRadius, cycleResult, activeNodeId, isLightMode, propTrace, diffOverlay]);
 
   const handleNodeClick = (_: React.MouseEvent, node: any) => {
     setSelectedNodeId(node.id);

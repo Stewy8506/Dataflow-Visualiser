@@ -4,6 +4,8 @@ mod git;
 mod parser;
 mod pty;
 mod state;
+mod refactor;
+mod snapshots;
 
 use state::AppState;
 
@@ -29,7 +31,12 @@ pub fn run() {
             git::get_commit_diff,
             pty::spawn_pty,
             pty::write_pty,
-            pty::resize_pty
+            pty::resize_pty,
+            refactor::preview_refactor,
+            parser::props::trace_prop,
+            snapshots::save_snapshot,
+            snapshots::list_snapshots,
+            snapshots::diff_snapshots
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

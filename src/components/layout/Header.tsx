@@ -1,4 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon, Map, FolderOpen } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon, Map, FolderOpen, Package, History } from 'lucide-react';
 
 export type GraphLayer = 'ui' | 'backend' | 'overall';
 
@@ -13,9 +13,13 @@ interface HeaderProps {
   setIsLightMode: (val: boolean) => void;
   showMiniMap?: boolean;
   setShowMiniMap?: (val: boolean) => void;
+  showExternalDeps?: boolean;
+  setShowExternalDeps?: (val: boolean) => void;
+  showSnapshots?: boolean;
+  setShowSnapshots?: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots }: HeaderProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
@@ -104,6 +108,36 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
             title="Toggle Mini Map"
           >
             <Map size={15} />
+          </button>
+        )}
+
+        {/* External Deps Toggle */}
+        {viewMode === '2d' && setShowExternalDeps && (
+          <button
+            onClick={() => setShowExternalDeps(!showExternalDeps)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              showExternalDeps 
+                ? 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30' 
+                : 'text-text-dim hover:text-text-main hover:bg-glass-light border border-transparent'
+            }`}
+            title="Toggle External Dependencies"
+          >
+            <Package size={15} />
+          </button>
+        )}
+
+        {/* Snapshots Toggle */}
+        {setShowSnapshots && (
+          <button
+            onClick={() => setShowSnapshots(!showSnapshots)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              showSnapshots 
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                : 'text-text-dim hover:text-text-main hover:bg-glass-light border border-transparent'
+            }`}
+            title="Snapshots & Diffing"
+          >
+            <History size={16} />
           </button>
         )}
 

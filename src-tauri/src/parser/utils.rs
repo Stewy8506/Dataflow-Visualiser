@@ -3,19 +3,32 @@ use ignore::DirEntry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-pub fn is_ignored(entry: &DirEntry) -> bool {
+pub fn is_ignored(entry: &DirEntry, filter_mobile_platforms: bool) -> bool {
     entry
         .file_name()
         .to_str()
         .map(|s| {
-            s.starts_with('.')
+            let mut ignored = s.starts_with('.')
                 || s == "node_modules"
                 || s == "target"
                 || s == "dist"
                 || s == "build"
                 || s.starts_with("next-env")
                 || s == "next.config.ts"
-                || s == "next.config.js"
+                || s == "next.config.js";
+                
+            if filter_mobile_platforms {
+                let lower = s.to_lowercase();
+                ignored = ignored 
+                    || lower == "windows"
+                    || lower == "linux"
+                    || lower == "ios"
+                    || lower == "android"
+                    || lower == "macos"
+                    || lower == "web";
+            }
+            
+            ignored
         })
         .unwrap_or(false)
 }

@@ -5,6 +5,7 @@ pub mod javascript;
 pub mod nextjs;
 pub mod python;
 pub mod rust;
+pub mod props;
 pub mod tree_sitter_utils;
 pub mod utils;
 
@@ -42,6 +43,8 @@ pub struct ParsedNode {
     pub semantic_group: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unused_exports: Vec<String>,
     #[serde(default)]
     pub metrics: Option<NodeMetrics>,
 }
@@ -229,8 +232,22 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
 
     let mut package_name = None;
     let pubspec_path = path_ref.join("pubspec.yaml");
-    if pubspec_path.exists() {
-        if let Ok(content) = fs::read_to_string(pubspec_path) {
+    let is_flutter = pubspec_path.exists();
+    
+    let mut filter_mobile_platforms = is_flutter;
+    if !filter_mobile_platforms {
+        let package_json_path = path_ref.join("package.json");
+        if package_json_path.exists() {
+            if let Ok(content) = fs::read_to_string(&package_json_path) {
+                if content.contains("\"react-native\"") {
+                    filter_mobile_platforms = true;
+                }
+            }
+        }
+    }
+
+    if is_flutter {
+        if let Ok(content) = fs::read_to_string(&pubspec_path) {
             for line in content.lines() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("name:") {
@@ -244,12 +261,60 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         }
     }
 
+    let mut ext_deps = std::collections::HashSet::new();
+    if !is_flutter {
+        let package_json_path = path_ref.join("package.json");
+        if package_json_path.exists() {
+            if let Ok(content) = fs::read_to_string(&package_json_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
+                        for k in deps.keys() { ext_deps.insert(k.clone()); }
+                    }
+                    if let Some(deps) = json.get("devDependencies").and_then(|v| v.as_object()) {
+                        for k in deps.keys() { ext_deps.insert(k.clone()); }
+                    }
+                }
+            }
+        }
+    } else {
+        if let Ok(content) = fs::read_to_string(&pubspec_path) {
+            let mut in_deps = false;
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if line.starts_with("dependencies:") || line.starts_with("dev_dependencies:") {
+                    in_deps = true;
+                } else if !line.starts_with(' ') && !line.is_empty() {
+                    in_deps = false;
+                } else if in_deps && trimmed.len() > 0 && !trimmed.starts_with('#') {
+                    let parts: Vec<&str> = trimmed.split(':').collect();
+                    if !parts.is_empty() {
+                        ext_deps.insert(parts[0].trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    for dep in &ext_deps {
+        nodes.push(ParsedNode {
+            id: format!("ext:{}", dep),
+            label: dep.clone(),
+            group: if is_flutter { "pub".to_string() } else { "npm".to_string() },
+            semantic_group: None,
+            summary: None,
+            unused_exports: Vec::new(),
+            metrics: None,
+        });
+    }
+
     struct FileData {
         id: String,
         path: PathBuf,
         imports: Vec<(String, bool)>,
         api_calls: Vec<String>,
         api_endpoints: Vec<String>,
+        exported_symbols: Vec<String>,
+        import_specifiers: Vec<(String, String)>,
         is_barrel_file: bool,
         is_router: bool,
     }
@@ -259,7 +324,7 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
     for result in WalkBuilder::new(path_ref)
         .hidden(true)
         .git_ignore(true)
-        .filter_entry(|e| !is_ignored(e))
+        .filter_entry(move |e| !is_ignored(e, filter_mobile_platforms))
         .build()
     {
         if let Ok(entry) = result {
@@ -295,12 +360,15 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                         group: ext.to_string(),
                         semantic_group: None,
                         summary: None,
+                        unused_exports: Vec::new(),
                         metrics: None,
                     });
 
                     let mut imports = Vec::new();
                     let mut api_calls = Vec::new();
                     let mut api_endpoints = Vec::new();
+                    let mut exported_symbols = Vec::new();
+                    let mut import_specifiers = Vec::new();
                     let mut is_barrel_file = false;
                     let is_router = false;
                     let mut function_count = 0;
@@ -318,6 +386,8 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                                 &file_path,
                                 &mut imports,
                                 &mut api_calls,
+                                &mut exported_symbols,
+                                &mut import_specifiers,
                             );
                             is_barrel_file = barrel;
                         } else if matches!(
@@ -398,6 +468,8 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
                         imports,
                         api_calls,
                         api_endpoints,
+                        exported_symbols,
+                        import_specifiers,
                         is_barrel_file,
                         is_router,
                     });
@@ -475,6 +547,21 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
 
                 if let Some(header_id) = resolved_header_id {
                     target_id = Some(header_id);
+                }
+            }
+
+            if target_id.is_none() {
+                let base_pkg = import_str.0.split('/').next().unwrap_or(&import_str.0);
+                let scoped_pkg = if import_str.0.starts_with('@') {
+                    import_str.0.split('/').take(2).collect::<Vec<_>>().join("/")
+                } else {
+                    base_pkg.to_string()
+                };
+
+                let pkg_to_check = if import_str.0.starts_with('@') { scoped_pkg } else { base_pkg.to_string() };
+
+                if ext_deps.contains(&pkg_to_check) {
+                    target_id = Some(format!("ext:{}", pkg_to_check));
                 }
             }
 
@@ -623,9 +710,43 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         final_edges.retain(|e| e.source != *bypass_id && e.target != *bypass_id);
     }
 
+    let mut all_imported_specifiers = std::collections::HashSet::new();
+    for file_data in &files_data {
+        for (source_import, specifier) in &file_data.import_specifiers {
+            if let Some(idx) = resolve_import_path(
+                &file_data.path,
+                path_ref,
+                source_import,
+                package_name.as_deref(),
+                &node_index,
+                &nodes,
+                &alias_resolver,
+            ) {
+                let target_id = &nodes[idx].id;
+                all_imported_specifiers.insert(format!("{}::{}", target_id, specifier));
+            }
+        }
+    }
+
     let final_nodes: Vec<ParsedNode> = nodes
         .into_iter()
         .filter(|n| !ids_to_bypass.contains(&n.id))
+        .map(|mut n| {
+            if let Some(file_data) = files_data.iter().find(|f| f.id == n.id) {
+                for export in &file_data.exported_symbols {
+                    if export != "*" && !all_imported_specifiers.contains(&format!("{}::{}", n.id, export)) {
+                        // For default exports, we might not want to flag if they are used via wildcard or something,
+                        // but let's flag them if strictly no 'default' is imported.
+                        // Actually, if a barrel file exports everything `export * from './a'`, we might miss it.
+                        // We will ignore `default` for now to avoid false positives in Next.js pages.
+                        if export != "default" {
+                            n.unused_exports.push(export.clone());
+                        }
+                    }
+                }
+            }
+            n
+        })
         .collect();
 
     Ok(GraphData {
@@ -698,11 +819,15 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                             function_count = re.find_iter(&source_text).count();
 
                             if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
+                                let mut exported_symbols = Vec::new();
+                                let mut import_specifiers = Vec::new();
                                 let _ = extract_javascript_imports(
                                     &source_text,
                                     &path_buf,
                                     &mut imports,
                                     &mut api_calls,
+                                    &mut exported_symbols,
+                                    &mut import_specifiers,
                                 );
                             } else {
                                 match ext {
@@ -771,6 +896,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> 
                             group: ext.to_string(),
                             semantic_group: None,
                             summary: None,
+                            unused_exports: Vec::new(),
                             metrics: Some(NodeMetrics {
                                 function_count,
                                 import_count,

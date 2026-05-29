@@ -18,6 +18,8 @@ import { ExplorerPanel } from "./components/layout/ExplorerPanel";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
 import { getLayoutedElements } from "./utils/layout";
+import { RefactorPreview } from "./components/layout/RefactorPreview";
+import { SnapshotPanel, SnapshotDiff } from "./components/layout/SnapshotPanel";
 import { Edge, MarkerType } from "@xyflow/react";
 
 interface GraphData {
@@ -278,6 +280,11 @@ function App() {
   const [searchMode, setSearchMode] = useState<'highlight' | 'collapse'>('highlight');
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showExternalDeps, setShowExternalDeps] = useState(false);
+  const [refactorTarget, setRefactorTarget] = useState<string | null>(null);
+  const [propTrace, setPropTrace] = useState<any | null>(null);
+  const [showSnapshots, setShowSnapshots] = useState(false);
+  const [diffOverlay, setDiffOverlay] = useState<SnapshotDiff | null>(null);
 
   const [preferredIde, setPreferredIde] = useState('code');
 
@@ -504,9 +511,11 @@ function App() {
 
     // Filter nodes based on active layer
     let filteredRawNodes = rawGraphData.nodes.filter(n => {
+      if (n.id.startsWith('ext:') && !showExternalDeps) return false;
+
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
-      if (activeLayer === 'ui') return !isBackend;
-      if (activeLayer === 'backend') return isBackend;
+      if (activeLayer === 'ui') return !isBackend && !n.id.startsWith('ext:');
+      if (activeLayer === 'backend') return isBackend && !n.id.startsWith('ext:');
       return true; // overall
     });
 
@@ -558,7 +567,9 @@ function App() {
 
       // Calculate architectural taxonomy hierarchy
       let layerIndex = 2; // Default script/utilities layer
-      if (isBackend) {
+      if (n.id.startsWith('ext:')) {
+        layerIndex = 4; // External dependencies layer
+      } else if (isBackend) {
         layerIndex = 3; // Backend service & APIs layer
       } else if (/^(page|main|index|app)\./i.test(n.label)) {
         layerIndex = 0; // Entry points / Webpages layer
@@ -821,6 +832,10 @@ function App() {
             setIsLightMode={setIsLightMode}
             showMiniMap={showMiniMap}
             setShowMiniMap={setShowMiniMap}
+            showExternalDeps={showExternalDeps}
+            setShowExternalDeps={setShowExternalDeps}
+            showSnapshots={showSnapshots}
+            setShowSnapshots={setShowSnapshots}
           />
 
           {selectedPath && (
@@ -852,6 +867,8 @@ function App() {
               searchQuery={searchQuery}
               searchMode={searchMode}
               showMiniMap={showMiniMap}
+              propTrace={propTrace}
+              diffOverlay={diffOverlay}
             />
           ) : (
             <ThreeDGraph
@@ -862,7 +879,15 @@ function App() {
           )}
         </div>
 
-        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} workspacePath={selectedPath} edges={flowEdges} />
+        <BottomPanel 
+          selectedNode={selectedNode} 
+          logs={logs} 
+          preferredIde={preferredIde} 
+          workspacePath={selectedPath} 
+          edges={flowEdges} 
+          onRefactorClick={setRefactorTarget}
+          onPropTrace={setPropTrace}
+        />
       </div>
 
       {showSettings && selectedPath && (
@@ -872,6 +897,23 @@ function App() {
           enableAi={enableAi} setEnableAi={setEnableAi}
           preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {refactorTarget && selectedPath && (
+        <RefactorPreview
+          workspacePath={selectedPath}
+          targetPath={refactorTarget}
+          onClose={() => setRefactorTarget(null)}
+        />
+      )}
+
+      {showSnapshots && selectedPath && (
+        <SnapshotPanel
+          workspacePath={selectedPath}
+          graphData={rawGraphData}
+          onClose={() => setShowSnapshots(false)}
+          onApplyDiff={setDiffOverlay}
         />
       )}
 

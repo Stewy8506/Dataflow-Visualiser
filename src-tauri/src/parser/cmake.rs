@@ -20,7 +20,7 @@ pub fn parse_cmake_projects(workspace_root: &Path) -> CMakeData {
     for result in WalkBuilder::new(workspace_root)
         .hidden(true)
         .git_ignore(true)
-        .filter_entry(|e| !is_ignored(e))
+        .filter_entry(|e| !is_ignored(e, false))
         .build()
     {
         if let Ok(entry) = result {
