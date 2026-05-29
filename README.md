@@ -21,12 +21,12 @@ Developers working on large, unfamiliar, or legacy codebases have no fast way to
 
 Dataflow Visualiser turns your local codebase into a **live, interactive dependency graph** — then lets you simulate structural changes and instantly see the propagation path before a single line of code is touched.
 
-- **Native-speed AST parsing** via `oxc-parser` in Rust — scans thousands of files per second without blocking the main thread
-- **Interactive spatial canvas** — force-directed graph with directory-based clustering, dynamic edge weight/opacity scaled to import frequency
-- **Blast-radius simulation** — select any node, simulate a refactor, and watch the downstream impact color-code from Deep Red (immediate breaking risk) to Light Orange (type adjustment required)
-- **Privacy-first AI** — toggle between fully offline Ollama (zero data leaves your machine) and Anthropic Cloud for deep architectural analysis
-- **Smart edge routing** — dynamic handle selection (top/bottom/left/right) post-Dagre layout for clean bezier curves with no looping artifacts
-- **Data flow directionality** — blue edges for incoming data, green for outgoing, with matching arrowheads
+- **Native-speed AST parsing** via `oxc-parser` in Rust — scans thousands of files per second without blocking the main thread.
+- **Interactive spatial canvas** — force-directed graph in both 2D and 3D with directory-based clustering, dynamic edge weight/opacity scaled to import frequency.
+- **Blast-radius simulation** — select any node, simulate a refactor, and watch the downstream impact color-code from Deep Red (immediate breaking risk) to Light Orange (type adjustment required).
+- **AI-Powered Code Mapping** — integrates with the Google Gemini API to automatically group files into semantic domains and generate concise descriptions.
+- **Smart edge routing** — dynamic handle selection (top/bottom/left/right) post-Dagre layout for clean bezier curves with no looping artifacts.
+- **Data flow directionality** — blue edges for incoming data, green for outgoing, with matching arrowheads.
 
 ---
 
@@ -41,8 +41,7 @@ The application is strictly separated into a sandboxed UI layer and a native sys
 | **Backend** | Rust + Tauri v2 | File system I/O, AST parsing, AI orchestration |
 | **Graph Layout** | `@xyflow/react` + `dagre` | Node/edge rendering and hierarchical layout |
 | **Parsing** | `oxc-parser` (Rust) | Ultra-fast JS/TS AST tokenizing |
-| **AI — Local** | Ollama | Fully offline, privacy-compliant analysis |
-| **AI — Cloud** | Anthropic API | Deep macro-architectural refactoring assessments |
+| **AI Engine** | Google Gemini API | Dynamic semantic domain grouping & file descriptions |
 
 ### Data Flow
 
@@ -57,7 +56,7 @@ User selects node → blast-radius traversal runs downstream DFS
        ↓
 AI analysis request → Rust formulates prompt with local code context
        ↓
-Ollama (local) or Anthropic (cloud) → response streamed back to UI
+Google Gemini API → response returned to frontend to enrich graph
 ```
 
 ---
@@ -113,7 +112,7 @@ Dataflow-Visualiser/
 │   │       ├── SourceControlPanel.tsx
 │   │       └── ...               # Other layout components
 │   ├── types.ts                  # Shared TypeScript interfaces
-│   ├── App.tsx                   # Root composition (~235 lines)
+│   ├── App.tsx                   # Root composition
 │   └── utils/                    # Pure utility functions
 │       ├── layout.ts             # Dagre + external dep placement
 │       ├── cycleDetection.ts     # Circular dependency DFS
@@ -131,12 +130,13 @@ Dataflow-Visualiser/
 - **Python, Rust, Dart, C, & C++**: Leverages `tree-sitter` for rapid dependency extraction across primary backend, mobile, and embedded languages. Supports smart resolution of `pubspec.yaml`, Rust module hierarchies, and complex `#include` parsing for embedded frameworks like ESP-IDF.
 
 ### Interactive Spatial Canvas
-- Directory-based bounding box clustering — files grouped visually by folder hierarchy
+- **Directory-Based Bounding Box Clustering** — files grouped visually by folder hierarchy.
+- **WebGL-Powered 3D Canvas** — switch seamlessly to a fully interactive 3D force-directed node web for complete spatial exploration.
 - **Next.js Architecture Awareness** — automatically infers implicit routing dependencies (connecting `layout.tsx` to nested `page.tsx`) and collapses noisy API routes to clean up the graph.
-- **Contextual Node Actions** — right-click any node to instantly open the file in your default IDE or delete it from the codebase.
-- Edge weight and opacity scaled to actual import frequency from AST data
-- Smart dynamic handle routing — post-Dagre layout resolves bezier handle direction per edge
-- Color-coded directionality — blue (incoming), green (outgoing) with matching arrowheads
+- **Contextual Node Actions** — right-click any node to instantly open the file in your preferred editor or delete it from the codebase.
+- **Edge Weight & Opacity** — scaled to actual import frequency from AST data.
+- **Smart Dynamic Handle Routing** — post-Dagre layout resolves bezier handle direction per edge to eliminate crossing lines.
+- **Color-Coded Directionality** — blue (incoming), green (outgoing) with matching arrowheads.
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
@@ -152,6 +152,33 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
 - **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
 
+### Interactive Command Palette
+Press **`Ctrl+K`** (or **`Cmd+K`** on macOS) at any time to open the global **Command Palette** overlay. Fully keyboard-driven, it lets you:
+- Quickly switch projects/directories.
+- Toggle between **Dark Mode** and **Light Mode**.
+- Toggle layout overlays like the **Minimap** or **External Dependencies**.
+- Instantly filter the canvas to isolate the **UI Layer**, the **Backend Layer**, or view **Overall**.
+- Open Settings and configure integrations.
+
+### Deep IDE Integration
+Configure your preferred development tool in the settings panel to quickly open any file with a right-click. Supported IDEs include:
+- **VS Code** (`code`)
+- **Cursor** (`cursor`)
+- **IntelliJ IDEA** (`idea`)
+- **WebStorm** (`webstorm`)
+- **Neovim** (`nvim`)
+
+### Recent Projects Dashboard
+Never lose your place. The home screen features a chronological list of recent workspaces, displaying project names and parent folders for easy, single-click restoration of your layout.
+
+### Beautiful Dual-Theme Engine
+Crafted with a sleek, dark micro-IDE aesthetic by default. Features complete support for a crisp, high-contrast **Light Mode** that shifts all canvas components, headers, panels, and borders to light styling without sacrificing design premiumness.
+
+### Google Gemini AI Engine
+- **Dynamic Model Discovery** — input your Gemini API Key to dynamically fetch available generative models directly from Google's endpoint (including `gemini-1.5-flash`).
+- **Connection Testing** — built-in API connectivity test and feedback to quickly verify your credentials.
+- **Automated Summary & Domain Mapping** — once enabled, the backend reads file context in chunks to assign descriptive semantic domains and precise 1-2 sentence explanations, rendering them directly in the inspector panels.
+
 ### Native OS Security & Capabilities
 - **Strict Capability Auditing** — Rust backend operations explicitly enforce the Tauri `fs_scope()`. Even when circumventing frontend layers, the execution sandbox rejects access to files not explicitly authorized by the native OS directory picker.
 
@@ -163,11 +190,6 @@ Select any node and simulate a structural change. The engine traces dependencies
 ### Integrated PTY Terminal
 - Built-in, resizable interactive terminal powered by `portable-pty`.
 - Run commands, start dev servers, or use standard CLI tools in the same window as your graph.
-
-### Privacy-First AI Toggle
-- **Ollama mode** — fully air-gapped, all analysis on-machine. Zero proprietary code leaves the device. Suitable for enterprise, fintech, and defence environments
-- **Anthropic Cloud mode** — deep macro-architectural analysis for complex refactoring decisions
-- Single toggle, shared prompt interface, swappable transport
 
 ---
 
@@ -185,10 +207,10 @@ Dataflow Visualiser is designed to be language and framework agnostic, but inclu
 ## Tech Stack
 
 - **Frontend**: React 19, TypeScript, Vite, TailwindCSS 4
-- **Graph**: `@xyflow/react` v12, `dagre`
+- **Graph**: `@xyflow/react` v12, `dagre`, WebGL / Three.js
 - **Backend**: Rust, Tauri v2
 - **Parsing**: `oxc-parser`
-- **AI**: Ollama (local), Anthropic API (cloud)
+- **AI**: Google Gemini API (with dynamic model list retrieval)
 
 ---
 
@@ -241,8 +263,13 @@ npm run tauri build
 - [x] Component prop tracing across React/JSX hierarchies
 - [x] Snapshot diffing and version drifting visualization
 - [x] Symbol-level drill-down inside file nodes
+- [x] Google Gemini AI integration, dynamic model fetching, and settings connection
+- [x] Resizable bottom pane shell with tab routing and matrix visualization
+- [x] Global keyboard-driven Command Palette (`Ctrl+K`)
+- [x] Configurable IDE editor launcher in settings (VS Code, Cursor, WebStorm, IntelliJ, Neovim)
+- [x] Light Mode and Dark Mode support
+- [x] Welcome dashboard with Recent Projects listing
 - [ ] Persistent node layout across sessions
-- [ ] Ollama + Anthropic AI panel UI
 - [ ] `git2` crate — file churn overlay (volatility heatmap on nodes)
 - [ ] PNG canvas export
 - [ ] JSON dependency graph export for CI diffing
@@ -266,3 +293,5 @@ Dataflow Visualiser is the only tool that combines **native-speed local parsing*
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+
