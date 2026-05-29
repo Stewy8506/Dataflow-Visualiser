@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Save, History, SplitSquareHorizontal, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 

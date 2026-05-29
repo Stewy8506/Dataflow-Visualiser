@@ -1,12 +1,14 @@
 pub mod cmake;
 pub mod cpp;
 pub mod dart;
+pub mod graph_builder;
 pub mod javascript;
 pub mod nextjs;
 pub mod python;
 pub mod rust;
 pub mod props;
 pub mod tree_sitter_utils;
+pub mod unused_exports;
 pub mod utils;
 
 use ignore::WalkBuilder;
@@ -21,11 +23,11 @@ use tauri_plugin_fs::FsExt;
 use cpp::{CPP_PARSER, C_PARSER};
 use dart::DART_PARSER;
 use javascript::extract_javascript_imports;
-use nextjs::resolve_nextjs_edges;
+
 use python::PYTHON_PARSER;
 use rust::RUST_PARSER;
 use tree_sitter_utils::extract_imports_with_parser;
-use utils::{is_ignored, resolve_import_path};
+use utils::is_ignored;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct NodeMetrics {
@@ -55,6 +57,18 @@ pub struct ParsedEdge {
     pub target: String,
     pub via: Option<String>,
     pub is_data_source: bool,
+}
+
+pub struct FileData {
+    pub id: String,
+    pub path: PathBuf,
+    pub imports: Vec<(String, bool)>,
+    pub api_calls: Vec<String>,
+    pub api_endpoints: Vec<String>,
+    pub exported_symbols: Vec<String>,
+    pub import_specifiers: Vec<(String, String)>,
+    pub is_barrel_file: bool,
+    pub is_router: bool,
 }
 
 pub struct AliasResolver {
@@ -215,8 +229,6 @@ pub struct GraphData {
 #[tauri::command]
 pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<GraphData, String> {
     let mut nodes = Vec::new();
-    let mut edges = Vec::new();
-
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
         return Err("Path does not exist".to_string());
@@ -305,18 +317,6 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
             unused_exports: Vec::new(),
             metrics: None,
         });
-    }
-
-    struct FileData {
-        id: String,
-        path: PathBuf,
-        imports: Vec<(String, bool)>,
-        api_calls: Vec<String>,
-        api_endpoints: Vec<String>,
-        exported_symbols: Vec<String>,
-        import_specifiers: Vec<(String, String)>,
-        is_barrel_file: bool,
-        is_router: bool,
     }
 
     let mut files_data = Vec::new();
@@ -484,275 +484,18 @@ pub async fn parse_codebase(app: tauri::AppHandle, path: String) -> Result<Graph
         .map(|(i, n)| (n.id.to_lowercase(), i))
         .collect();
 
-    let mut header_index = HashMap::new();
-    for n in &nodes {
-        if n.group == "h" || n.group == "hpp" || n.group == "hxx" {
-            let file_name = Path::new(&n.id)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            header_index.insert(file_name, n.id.clone());
-        }
-    }
-
     let cmake_data = cmake::parse_cmake_projects(path_ref);
 
-    for file_data in &files_data {
-        for import_str in &file_data.imports {
-            let mut target_id = None;
-
-            if let Some(idx) = resolve_import_path(
-                &file_data.path,
-                path_ref,
-                &import_str.0,
-                package_name.as_deref(),
-                &node_index,
-                &nodes,
-                &alias_resolver,
-            ) {
-                target_id = Some(nodes[idx].id.clone());
-            } else if import_str.0.ends_with(".h") || import_str.0.ends_with(".hpp") {
-                let file_name = Path::new(&import_str.0)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-
-                let mut resolved_header_id = None;
-
-                let mut search_dir = file_data.path.parent();
-                while let Some(dir) = search_dir {
-                    if let Some(inc_dirs) = cmake_data.include_dirs.get(dir) {
-                        for inc in inc_dirs {
-                            let possible_path = dir.join(inc).join(&import_str.0);
-                            let possible_id = possible_path.to_string_lossy().replace('\\', "/");
-                            if node_index.contains_key(&possible_id.to_lowercase()) {
-                                resolved_header_id = Some(possible_id);
-                                break;
-                            }
-                        }
-                    }
-                    if resolved_header_id.is_some() || dir == path_ref {
-                        break;
-                    }
-                    search_dir = dir.parent();
-                }
-
-                if resolved_header_id.is_none() {
-                    if let Some(header_id) = header_index.get(&file_name) {
-                        resolved_header_id = Some(header_id.clone());
-                    }
-                }
-
-                if let Some(header_id) = resolved_header_id {
-                    target_id = Some(header_id);
-                }
-            }
-
-            if target_id.is_none() {
-                let base_pkg = import_str.0.split('/').next().unwrap_or(&import_str.0);
-                let scoped_pkg = if import_str.0.starts_with('@') {
-                    import_str.0.split('/').take(2).collect::<Vec<_>>().join("/")
-                } else {
-                    base_pkg.to_string()
-                };
-
-                let pkg_to_check = if import_str.0.starts_with('@') { scoped_pkg } else { base_pkg.to_string() };
-
-                if ext_deps.contains(&pkg_to_check) {
-                    target_id = Some(format!("ext:{}", pkg_to_check));
-                }
-            }
-
-            if let Some(target) = target_id {
-                let mut source_node = file_data.id.clone();
-                let mut target_node = target.clone();
-
-                let is_c_cpp = source_node.ends_with(".c")
-                    || source_node.ends_with(".cpp")
-                    || source_node.ends_with(".cc")
-                    || source_node.ends_with(".cxx");
-                    
-                let is_main = source_node.ends_with("main.c")
-                    || source_node.ends_with("main.cpp")
-                    || source_node.ends_with("app_main.c");
-
-                if is_c_cpp && !is_main {
-                    source_node = target;
-                    target_node = file_data.id.clone();
-                }
-
-                edges.push(ParsedEdge {
-                    source: source_node,
-                    target: target_node,
-                    via: None,
-                    is_data_source: import_str.1,
-                });
-            }
-        }
-    }
-
-    let url_base_re = Regex::new(r#"^https?://[^/]+"#).unwrap();
-    let param_re = Regex::new(r#"\{[^}]+\}|<[^>]+>|:[^/]+"#).unwrap();
-
-    for frontend_file in &files_data {
-        for api_call in &frontend_file.api_calls {
-            let clean_api = url_base_re.replace(api_call, "");
-            let clean_api = clean_api.split('?').next().unwrap_or(&clean_api);
-
-            for backend_file in &files_data {
-                for endpoint in &backend_file.api_endpoints {
-                    let endpoint_pattern = param_re.replace_all(endpoint, "[^/]+");
-                    let endpoint_regex_str = format!("(?i){}$", endpoint_pattern.replace("?", "\\?"));
-                    
-                    let matched = if let Ok(re) = Regex::new(&endpoint_regex_str) {
-                        re.is_match(clean_api)
-                    } else {
-                        clean_api.contains(endpoint) || endpoint.contains(clean_api)
-                    };
-
-                    if matched {
-                        edges.push(ParsedEdge {
-                            source: frontend_file.id.clone(),
-                            target: backend_file.id.clone(),
-                            via: Some("API Call".to_string()),
-                            is_data_source: true,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    for (cmake_dir, deps) in &cmake_data.component_deps {
-        let cmake_dir_str = cmake_dir.to_string_lossy().replace('\\', "/");
-        let comp_nodes: Vec<_> = nodes
-            .iter()
-            .filter(|n| n.id.starts_with(&cmake_dir_str))
-            .collect();
-        if let Some(main_node) = comp_nodes.first() {
-            for dep in deps {
-                if let Some(dep_node) = nodes.iter().find(|n| n.id.contains(dep)) {
-                    edges.push(ParsedEdge {
-                        source: main_node.id.clone(),
-                        target: dep_node.id.clone(),
-                        via: Some(format!("CMake Requires {}", dep)),
-                        is_data_source: false,
-                    });
-                }
-            }
-        }
-    }
-
-    resolve_nextjs_edges(&nodes, &mut edges);
-
-    let barrel_ids: Vec<String> = files_data
-        .iter()
-        .filter(|f| f.is_barrel_file)
-        .map(|f| f.id.clone())
-        .collect();
-
-    let router_ids: Vec<String> = files_data
-        .iter()
-        .filter(|f| {
-            let is_api_route =
-                f.id.contains("/api/") || f.id.contains("route.ts") || f.id.contains("route.js");
-            f.is_router || is_api_route
-        })
-        .map(|f| f.id.clone())
-        .collect();
-
-    let mut ids_to_bypass = barrel_ids.clone();
-    ids_to_bypass.extend(router_ids.clone());
-
-    let mut final_edges = edges;
-
-    for bypass_id in &ids_to_bypass {
-        let incoming: Vec<ParsedEdge> = final_edges
-            .iter()
-            .filter(|e| e.target == *bypass_id)
-            .cloned()
-            .collect();
-
-        let outgoing: Vec<ParsedEdge> = final_edges
-            .iter()
-            .filter(|e| e.source == *bypass_id)
-            .cloned()
-            .collect();
-
-        for inc in &incoming {
-            for out in &outgoing {
-                if inc.source != out.target {
-                    let mut new_via = inc.via.clone();
-                    let proxy_filename = Path::new(bypass_id)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
-
-                    if new_via.is_none() {
-                        new_via = Some(proxy_filename);
-                    } else {
-                        new_via = Some(format!("{}, {}", new_via.unwrap(), proxy_filename));
-                    }
-
-                    final_edges.push(ParsedEdge {
-                        source: inc.source.clone(),
-                        target: out.target.clone(),
-                        via: new_via,
-                        is_data_source: inc.is_data_source || out.is_data_source,
-                    });
-                }
-            }
-        }
-
-        final_edges.retain(|e| e.source != *bypass_id && e.target != *bypass_id);
-    }
-
-    let mut all_imported_specifiers = std::collections::HashSet::new();
-    for file_data in &files_data {
-        for (source_import, specifier) in &file_data.import_specifiers {
-            if let Some(idx) = resolve_import_path(
-                &file_data.path,
-                path_ref,
-                source_import,
-                package_name.as_deref(),
-                &node_index,
-                &nodes,
-                &alias_resolver,
-            ) {
-                let target_id = &nodes[idx].id;
-                all_imported_specifiers.insert(format!("{}::{}", target_id, specifier));
-            }
-        }
-    }
-
-    let final_nodes: Vec<ParsedNode> = nodes
-        .into_iter()
-        .filter(|n| !ids_to_bypass.contains(&n.id))
-        .map(|mut n| {
-            if let Some(file_data) = files_data.iter().find(|f| f.id == n.id) {
-                for export in &file_data.exported_symbols {
-                    if export != "*" && !all_imported_specifiers.contains(&format!("{}::{}", n.id, export)) {
-                        // For default exports, we might not want to flag if they are used via wildcard or something,
-                        // but let's flag them if strictly no 'default' is imported.
-                        // Actually, if a barrel file exports everything `export * from './a'`, we might miss it.
-                        // We will ignore `default` for now to avoid false positives in Next.js pages.
-                        if export != "default" {
-                            n.unused_exports.push(export.clone());
-                        }
-                    }
-                }
-            }
-            n
-        })
-        .collect();
-
-    Ok(GraphData {
-        nodes: final_nodes,
-        edges: final_edges,
-    })
+    Ok(graph_builder::build_graph(
+        &files_data,
+        nodes,
+        path_ref,
+        package_name.as_deref(),
+        &node_index,
+        &alias_resolver,
+        &cmake_data,
+        &ext_deps,
+    ))
 }
 
 #[derive(Serialize, Clone)]

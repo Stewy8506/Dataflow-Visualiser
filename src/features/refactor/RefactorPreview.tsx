@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X, Search, FileEdit, ArrowRight, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Search, FileEdit, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface RefactorMatch {
   line: number;
@@ -63,7 +63,7 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
   }, []);
 
   const toggleFile = (path: string) => {
-    setExpandedFiles(prev => {
+    setExpandedFiles((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -186,7 +186,7 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {impact.affected_files.map((file, i) => (
+                      {impact.affected_files.map((file: any, i: number) => (
                         <div key={i} className="bg-surface border border-border rounded-lg overflow-hidden">
                           {/* File Header */}
                           <div 
@@ -207,7 +207,7 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                           {/* File Details (Matches) */}
                           {expandedFiles.has(file.path) && (
                             <div className="border-t border-border-subtle bg-background/50 p-3 space-y-2">
-                              {file.matches.map((match, j) => (
+                              {file.matches.map((match: any, j: number) => (
                                 <div key={j} className="flex items-start gap-3 text-xs">
                                   <div className="w-8 text-right text-text-dim shrink-0 font-mono mt-0.5 select-none">{match.line}</div>
                                   <div className="flex-1 font-mono text-text-muted bg-surface-raised px-2 py-1.5 rounded overflow-x-auto whitespace-pre">

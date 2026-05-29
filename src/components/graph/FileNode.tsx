@@ -67,7 +67,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
           style={{ background: data.isDeadCode ? '#450a0a' : 'var(--color-surface)' }}
         >
           <Package size={14} style={{ color: data.isDeadCode ? '#ef4444' : accent.color }} />
-          <span className={`text-[11px] font-bold tracking-wide truncate max-w-[150px] ${data.isDeadCode ? 'text-red-400 line-through' : 'text-text-main'}`}>
+          <span className={`text-[11px] font-bold tracking-wide truncate max-w-[250px] ${data.isDeadCode ? 'text-red-400 line-through' : 'text-text-main'}`}>
             {data.label}
           </span>
           {data.isDeadCode && (

@@ -66,26 +66,60 @@ Ollama (local) or Anthropic (cloud) → response streamed back to UI
 
 ```text
 Dataflow-Visualiser/
-├── src-tauri/             # Rust Backend Engine
+├── src-tauri/                    # Rust Backend Engine
 │   ├── src/
-│   │   ├── ai.rs          # Gemini AI integration for blast-radius & semantic grouping
-│   │   ├── commands.rs    # Basic utility commands (delete, open in IDE)
-│   │   ├── git.rs         # Git operations (history, diffs, staging, commits)
-│   │   ├── lib.rs         # Tauri application setup and command registration
-│   │   ├── parser.rs      # AST parsing, monorepo alias resolution, and edge building
-│   │   ├── pty.rs         # Interactive terminal integration via portable-pty
-│   │   └── state.rs       # Shared application state
-│   ├── Cargo.toml         # Rust dependencies
-│   └── build.rs           # Tauri build script
-├── src/                   # React Frontend
-│   ├── components/        # UI components
-│   │   ├── graph/         # Nodes, edges, controls, and mini-map
-│   │   ├── layout/        # Main panels (Terminal, Source Control, Sidebars)
-│   │   └── ...            # Other shared UI elements
-│   ├── App.tsx            # Main application layout and state management
-│   └── main.tsx           # React DOM render entry
-├── package.json           # Node.js dependencies and scripts
-└── vite.config.ts         # Vite build configuration
+│   │   ├── ai.rs                 # Gemini AI integration for blast-radius & semantic grouping
+│   │   ├── commands.rs           # Basic utility commands (delete, open in IDE)
+│   │   ├── git.rs                # Git operations (history, diffs, staging, commits)
+│   │   ├── lib.rs                # Tauri application setup and command registration
+│   │   ├── pty.rs                # Interactive terminal integration via portable-pty
+│   │   ├── refactor.rs           # Refactor impact preview
+│   │   ├── snapshots.rs          # Snapshot save, list, and diff
+│   │   ├── state.rs              # Shared application state
+│   │   └── parser/               # AST parsing engine
+│   │       ├── mod.rs            # Orchestration: file walking & dispatch
+│   │       ├── graph_builder.rs  # Edge resolution, barrel flattening, CMake & API wiring
+│   │       ├── unused_exports.rs # Unused export annotation
+│   │       ├── javascript.rs     # oxc-parser JS/TS ingestion + dynamic import/require
+│   │       ├── nextjs.rs         # Next.js routing & layout implicit edges
+│   │       ├── python.rs         # Python import extraction
+│   │       ├── rust.rs           # Rust module resolution
+│   │       ├── dart.rs           # Dart package resolution
+│   │       ├── cmake.rs          # CMake component dependency parsing
+│   │       ├── cpp.rs            # C/C++ include extraction
+│   │       ├── props.rs          # React prop trace command
+│   │       ├── tree_sitter_utils.rs # tree-sitter helpers
+│   │       └── utils.rs          # Import path resolution & alias handling
+│   ├── Cargo.toml                # Rust dependencies
+│   └── build.rs                  # Tauri build script
+├── src/                          # React Frontend
+│   ├── hooks/                    # Business logic hooks
+│   │   ├── useSettings.ts        # API key, theme, IDE settings persistence
+│   │   ├── useProjectLoader.ts   # Directory selection, parsing, AI enrichment, watchers
+│   │   └── useGraphLayout.ts     # Dagre layout computation & AI enrichment merge
+│   ├── components/
+│   │   ├── graph/                # Canvas nodes and edges
+│   │   │   ├── FileNode.tsx      # File + external dependency node renderer
+│   │   │   ├── ReactFlowGraph.tsx# 2D flow canvas
+│   │   │   ├── ThreeDGraph.tsx   # 3D force-directed canvas
+│   │   │   └── ...               # Legend, layout controls
+│   │   └── layout/               # IDE chrome
+│   │       ├── panels/           # BottomPanel sub-panels
+│   │       │   ├── InspectorPanel.tsx  # Node metadata, prop tracer, dependency list
+│   │       │   └── MatrixPanel.tsx     # Adjacency matrix view
+│   │       ├── BottomPanel.tsx   # Resizable panel shell with tab routing
+│   │       ├── Header.tsx        # Top toolbar (view mode, layers, toggles)
+│   │       ├── SettingsModal.tsx # API key, model, IDE configuration
+│   │       ├── SourceControlPanel.tsx
+│   │       └── ...               # Other layout components
+│   ├── types.ts                  # Shared TypeScript interfaces
+│   ├── App.tsx                   # Root composition (~235 lines)
+│   └── utils/                    # Pure utility functions
+│       ├── layout.ts             # Dagre + external dep placement
+│       ├── cycleDetection.ts     # Circular dependency DFS
+│       └── blastRadius.ts        # Blast radius traversal
+├── package.json                  # Node.js dependencies and scripts
+└── vite.config.ts                # Vite build configuration
 ```
 
 ---
