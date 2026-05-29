@@ -12,6 +12,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
 import { LayoutController } from './LayoutController';
+import { GraphLegend } from './GraphLegend';
 import { calculateBlastRadius } from '../../utils/blastRadius';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -170,6 +171,7 @@ function ReactFlowInner({
 
       return {
         ...edge,
+        animated: isConnected,
         style: {
           ...edge.style,
           opacity: noActiveNode ? 0.6 : (isConnected ? 0.9 : 0.04),
@@ -177,7 +179,6 @@ function ReactFlowInner({
           stroke: strokeColor,
         },
         markerEnd,
-        animated: isDirectlyConnected && !!blastRadius,
       };
     });
   }, [initialEdges, blastRadius, activeNodeId, isLightMode]);
@@ -244,6 +245,7 @@ function ReactFlowInner({
         direction={direction}
         setDirection={setDirection}
       />
+      <GraphLegend />
     </div>
   );
 }

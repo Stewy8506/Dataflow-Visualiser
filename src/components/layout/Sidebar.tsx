@@ -37,8 +37,8 @@ function NavItem({ icon, label, active, disabled, onClick }: NavItemProps) {
 }
 
 interface SidebarProps {
-  activeTab: 'network' | 'source-control';
-  setActiveTab: (tab: 'network' | 'source-control') => void;
+  activeTab: 'network' | 'source-control' | 'explorer';
+  setActiveTab: (tab: 'network' | 'source-control' | 'explorer') => void;
 }
 
 export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
@@ -75,7 +75,12 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           active={activeTab === 'source-control'} 
           onClick={() => setActiveTab('source-control')} 
         />
-        <NavItem icon={<FolderGit2 size={18} />} label="Explorer" disabled />
+        <NavItem 
+          icon={<FolderGit2 size={18} />} 
+          label="Explorer" 
+          active={activeTab === 'explorer'}
+          onClick={() => setActiveTab('explorer')}
+        />
         <NavItem icon={<GitBranch size={18} />} label="Branches" disabled />
         <NavItem icon={<Settings size={18} />} label="Settings" disabled />
       </div>

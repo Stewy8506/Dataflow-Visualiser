@@ -1,4 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon, Map } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Sparkles, Sun, Moon, Map, FolderOpen } from 'lucide-react';
 
 export type GraphLayer = 'ui' | 'backend' | 'overall';
 
@@ -8,13 +8,14 @@ interface HeaderProps {
   activeLayer: GraphLayer;
   onLayerChange: (layer: GraphLayer) => void;
   onSettingsClick?: () => void;
+  onChangeDirectory?: () => void;
   isLightMode: boolean;
   setIsLightMode: (val: boolean) => void;
   showMiniMap?: boolean;
   setShowMiniMap?: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap }: HeaderProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
@@ -81,6 +82,16 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
       </div>
 
       <div className="flex items-center gap-1">
+        {/* Change Directory */}
+        {onChangeDirectory && (
+          <button
+            onClick={onChangeDirectory}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-text-dim hover:text-text-main hover:bg-glass-light transition-all duration-200 cursor-pointer"
+            title="Change Project Directory"
+          >
+            <FolderOpen size={16} />
+          </button>
+        )}
         {/* Map Toggle */}
         {viewMode === '2d' && setShowMiniMap && (
           <button

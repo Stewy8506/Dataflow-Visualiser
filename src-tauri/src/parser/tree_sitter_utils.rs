@@ -15,6 +15,13 @@ pub fn extract_imports_with_parser(
                 api_endpoints.push(route.as_str().to_string());
             }
         }
+    } else if ext == "rs" {
+        let tauri_cmd_re = Regex::new(r#"#\[tauri::command\]\s*(?:async\s+)?fn\s+([a-zA-Z0-9_]+)"#).unwrap();
+        for cap in tauri_cmd_re.captures_iter(source_text) {
+            if let Some(cmd) = cap.get(1) {
+                api_endpoints.push(cmd.as_str().to_string());
+            }
+        }
     }
 
     if let Some(tree) = parser.parse(source_text, None) {
@@ -29,6 +36,14 @@ pub fn extract_imports_with_parser(
                 target_node = Some(node);
             } else if ext == "rs" && kind == "use_declaration" {
                 target_node = Some(node);
+            } else if ext == "rs" && kind == "mod_item" {
+                if let Ok(text) = node.utf8_text(source_text.as_bytes()) {
+                    let clean = text.replace("pub mod ", "").replace("mod ", "").replace(';', "").trim().to_string();
+                    imports.push((format!("./{}", clean), false));
+                }
+                if cursor.goto_first_child() {
+                    continue;
+                }
             } else if ext == "dart" && kind == "import_or_export" {
                 target_node = Some(node);
             } else if matches!(ext, "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx")

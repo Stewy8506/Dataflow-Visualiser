@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronUp, Minus, X, Terminal as TerminalIcon, Search, Grid3x3, ExternalLink } from 'lucide-react';
+import { ChevronUp, Minus, X, Terminal as TerminalIcon, Search, Grid3x3, ExternalLink, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Terminal } from './Terminal';
 
@@ -8,9 +8,10 @@ interface BottomPanelProps {
   logs: string[];
   preferredIde: string;
   workspacePath: string | null;
+  edges?: any[];
 }
 
-export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }: BottomPanelProps) {
+export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath, edges = [] }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'console' | 'terminal' | 'matrix'>('inspector');
   const [shell, setShell] = useState('powershell.exe');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -53,8 +54,8 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }:
   }, [panelHeight]);
 
   const tabs = [
-    { id: 'inspector' as const, label: 'Inspector', icon: Search },
-    { id: 'console' as const, label: 'Output Logs', icon: TerminalIcon },
+    { id: 'inspector' as const, label: 'Inspector', icon: Search, badge: selectedNode?.data?.label },
+    { id: 'console' as const, label: 'Output Logs', icon: TerminalIcon, badge: logs.length > 0 ? logs.length : undefined },
     { id: 'terminal' as const, label: 'Terminal', icon: TerminalIcon },
     { id: 'matrix' as const, label: 'Matrix', icon: Grid3x3 },
   ];
@@ -103,6 +104,13 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }:
               >
                 <Icon size={12} />
                 <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono leading-none ${
+                    activeTab === tab.id ? 'bg-blue-500/20 text-blue-400' : 'bg-surface border border-border text-text-muted'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -179,6 +187,59 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }:
                       <p className="text-[11px] text-text-muted leading-relaxed">{selectedNode.data.summary}</p>
                     </div>
                   )}
+
+                  {/* Dependencies & Dependents */}
+                  {edges.length > 0 && selectedNode && (() => {
+                    const nodeId = selectedNode.id;
+                    // originalSource is the importer, originalTarget is the imported
+                    const dependencies = edges
+                      .filter(e => e.data?.originalSource === nodeId)
+                      .map(e => e.data?.originalTarget)
+                      .filter(Boolean) as string[];
+                    const dependents = edges
+                      .filter(e => e.data?.originalTarget === nodeId)
+                      .map(e => e.data?.originalSource)
+                      .filter(Boolean) as string[];
+
+                    return (
+                      <>
+                        {dependencies.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-border-subtle">
+                            <span className="text-[10px] text-text-dim uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                              <ArrowUpRight size={10} /> Dependencies ({dependencies.length})
+                            </span>
+                            <div className="space-y-0.5">
+                              {dependencies.map((dep, i) => {
+                                const name = dep.split('/').pop() || dep;
+                                return (
+                                  <div key={i} className="text-[10px] text-text-muted font-mono truncate py-0.5">
+                                    {name}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {dependents.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-border-subtle">
+                            <span className="text-[10px] text-text-dim uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                              <ArrowDownLeft size={10} /> Dependents ({dependents.length})
+                            </span>
+                            <div className="space-y-0.5">
+                              {dependents.map((dep, i) => {
+                                const name = dep.split('/').pop() || dep;
+                                return (
+                                  <div key={i} className="text-[10px] text-text-muted font-mono truncate py-0.5">
+                                    {name}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-xs text-text-dim italic">
@@ -240,10 +301,60 @@ export function BottomPanel({ selectedNode, logs, preferredIde, workspacePath }:
         )}
 
         {activeTab === 'matrix' && (
-          <div className="flex-1 p-6 flex flex-col items-center justify-center gap-3">
-            <Grid3x3 size={32} className="text-text-dim/30" />
-            <p className="text-sm text-text-dim font-medium">Dependency Matrix</p>
-            <p className="text-xs text-text-dim/60">Coming soon.</p>
+          <div className="flex-1 overflow-auto p-4 bg-background">
+            {edges.length > 0 ? (() => {
+              const nodes = Array.from(new Set(edges.flatMap(e => [e.data?.originalSource || e.source, e.data?.originalTarget || e.target]).filter(Boolean))).slice(0, 30);
+              
+              if (nodes.length === 0) return <div className="text-text-dim text-xs">No dependencies found.</div>;
+
+              return (
+                <div className="inline-block">
+                  <div className="flex mb-1">
+                    <div className="w-32 shrink-0"></div>
+                    {nodes.map(n => {
+                      const name = n.split('/').pop() || n;
+                      return (
+                        <div key={n} className="w-5 text-[8px] text-text-dim rotate-45 origin-bottom-left whitespace-nowrap truncate" title={n}>
+                          {name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {nodes.map(rowNode => {
+                    const rowName = rowNode.split('/').pop() || rowNode;
+                    return (
+                      <div key={rowNode} className="flex items-center gap-1 mb-1">
+                        <div className="w-32 text-[10px] text-text-dim truncate text-right pr-2" title={rowNode}>
+                          {rowName}
+                        </div>
+                        {nodes.map(colNode => {
+                          const hasEdge = edges.some(e => 
+                            (e.data?.originalSource === rowNode && e.data?.originalTarget === colNode) ||
+                            (e.source === rowNode && e.target === colNode)
+                          );
+                          return (
+                            <div 
+                              key={`${rowNode}-${colNode}`} 
+                              className={`w-4 h-4 rounded-sm ${hasEdge ? 'bg-blue-500' : 'bg-surface-raised'} hover:bg-blue-400 transition-colors cursor-pointer`}
+                              title={`${rowName} → ${colNode.split('/').pop() || colNode}`}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                  <div className="mt-4 text-[10px] text-text-dim">
+                    Showing top {nodes.length} nodes (Rows: Importer, Columns: Imported)
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <Grid3x3 size={32} className="text-text-dim/30" />
+                <p className="text-sm text-text-dim font-medium">No Data</p>
+                <p className="text-xs text-text-dim/60">Load a project to see the dependency matrix.</p>
+              </div>
+            )}
           </div>
         )}
       </div>

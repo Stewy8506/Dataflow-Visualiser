@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, Sparkles, X, Eye, EyeOff, RefreshCw, Zap } from "lucide-react";
+import { FolderOpen, Sparkles, X, Eye, EyeOff, RefreshCw, Zap, Clock, FolderGit2 } from "lucide-react";
 import "./App.css";
 import { load } from '@tauri-apps/plugin-store';
 
@@ -12,6 +12,9 @@ import { Header, GraphLayer } from "./components/layout/Header";
 import { BottomPanel } from "./components/layout/BottomPanel";
 import { SearchBar } from "./components/layout/SearchBar";
 import { SourceControlPanel } from "./components/layout/SourceControlPanel";
+import { WorkspaceBreadcrumb } from "./components/layout/WorkspaceBreadcrumb";
+import { CommandPalette } from "./components/layout/CommandPalette";
+import { ExplorerPanel } from "./components/layout/ExplorerPanel";
 import { ReactFlowGraph } from "./components/graph/ReactFlowGraph";
 import { ThreeDGraph } from "./components/graph/ThreeDGraph";
 import { getLayoutedElements } from "./utils/layout";
@@ -197,19 +200,18 @@ function SettingsModal({ apiKey, setApiKey, selectedModel, setSelectedModel, ena
               <button
                 onClick={handleTestConnection}
                 disabled={testStatus === 'testing'}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border ${
-                  testStatus === 'success'
+                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border ${testStatus === 'success'
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                     : testStatus === 'error'
                       ? 'bg-red-500/10 border-red-500/30 text-red-400'
                       : 'bg-surface-raised border-border hover:border-blue-500/30 text-text-muted hover:text-text-main'
-                }`}
+                  }`}
               >
                 <Zap size={14} />
                 {testStatus === 'testing' ? 'Testing...' :
-                 testStatus === 'success' ? 'Connection Successful!' :
-                 testStatus === 'error' ? 'Connection Failed' :
-                 'Test Connection'}
+                  testStatus === 'success' ? 'Connection Successful!' :
+                    testStatus === 'error' ? 'Connection Failed' :
+                      'Test Connection'}
               </button>
             )}
           </div>
@@ -241,7 +243,7 @@ function App() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [activeLayer, setActiveLayer] = useState<GraphLayer>('overall');
-  const [activeTab, setActiveTab] = useState<'network' | 'source-control'>('network');
+  const [activeTab, setActiveTab] = useState<'network' | 'source-control' | 'explorer'>('network');
 
   // Data state
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
@@ -271,20 +273,27 @@ function App() {
     const saved = localStorage.getItem('theme');
     return saved === 'light';
   });
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'highlight' | 'collapse'>('highlight');
   const [showMiniMap, setShowMiniMap] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   const [preferredIde, setPreferredIde] = useState('code');
+
+  // Recent projects
+  const [recentProjects, setRecentProjects] = useState<string[]>([]);
 
   // Separate AI enrichment from graph structure so enrichment never triggers a full dagre relayout
   const [enrichmentMap, setEnrichmentMap] = useState<Map<string, { semantic_group: string; summary: string }>>(new Map());
 
   useEffect(() => {
-    load('settings.json', { autoSave: false, defaults: { preferredIde: 'code' } }).then(store => {
+    load('settings.json', { autoSave: false, defaults: { preferredIde: 'code', recentProjects: [] } }).then(store => {
       store.get<string>('preferredIde').then(val => {
         if (val) setPreferredIde(val);
+      });
+      store.get<string[]>('recentProjects').then(val => {
+        if (val && Array.isArray(val)) setRecentProjects(val);
       });
     });
   }, []);
@@ -305,6 +314,18 @@ function App() {
       localStorage.setItem('theme', 'dark');
     }
   }, [isLightMode]);
+
+  // ─── Command Palette Keyboard Shortcut ─────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleDeleteNode = useCallback((nodeId: string, nodePath: string) => {
     setRawGraphData(prev => {
@@ -327,7 +348,8 @@ function App() {
 
       if (path) {
         setIsParsing(true);
-        setLogs(prev => [...prev, `> Selected directory: ${path}`, '> Parsing codebase...']);
+        setSelectedNode(null);
+        setLogs([`> Selected directory: ${path}`, '> Parsing codebase...']);
 
         await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -339,6 +361,14 @@ function App() {
         setSelectedPath(path);
         setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
         setIsParsing(false);
+
+        // Save to recent projects
+        const updated = [path, ...recentProjects.filter(p => p !== path)].slice(0, 5);
+        setRecentProjects(updated);
+        load('settings.json', { autoSave: false, defaults: { preferredIde: 'code', recentProjects: [] } }).then(async store => {
+          await store.set('recentProjects', updated);
+          await store.save();
+        });
 
         if (apiKey && enableAi) {
           setLogs(prev => [...prev, `> Found API Key, starting progressive AI enrichment with ${selectedModel}...`]);
@@ -352,6 +382,49 @@ function App() {
           }
         } else if (apiKey && !enableAi) {
           setLogs(prev => [...prev, `> AI summary generation is disabled in Settings.`]);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setLogs(prev => [...prev, `> Error: ${String(e)}`]);
+      setIsParsing(false);
+    }
+  };
+
+  const handleOpenRecentProject = async (path: string) => {
+    try {
+      setIsParsing(true);
+      setSelectedNode(null);
+      setLogs([`> Opening recent project: ${path}`, '> Parsing codebase...']);
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const result: GraphData = await invoke("parse_codebase", { path });
+      invoke("watch_codebase", { path }).catch(e => console.error("Watcher init error", e));
+
+      setEnrichmentMap(new Map());
+      setRawGraphData(result);
+      setSelectedPath(path);
+      setLogs(prev => [...prev, `> Parsed ${result.nodes.length} files successfully.`]);
+      setIsParsing(false);
+
+      // Save to recent projects
+      const updated = [path, ...recentProjects.filter(p => p !== path)].slice(0, 5);
+      setRecentProjects(updated);
+      load('settings.json', { autoSave: false, defaults: { preferredIde: 'code', recentProjects: [] } }).then(async store => {
+        await store.set('recentProjects', updated);
+        await store.save();
+      });
+
+      if (apiKey && enableAi) {
+        setLogs(prev => [...prev, `> Found API Key, starting progressive AI enrichment with ${selectedModel}...`]);
+        setIsEnriching(true);
+        try {
+          await invoke("enrich_graph_with_ai", { graphData: result, apiKey, model: selectedModel });
+        } catch (aiErr) {
+          console.error("AI Enrichment Error:", aiErr);
+          setLogs(prev => [...prev, `> AI Error: ${String(aiErr)}`]);
+          setIsEnriching(false);
         }
       }
     } catch (e) {
@@ -392,20 +465,20 @@ function App() {
 
         const newEdges = prev.edges.filter(e => e.source !== payload.node.id);
         const exts = ['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'dart'];
-        
+
         for (const [targetStr, isDataSource] of payload.resolved_imports) {
-           const targetLower = targetStr.toLowerCase();
-           const match = prev.nodes.find(n => {
-              const idLower = n.id.toLowerCase();
-              return exts.some(ext => 
-                idLower.endsWith(`/${targetLower}.${ext}`) || 
-                idLower.endsWith(`/${targetLower}/index.${ext}`) ||
-                idLower.endsWith(`/${targetLower}`)
-              );
-           });
-           if (match) {
-             newEdges.push({ source: payload.node.id, target: match.id, via: null, is_data_source: isDataSource });
-           }
+          const targetLower = targetStr.toLowerCase();
+          const match = prev.nodes.find(n => {
+            const idLower = n.id.toLowerCase();
+            return exts.some(ext =>
+              idLower.endsWith(`/${targetLower}.${ext}`) ||
+              idLower.endsWith(`/${targetLower}/index.${ext}`) ||
+              idLower.endsWith(`/${targetLower}`)
+            );
+          });
+          if (match) {
+            newEdges.push({ source: payload.node.id, target: match.id, via: null, is_data_source: isDataSource });
+          }
         }
         return { nodes: newNodes, edges: newEdges };
       });
@@ -480,7 +553,7 @@ function App() {
       }
 
       // Flag common entry point files across frameworks (Next.js, Vite, React Native, Flutter, etc.)
-      const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|lib|app|middleware|sitemap)\./i.test(n.label) || n.id.includes('src-tauri');
+      const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|lib|app|middleware|sitemap|.*config.*|.*env.*)\./i.test(n.label) || n.id.includes('src-tauri');
       const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
 
       // Calculate architectural taxonomy hierarchy
@@ -563,25 +636,25 @@ function App() {
     const nodeById = new Map(layoutedNodes.map(n => [n.id, n]));
 
     const styledEdges = initialEdges.map(e => {
-       const sourceNode = nodeById.get(e.source);
-       const targetNode = nodeById.get(e.target);
-       let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
-       let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
+      const sourceNode = nodeById.get(e.source);
+      const targetNode = nodeById.get(e.target);
+      let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
+      let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
 
-       if (sourceNode && targetNode) {
-          if (layoutDirection === 'TB') {
-             if (targetNode.position.y < sourceNode.position.y) {
-                 sourceHandle = 'top-source';
-                 targetHandle = 'bottom-target';
-             }
-          } else {
-             if (targetNode.position.x < sourceNode.position.x) {
-                 sourceHandle = 'left-source';
-                 targetHandle = 'right-target';
-             }
+      if (sourceNode && targetNode) {
+        if (layoutDirection === 'TB') {
+          if (targetNode.position.y < sourceNode.position.y) {
+            sourceHandle = 'top-source';
+            targetHandle = 'bottom-target';
           }
-       }
-       return { ...e, sourceHandle, targetHandle };
+        } else {
+          if (targetNode.position.x < sourceNode.position.x) {
+            sourceHandle = 'left-source';
+            targetHandle = 'right-target';
+          }
+        }
+      }
+      return { ...e, sourceHandle, targetHandle };
     });
 
     setFlowNodes(layoutedNodes);
@@ -612,38 +685,78 @@ function App() {
   if (!selectedPath && !isParsing) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background relative overflow-hidden">
-        {/* Subtle background glow */}
+        {/* Animated background glow */}
         <div className="absolute inset-0 z-0">
-          <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-text-dim/5 rounded-full blur-3xl" />
+          <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
+          <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-primary/5 rounded-full blur-3xl animate-welcome-glow-2" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/[0.02] rounded-full blur-3xl animate-welcome-glow-3" />
         </div>
 
-        {/* Card */}
-        <div className="z-10 flex flex-col items-center nebula-glass p-12 rounded-2xl max-w-md text-center shadow-2xl nebula-slide-up">
-          {/* Logo */}
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-6">
-            <Sparkles className="text-white" size={28} />
+        <div className="z-10 flex flex-col items-center max-w-lg w-full px-4">
+          {/* Main card */}
+          <div className="flex flex-col items-center nebula-glass p-10 rounded-2xl w-full text-center shadow-2xl nebula-slide-up">
+            {/* Logo */}
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-6">
+              <Sparkles className="text-white" size={28} />
+            </div>
+
+            <h1 className="text-4xl font-serif font-medium text-text-main mb-3 tracking-tight">CodeMapper</h1>
+            <p className="text-text-muted mb-8 text-[15px] leading-relaxed font-serif">
+              Visualize your codebase architecture in stunning 2D and 3D graphs.
+            </p>
+
+            <button
+              onClick={handleSelectDirectory}
+              className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 cursor-pointer mb-4"
+            >
+              <FolderOpen size={18} />
+              <span>Select Project Folder</span>
+            </button>
+
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-text-dim hover:text-text-muted transition-colors text-sm cursor-pointer underline underline-offset-2"
+            >
+              Configure API Key
+            </button>
           </div>
 
-          <h1 className="text-4xl font-serif font-medium text-text-main mb-3 tracking-tight">CodeMapper</h1>
-          <p className="text-text-muted mb-8 text-[15px] leading-relaxed font-serif">
-            Visualize your codebase architecture in stunning 2D and 3D graphs.
-          </p>
+          {/* Recent Projects */}
+          {recentProjects.length > 0 && (
+            <div className="w-full mt-4 nebula-slide-up" style={{ animationDelay: '0.1s' }}>
+              <div className="flex items-center gap-2 mb-2.5 px-1">
+                <Clock size={12} className="text-text-dim" />
+                <span className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">Recent Projects</span>
+              </div>
+              <div className="space-y-1.5">
+                {recentProjects.map((projectPath, i) => {
+                  const normalized = projectPath.replace(/\\/g, '/');
+                  const segments = normalized.split('/').filter(Boolean);
+                  const projectName = segments[segments.length - 1] || projectPath;
+                  const parentPath = segments.slice(-3, -1).join('/');
 
-          <button
-            onClick={handleSelectDirectory}
-            className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 cursor-pointer mb-4"
-          >
-            <FolderOpen size={18} />
-            <span>Select Project Folder</span>
-          </button>
-
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-text-dim hover:text-text-muted transition-colors text-sm cursor-pointer underline underline-offset-2"
-          >
-            Configure API Key
-          </button>
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleOpenRecentProject(projectPath)}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl glass-panel hover:bg-surface-raised/80 transition-all duration-200 cursor-pointer group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-surface-raised border border-border flex items-center justify-center shrink-0 group-hover:border-blue-500/30 transition-colors">
+                        <FolderGit2 size={14} className="text-text-dim group-hover:text-blue-400 transition-colors" />
+                      </div>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-semibold text-text-main truncate">{projectName}</span>
+                        {parentPath && (
+                          <span className="text-[10px] text-text-dim font-mono truncate">{parentPath}/</span>
+                        )}
+                      </div>
+                      <FolderOpen size={14} className="text-text-dim/0 group-hover:text-text-dim transition-all shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {showSettings && (
@@ -679,9 +792,20 @@ function App() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background relative text-text-main font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+
       {activeTab === 'source-control' && (
         <SourceControlPanel workspacePath={selectedPath} />
+      )}
+
+      {activeTab === 'explorer' && (
+        <ExplorerPanel
+          nodes={enrichedFlowNodes}
+          onNodeFocus={(nodeId) => {
+            const node = enrichedFlowNodes.find(n => n.id.replace(/\\/g, '/').endsWith(nodeId));
+            if (node) setSelectedNode(node);
+          }}
+          selectedNodeId={selectedNode?.id || null}
+        />
       )}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -692,14 +816,19 @@ function App() {
             activeLayer={activeLayer}
             onLayerChange={setActiveLayer}
             onSettingsClick={() => setShowSettings(true)}
+            onChangeDirectory={handleSelectDirectory}
             isLightMode={isLightMode}
             setIsLightMode={setIsLightMode}
             showMiniMap={showMiniMap}
             setShowMiniMap={setShowMiniMap}
           />
 
+          {selectedPath && (
+            <WorkspaceBreadcrumb path={selectedPath} onChangeDirectory={handleSelectDirectory} />
+          )}
+
           {viewMode === '2d' && activeTab === 'network' && (
-            <SearchBar 
+            <SearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               searchMode={searchMode}
@@ -733,7 +862,7 @@ function App() {
           )}
         </div>
 
-        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} workspacePath={selectedPath} />
+        <BottomPanel selectedNode={selectedNode} logs={logs} preferredIde={preferredIde} workspacePath={selectedPath} edges={flowEdges} />
       </div>
 
       {showSettings && selectedPath && (
@@ -745,6 +874,20 @@ function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onChangeDirectory={handleSelectDirectory}
+        onToggleTheme={() => setIsLightMode(prev => !prev)}
+        onOpenSettings={() => { setShowCommandPalette(false); setShowSettings(true); }}
+        onSetViewMode={setViewMode}
+        onToggleMiniMap={() => setShowMiniMap(prev => !prev)}
+        onSetLayer={setActiveLayer}
+        isLightMode={isLightMode}
+        viewMode={viewMode}
+        showMiniMap={showMiniMap}
+      />
     </div>
   );
 }

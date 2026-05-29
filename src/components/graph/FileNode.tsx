@@ -49,7 +49,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   }
 
   return (
-    <div className="relative transition-all duration-200">
+    <div className="relative transition-all duration-200 group">
       {/* Card */}
       <div
         className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${selected
@@ -65,6 +65,32 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
           boxShadow: selected ? `0 0 24px ${accent.color}40, 0 4px 16px rgba(0,0,0,0.4)` : (blastShadow || `0 4px 16px rgba(0, 0, 0, 0.3)`),
         }}
       >
+        {/* Hover Tooltip Card */}
+        {!selected && (
+          <div className="absolute left-1/2 -top-2 -translate-x-1/2 -translate-y-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-64 p-3 rounded-xl bg-surface border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl pointer-events-none delay-300">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.color }} />
+              <span className="text-xs font-semibold text-text-main truncate">{data.label}</span>
+            </div>
+            <div className="space-y-1 text-[10px]">
+              <div className="flex justify-between">
+                <span className="text-text-dim">Path:</span>
+                <span className="text-text-muted font-mono truncate max-w-[150px]">{data.path}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-dim">Type:</span>
+                <span className="text-text-muted">{data.subLabel || data.type}</span>
+              </div>
+            </div>
+            {data.summary && (
+              <div className="mt-2 pt-2 border-t border-border-subtle">
+                <p className="text-[10px] text-text-muted leading-relaxed line-clamp-3">
+                  {data.summary}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         {/* Handles */}
         <Handle
           type="target"

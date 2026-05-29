@@ -78,6 +78,31 @@ body {
   to { opacity: 1; }
 }
 
+@keyframes nebula-slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes welcome-glow-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  50% { transform: translate(30px, -20px) scale(1.15); opacity: 0.8; }
+}
+
+@keyframes welcome-glow-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+  50% { transform: translate(-25px, 15px) scale(1.1); opacity: 0.7; }
+}
+
+@keyframes welcome-glow-3 {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+  50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.5; }
+}
+
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* ─── Base ────────────────────────────────────────────────── */
 
 @layer base {
@@ -132,6 +157,37 @@ body {
 
   .animate-fade-in {
     animation: fade-in 0.3s ease forwards;
+  }
+
+  .nebula-glass {
+    background: var(--color-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+  }
+
+  .nebula-slide-up {
+    animation: nebula-slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .nebula-fade-in {
+    animation: fade-in 0.2s ease forwards;
+  }
+
+  .animate-welcome-glow-1 {
+    animation: welcome-glow-1 8s ease-in-out infinite;
+  }
+
+  .animate-welcome-glow-2 {
+    animation: welcome-glow-2 10s ease-in-out infinite;
+  }
+
+  .animate-welcome-glow-3 {
+    animation: welcome-glow-3 12s ease-in-out infinite;
+  }
+
+  .animate-panel-slide-in {
+    animation: panel-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
 

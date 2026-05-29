@@ -102,9 +102,10 @@ pub fn resolve_import_path(
             candidates.push(resolved);
         }
     } else {
-        candidates.push(workspace_root.join(clean_import));
-        candidates.push(workspace_root.join("src").join(clean_import));
-        candidates.push(workspace_root.join("lib").join(clean_import));
+        candidates.push(workspace_root.join(&clean_import));
+        candidates.push(workspace_root.join("src").join(&clean_import));
+        candidates.push(workspace_root.join("lib").join(&clean_import));
+        candidates.push(workspace_root.join("src-tauri").join(&clean_import));
     }
 
     const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart", "c", "h", "cpp", "hpp", "cc", "cxx", "hxx"];
