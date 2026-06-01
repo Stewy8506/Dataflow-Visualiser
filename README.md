@@ -215,8 +215,9 @@ Dataflow Visualiser features a genuinely deep AI integration with Google Gemini,
 
 Dataflow Visualiser is designed to be language and framework agnostic, but includes dedicated smart-resolution logic for the following architectures:
 
-- **Web & Full-Stack**: `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
-- **Systems & Backend**: `Rust` (Cargo workspace resolution), `Python`, `Java`, `C#`, `Go`.
+- **Web & Full-Stack**: `Angular` (NgModule/decorator resolution), `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
+- **Node.js & Backend Frameworks**: `NestJS` (controller/service/module wiring), `Express.js` (router/middleware chain awareness).
+- **Systems & Native**: `Rust` (Cargo workspace resolution), `Python`, `Java`, `C#`, `Go`.
 - **Mobile Applications**: `Flutter / Dart` (automatic `pubspec.yaml` package mapping).
 - **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
 

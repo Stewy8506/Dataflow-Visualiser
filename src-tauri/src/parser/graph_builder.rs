@@ -112,10 +112,23 @@ pub fn build_graph(
                     std::mem::swap(&mut source_node, &mut target_node);
                 }
 
+                let mut via = None;
+                for (source_path, imported_name) in &file_data.import_specifiers {
+                    if source_path == &import_str.0 {
+                        for (route, handler) in &file_data.express_routes {
+                            if handler == imported_name {
+                                via = Some(route.clone());
+                                break;
+                            }
+                        }
+                    }
+                    if via.is_some() { break; }
+                }
+
                 edges.push(ParsedEdge {
                     source: source_node,
                     target: target_node,
-                    via: None,
+                    via,
                     is_data_source: import_str.1,
                 });
             }

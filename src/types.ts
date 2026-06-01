@@ -13,6 +13,7 @@ export interface ParsedNode {
   semantic_group?: string;
   summary?: string;
   unused_exports?: string[];
+  tags?: string[];
   metrics?: NodeMetrics;
 }
 

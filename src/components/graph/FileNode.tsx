@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { FileCode, FileType, Layout, Trash2, Cpu, ChevronDown, ChevronUp, Box, Package } from 'lucide-react';
+import { FileCode, FileType, Layout, Trash2, Cpu, ChevronDown, ChevronUp, Box, Package, Hexagon, Shield, Plug } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
@@ -299,6 +299,34 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
                     {data.semantic_group}
                   </span>
+                )}
+                {data.tags && data.tags.length > 0 && (
+                  <div className="flex gap-1 shrink-0 flex-wrap justify-end max-w-[80px]">
+                    {data.tags.map((tag: string) => {
+                      if (tag.startsWith('angular')) {
+                        return (
+                          <span key={tag} className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-red-500/10 text-red-500 border border-red-500/20" title={tag}>
+                            <Shield size={8} /> {tag.split('-')[1]?.substring(0, 3)}
+                          </span>
+                        );
+                      }
+                      if (tag.startsWith('nest')) {
+                        return (
+                          <span key={tag} className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-rose-500/10 text-rose-500 border border-rose-500/20" title={tag}>
+                            <Hexagon size={8} /> {tag.split('-')[1]?.substring(0, 4)}
+                          </span>
+                        );
+                      }
+                      if (tag === 'injectable') {
+                        return (
+                          <span key={tag} className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20" title="Injectable">
+                            <Plug size={8} /> INJ
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
                 )}
               </div>
 

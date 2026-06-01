@@ -55,6 +55,8 @@ pub struct ParsedNode {
     pub unused_exports: Vec<String>,
     #[serde(default)]
     pub metrics: Option<NodeMetrics>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -75,6 +77,8 @@ pub struct FileData {
     pub import_specifiers: Vec<(String, String)>,
     pub is_barrel_file: bool,
     pub is_router: bool,
+    pub tags: Vec<String>,
+    pub express_routes: Vec<(String, String)>,
 }
 
 pub struct AliasResolver {
@@ -324,6 +328,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
             summary: None,
             unused_exports: Vec::new(),
             metrics: None,
+            tags: Vec::new(),
         });
     }
 
@@ -367,6 +372,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 summary: None,
                 unused_exports: Vec::new(),
                 metrics: None,
+                tags: Vec::new(),
             };
 
             let mut imports = Vec::new();
@@ -377,6 +383,8 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
             let mut is_barrel_file = false;
             let is_router = false;
             let mut function_count = 0;
+            let mut tags = Vec::new();
+            let mut express_routes = Vec::new();
 
             if let Ok(source_text) = fs::read_to_string(&file_path) {
                 let re = Regex::new(
@@ -386,7 +394,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 function_count = re.find_iter(&source_text).count();
 
                 if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
-                    let (barrel, _exports) = extract_javascript_imports(
+                    let (barrel, _exports, extracted_tags, extracted_routes) = extract_javascript_imports(
                         &source_text,
                         &file_path,
                         &mut imports,
@@ -395,6 +403,8 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                         &mut import_specifiers,
                     );
                     is_barrel_file = barrel;
+                    tags.extend(extracted_tags);
+                    express_routes.extend(extracted_routes);
                 } else if matches!(
                     ext,
                     "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "java" | "cs" | "go"
@@ -502,6 +512,8 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 import_specifiers,
                 is_barrel_file,
                 is_router,
+                tags: tags.clone(),
+                express_routes,
             };
 
             (node, file_data)
@@ -681,6 +693,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                 import_count,
                                 complexity_score: score.to_string(),
                             }),
+                            tags: Vec::new(),
                         };
 
                         let alias_resolver = AliasResolver::new(path_ref);

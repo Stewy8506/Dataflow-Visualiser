@@ -12,7 +12,7 @@ pub fn extract_javascript_imports(
     api_calls: &mut Vec<String>,
     exported_symbols: &mut Vec<String>,
     import_specifiers: &mut Vec<(String, String)>,
-) -> (bool, bool) {
+) -> (bool, bool, Vec<String>, Vec<(String, String)>) {
     let mut is_barrel_file = false;
     let mut has_exports = false;
     let mut all_exports_imports = true;
@@ -30,6 +30,43 @@ pub fn extract_javascript_imports(
         if let Some(url) = cap.get(1) {
             let src = url.as_str().to_string();
             imports.push((src, false));
+        }
+    }
+
+    let mut tags = Vec::new();
+    let mut express_routes = Vec::new();
+
+    // Decorator extraction for Angular and NestJS
+    let decorator_re = Regex::new(r"(?m)^\s*@(NgModule|Component|Injectable|Controller|Module|Directive)\b").unwrap();
+    for cap in decorator_re.captures_iter(source_text) {
+        if let Some(dec) = cap.get(1) {
+            match dec.as_str() {
+                "NgModule" => tags.push("angular-module".to_string()),
+                "Component" => tags.push("angular-component".to_string()),
+                "Directive" => tags.push("angular-directive".to_string()),
+                "Controller" => tags.push("nest-controller".to_string()),
+                "Module" => tags.push("nest-module".to_string()),
+                "Injectable" => tags.push("injectable".to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    tags.sort();
+    tags.dedup();
+
+    let express_re = Regex::new(r#"(?m)(?:app|router)\.(get|post|put|delete|patch|all|use)\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*([a-zA-Z0-9_]+)"#).unwrap();
+    for cap in express_re.captures_iter(source_text) {
+        if let (Some(method), Some(route), Some(handler)) = (cap.get(1), cap.get(2), cap.get(3)) {
+            let method_str = method.as_str().to_uppercase();
+            let route_str = route.as_str().to_string();
+            let handler_str = handler.as_str().to_string();
+            let display_route = if method_str == "USE" {
+                format!("USE {}", route_str)
+            } else {
+                format!("{} {}", method_str, route_str)
+            };
+            express_routes.push((display_route, handler_str));
         }
     }
 
@@ -139,5 +176,5 @@ pub fn extract_javascript_imports(
         }
     }
 
-    (is_barrel_file, has_exports)
+    (is_barrel_file, has_exports, tags, express_routes)
 }
