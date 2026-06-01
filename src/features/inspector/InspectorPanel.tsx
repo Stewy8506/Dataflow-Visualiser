@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { ExternalLink, FileEdit, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { ExternalLink, FileEdit, ArrowUpRight, ArrowDownLeft, Sparkles } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
 
 interface InspectorPanelProps {
   selectedNode: any | null;
@@ -11,6 +12,7 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({ selectedNode, preferredIde, workspacePath, edges, onRefactorClick, onPropTrace }: InspectorPanelProps) {
+  const { setShowAiChat } = useAppStore();
   return (
     <>
       {/* Left: Node metadata */}
@@ -27,6 +29,15 @@ export function InspectorPanel({ selectedNode, preferredIde, workspacePath, edge
                 title="Preview Refactor Impact"
               >
                 <FileEdit size={14} />
+              </button>
+            )}
+            {selectedNode?.data?.path && (
+              <button
+                onClick={() => setShowAiChat(true)}
+                className="p-1 rounded-md text-text-dim hover:text-fuchsia-400 hover:bg-fuchsia-500/10 transition-colors cursor-pointer"
+                title="Ask AI about this file"
+              >
+                <Sparkles size={14} />
               </button>
             )}
             {selectedNode?.data?.path && (

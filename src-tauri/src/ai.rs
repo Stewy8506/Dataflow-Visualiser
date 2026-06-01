@@ -295,3 +295,87 @@ pub async fn execute_ai_refactor(
 
     Ok(ai_result.updates)
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub text: String,
+}
+
+#[derive(Serialize)]
+struct GeminiChatContent {
+    role: String,
+    parts: Vec<GeminiRequestPart>,
+}
+
+#[tauri::command]
+pub async fn ask_assistant(
+    history: Vec<ChatMessage>,
+    file_context: Option<String>,
+    api_key: String,
+    model: String,
+) -> Result<String, String> {
+    if api_key.is_empty() {
+        return Err("API key is required".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let mut contents = Vec::new();
+
+    for msg in history {
+        contents.push(GeminiChatContent {
+            role: if msg.role == "assistant" { "model".to_string() } else { "user".to_string() },
+            parts: vec![GeminiRequestPart { text: msg.text }],
+        });
+    }
+
+    if let Some(ctx) = file_context {
+        if let Some(last) = contents.last_mut() {
+            if last.role == "user" {
+                let current_text = last.parts[0].text.clone();
+                last.parts[0].text = format!("{}\n\nContext:\n```\n{}\n```", current_text, ctx);
+            }
+        }
+    }
+
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
+        model, api_key
+    );
+
+    #[derive(Serialize)]
+    struct GeminiChatRequest {
+        contents: Vec<GeminiChatContent>,
+        #[serde(rename = "generationConfig")]
+        generation_config: GenerationConfig,
+    }
+
+    let request_body = GeminiChatRequest {
+        contents,
+        generation_config: GenerationConfig {
+            response_mime_type: "text/plain".to_string(),
+        },
+    };
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let gemini_response: GeminiResponse =
+        serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}\nResponse was: {}", e, response_text))?;
+    
+    let text = gemini_response
+        .candidates
+        .first()
+        .and_then(|c| c.content.parts.first())
+        .map(|p| p.text.trim().to_string())
+        .ok_or("Empty response from AI")?;
+
+    Ok(text)
+}

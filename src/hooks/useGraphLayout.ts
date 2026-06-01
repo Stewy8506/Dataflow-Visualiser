@@ -14,6 +14,7 @@ interface UseGraphLayoutOptions {
   enrichmentMap: Map<string, EnrichmentEntry>;
   showExternalDeps: boolean;
   showTests: boolean;
+  customFilters: string;
   onDeleteNode: (nodeId: string, nodePath: string) => void;
   workspacePath: string | null;
 }
@@ -31,6 +32,7 @@ export function useGraphLayout({
   enrichmentMap,
   showExternalDeps,
   showTests,
+  customFilters,
   onDeleteNode,
   workspacePath,
 }: UseGraphLayoutOptions) {
@@ -87,6 +89,19 @@ export function useGraphLayout({
           pathLower.includes('__mocks__')
         ) {
           return false;
+        }
+      }
+
+      if (customFilters && customFilters.trim() !== '') {
+        const patterns = customFilters.split(',').map(p => p.trim().toLowerCase()).filter(Boolean);
+        const pathLower = n.id.toLowerCase();
+        for (const pattern of patterns) {
+          if (pattern.startsWith('*')) {
+            const ext = pattern.slice(1);
+            if (pathLower.endsWith(ext)) return false;
+          } else if (pathLower.includes(pattern)) {
+            return false;
+          }
         }
       }
 
@@ -238,7 +253,7 @@ export function useGraphLayout({
       ranksep
     });
 
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, onDeleteNode, savedPositions]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, customFilters, onDeleteNode, savedPositions]);
 
   // Merge AI enrichment into nodes without triggering dagre relayout
   const enrichedFlowNodes = useMemo(() => {

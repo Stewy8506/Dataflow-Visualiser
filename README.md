@@ -144,6 +144,10 @@ Dataflow-Visualiser/
 - **Color-Coded Directionality** — blue (incoming), green (outgoing) with matching arrowheads.
 - **Persistent Layout Storage** — securely saves custom node drag positions to `localStorage` seamlessly bridging between automated layout and manual curation.
 - **High-Quality PNG Export** — export the interactive graph directly to a clean, transparent PNG image file.
+- **Architectural Mapping:** Visualizes codebases with a layout algorithm powered by Dagre and optimized with Web Workers for large repositories.
+- **AI Codebase Assistant:** Interactive Gemini-powered floating chat to ask questions about specific files or the entire repository.
+- **Dynamic File Filtering:** Exclude specific directories, extensions, or tests/mocks dynamically.
+- **Performance Optimized:** Uses native Rust parsing (Tree-Sitter + Rayon), Web Workers for layout, and Zustand for frontend state.
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
@@ -184,10 +188,14 @@ Never lose your place. The home screen features a chronological list of recent w
 ### Beautiful Dual-Theme Engine
 Crafted with a sleek, dark micro-IDE aesthetic by default. Features complete support for a crisp, high-contrast **Light Mode** that shifts all canvas components, headers, panels, and borders to light styling without sacrificing design premiumness.
 
-### Google Gemini AI Engine
-- **Dynamic Model Discovery** — input your Gemini API Key to dynamically fetch available generative models directly from Google's endpoint (including `gemini-1.5-flash`).
-- **Connection Testing** — built-in API connectivity test and feedback to quickly verify your credentials.
-- **Automated Summary & Domain Mapping** — once enabled, the backend reads file context in chunks to assign descriptive semantic domains and precise 1-2 sentence explanations, rendering them directly in the inspector panels.
+### 🧠 Deep Google Gemini AI Engine
+Dataflow Visualiser features a genuinely deep AI integration with Google Gemini, utilizing it for three distinct, high-impact jobs:
+
+1. **Automated Semantic Domain Mapping** — The backend reads file context in chunks to automatically assign descriptive semantic domains and precise 1-2 sentence explanations to every file in your graph, making unfamiliar codebases instantly readable.
+2. **Executable Refactoring** — Preview structural changes and have Gemini directly rewrite the affected files, saving them to your local disk and instantly applying the necessary codebase updates.
+3. **Interactive File-Scoped Q&A** — A floating AI Chat Assistant is docked over your canvas. Click "Ask AI" on any node to instantly inject that specific file as context, allowing you to interrogate the exact implementation details of a single component without losing your place in the graph.
+
+- **Dynamic Model Discovery & Testing** — input your Gemini API Key to dynamically fetch available generative models directly from Google's endpoint (including `gemini-1.5-flash`) and quickly verify your credentials with built-in connectivity tests.
 
 ### Native OS Security & Capabilities
 - **Strict Capability Auditing** — Rust backend operations explicitly enforce the Tauri `fs_scope()`. Even when circumventing frontend layers, the execution sandbox rejects access to files not explicitly authorized by the native OS directory picker.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, RefreshCw, Zap, Settings2, Sparkles, LayoutGrid, Keyboard, GitBranch } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, Zap, Settings2, Sparkles, LayoutGrid, Keyboard, GitBranch, Filter } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
 
 interface SettingsModalProps {
   apiKey: string;
@@ -36,9 +37,9 @@ export function SettingsModal({
 
   // Mocked state for new settings
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [layoutDir, setLayoutDir] = useState('TB');
-  const [nodeSep, setNodeSep] = useState(70);
-  const [rankSep, setRankSep] = useState(400);
+  
+  const { customFilters, setCustomFilters } = useAppStore();
+  const { layoutDirection, setLayoutDirection, nodesep, setNodesep, ranksep, setRanksep } = useAppStore();
 
   useEffect(() => {
     if (apiKey) loadModels();
@@ -170,8 +171,8 @@ export function SettingsModal({
                 <div className="space-y-2">
                   <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Layout Direction</label>
                   <select
-                    value={layoutDir}
-                    onChange={e => setLayoutDir(e.target.value)}
+                    value={layoutDirection}
+                    onChange={e => setLayoutDirection(e.target.value as any)}
                     className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
                   >
                     <option value="TB">Top to Bottom (Vertical)</option>
@@ -182,11 +183,11 @@ export function SettingsModal({
                 <div className="space-y-2">
                   <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase flex justify-between">
                     <span>Node Separation</span>
-                    <span className="text-text-main">{nodeSep}px</span>
+                    <span className="text-text-main">{nodesep}px</span>
                   </label>
                   <input 
                     type="range" min="30" max="200" step="10"
-                    value={nodeSep} onChange={e => setNodeSep(Number(e.target.value))}
+                    value={nodesep} onChange={e => setNodesep(Number(e.target.value))}
                     className="w-full accent-blue-500 cursor-pointer"
                   />
                 </div>
@@ -194,13 +195,30 @@ export function SettingsModal({
                 <div className="space-y-2">
                   <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase flex justify-between">
                     <span>Rank Separation</span>
-                    <span className="text-text-main">{rankSep}px</span>
+                    <span className="text-text-main">{ranksep}px</span>
                   </label>
                   <input 
                     type="range" min="100" max="800" step="50"
-                    value={rankSep} onChange={e => setRankSep(Number(e.target.value))}
+                    value={ranksep} onChange={e => setRanksep(Number(e.target.value))}
                     className="w-full accent-blue-500 cursor-pointer"
                   />
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-border-subtle">
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase flex items-center gap-1.5 mb-1">
+                    <Filter size={12} />
+                    Custom Ignore Patterns
+                  </label>
+                  <input
+                    type="text"
+                    value={customFilters}
+                    onChange={e => setCustomFilters(e.target.value)}
+                    placeholder="e.g. scripts/, assets/, *.css"
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 placeholder:text-text-dim/40"
+                  />
+                  <p className="text-[10px] text-text-dim">
+                    Comma-separated list of folders or file extensions to hide from the graph.
+                  </p>
                 </div>
               </div>
             )}

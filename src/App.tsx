@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { FolderOpen, Sparkles, Clock, FolderGit2 } from 'lucide-react';
 import './App.css';
 
@@ -17,16 +17,16 @@ import { SettingsModal } from './features/settings/SettingsModal';
 import { ReactFlowGraph } from './components/graph/ReactFlowGraph';
 import { ThreeDGraph } from './components/graph/ThreeDGraph';
 import { RefactorPreview } from './features/refactor/RefactorPreview';
-import { SnapshotPanel, SnapshotDiff } from './features/snapshots/SnapshotPanel';
+import { SnapshotPanel } from './features/snapshots/SnapshotPanel';
+import { AiChatModal } from './features/ai/AiChatModal';
 import { invoke } from '@tauri-apps/api/core';
 
 // Hooks
 import { useSettings } from './hooks/useSettings';
 import { useProjectLoader } from './hooks/useProjectLoader';
 import { useGraphLayout } from './hooks/useGraphLayout';
+import { useAppStore } from './store/appStore';
 
-// Types
-import type { GraphLayer, ViewMode, ActiveTab, SearchMode } from './types';
 
 function App() {
   // ─── Settings ────────────────────────────────────────────────
@@ -53,27 +53,30 @@ function App() {
     handleDeleteNode,
   } = useProjectLoader({ apiKey, enableAi, selectedModel });
 
-  // ─── UI State ────────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState<ViewMode>('2d');
-  const [activeLayer, setActiveLayer] = useState<GraphLayer>('overall');
-  const [activeTab, setActiveTab] = useState<ActiveTab>('network');
-  const [selectedNode, setSelectedNode] = useState<any | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [showMiniMap, setShowMiniMap] = useState(false);
-  const [showExternalDeps, setShowExternalDeps] = useState(false);
-  const [showSnapshots, setShowSnapshots] = useState(false);
-  const [showHeatmap, setShowHeatmap] = useState(false);
-  const [showTests, setShowTests] = useState(true);
-  const [churnData, setChurnData] = useState<Record<string, number> | null>(null);
-  const [refactorTarget, setRefactorTarget] = useState<string | null>(null);
-  const [propTrace, setPropTrace] = useState<any | null>(null);
-  const [diffOverlay, setDiffOverlay] = useState<SnapshotDiff | null>(null);
-  const [nodesep, setNodesep] = useState(70);
-  const [ranksep, setRanksep] = useState(400);
-  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('TB');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchMode>('highlight');
+  // ─── UI State (Zustand) ──────────────────────────────────────
+  const {
+    viewMode, setViewMode,
+    activeLayer, setActiveLayer,
+    activeTab, setActiveTab,
+    selectedNode, setSelectedNode,
+    showSettings, setShowSettings,
+    showCommandPalette, setShowCommandPalette,
+    showMiniMap, setShowMiniMap,
+    showExternalDeps, setShowExternalDeps,
+    showSnapshots, setShowSnapshots,
+    showHeatmap, setShowHeatmap,
+    showTests,
+    churnData, setChurnData,
+    refactorTarget, setRefactorTarget,
+    propTrace, setPropTrace,
+    diffOverlay, setDiffOverlay,
+    nodesep, setNodesep,
+    ranksep, setRanksep,
+    layoutDirection, setLayoutDirection,
+    searchQuery, setSearchQuery,
+    searchMode, setSearchMode,
+    customFilters,
+  } = useAppStore();
 
   // ─── Graph Layout ────────────────────────────────────────────
   const { flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange } = useGraphLayout({
@@ -87,6 +90,7 @@ function App() {
     enrichmentMap,
     showExternalDeps,
     showTests,
+    customFilters,
     onDeleteNode: handleDeleteNode,
     workspacePath: selectedPath,
   });
@@ -96,7 +100,7 @@ function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        setShowCommandPalette(prev => !prev);
+        setShowCommandPalette(!useAppStore.getState().showCommandPalette);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -121,19 +125,19 @@ function App() {
           setShowCommandPalette(true);
           break;
         case 'TOGGLE_VIEW_MODE':
-          setViewMode(prev => prev === '2d' ? '3d' : '2d');
+          setViewMode(useAppStore.getState().viewMode === '2d' ? '3d' : '2d');
           break;
         case 'TOGGLE_MINIMAP':
-          setShowMiniMap(prev => !prev);
+          setShowMiniMap(!useAppStore.getState().showMiniMap);
           break;
         case 'TOGGLE_EXTERNAL_DEPS':
-          setShowExternalDeps(prev => !prev);
+          setShowExternalDeps(!useAppStore.getState().showExternalDeps);
           break;
         case 'TOGGLE_HEATMAP':
-          setShowHeatmap(prev => !prev);
+          setShowHeatmap(!useAppStore.getState().showHeatmap);
           break;
         case 'TOGGLE_SNAPSHOTS':
-          setShowSnapshots(prev => !prev);
+          setShowSnapshots(!useAppStore.getState().showSnapshots);
           break;
         case 'TOGGLE_THEME':
           setIsLightMode(prev => !prev);
@@ -313,8 +317,6 @@ function App() {
             setShowSnapshots={setShowSnapshots}
             showHeatmap={showHeatmap}
             setShowHeatmap={setShowHeatmap}
-            showTests={showTests}
-            setShowTests={setShowTests}
           />
 
           {selectedPath && (
@@ -409,6 +411,8 @@ function App() {
         />
       )}
 
+      <AiChatModal />
+
       <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
@@ -416,7 +420,7 @@ function App() {
         onToggleTheme={() => setIsLightMode(prev => !prev)}
         onOpenSettings={() => { setShowCommandPalette(false); setShowSettings(true); }}
         onSetViewMode={setViewMode}
-        onToggleMiniMap={() => setShowMiniMap(prev => !prev)}
+        onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
         onSetLayer={setActiveLayer}
         isLightMode={isLightMode}
         viewMode={viewMode}

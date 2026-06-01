@@ -1,5 +1,6 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2 } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import type { GraphLayer } from '../../types';
+import { useAppStore } from '../../store/appStore';
 
 interface EditorToolbarProps {
   viewMode: '2d' | '3d';
@@ -32,6 +33,8 @@ export function EditorToolbar({
     { key: 'backend', icon: Server, label: 'Backend' },
     { key: 'overall', icon: Layers, label: 'Overall' },
   ];
+
+  const { showAiChat, setShowAiChat } = useAppStore();
 
   return (
     <div className="h-10 bg-surface border-b border-border flex items-center justify-between px-3 shrink-0">
@@ -147,6 +150,18 @@ export function EditorToolbar({
             <History size={14} />
           </button>
         )}
+
+        <button
+          onClick={() => setShowAiChat(!showAiChat)}
+          className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+            showAiChat 
+              ? 'bg-blue-600/20 text-blue-400' 
+              : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
+          }`}
+          title="Toggle AI Assistant"
+        >
+          <Sparkles size={14} />
+        </button>
 
         <div className="w-px h-4 bg-border mx-1" />
 

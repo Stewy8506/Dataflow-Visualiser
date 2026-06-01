@@ -51,6 +51,7 @@ pub fn run() {
             parser::parse_codebase,
             ai::enrich_graph_with_ai,
             ai::execute_ai_refactor,
+            ai::ask_assistant,
             commands::delete_file,
             commands::open_in_ide,
             parser::watch_codebase,
