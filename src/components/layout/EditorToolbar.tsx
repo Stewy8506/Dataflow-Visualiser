@@ -1,40 +1,32 @@
 import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import type { GraphLayer } from '../../types';
 import { useAppStore } from '../../store/appStore';
+import { useSettings } from '../../hooks/useSettings';
 
 interface EditorToolbarProps {
-  viewMode: '2d' | '3d';
-  onViewModeChange: (mode: '2d' | '3d') => void;
-  activeLayer: GraphLayer;
-  onLayerChange: (layer: GraphLayer) => void;
-  onSettingsClick?: () => void;
-  isLightMode: boolean;
-  setIsLightMode: (val: boolean) => void;
-  showMiniMap?: boolean;
-  setShowMiniMap?: (val: boolean) => void;
-  showExternalDeps?: boolean;
-  setShowExternalDeps?: (val: boolean) => void;
-  showSnapshots?: boolean;
-  setShowSnapshots?: (val: boolean) => void;
-  showHeatmap?: boolean;
-  setShowHeatmap?: (val: boolean) => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
 }
 
-export function EditorToolbar({ 
-  viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, 
-  isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, 
-  showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots, 
-  showHeatmap, setShowHeatmap, isFullscreen, onToggleFullscreen
-}: EditorToolbarProps) {
+export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolbarProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
     { key: 'overall', icon: Layers, label: 'Overall' },
   ];
 
-  const { showAiChat, setShowAiChat } = useAppStore();
+  const { 
+    viewMode, setViewMode,
+    activeLayer, setActiveLayer,
+    showMiniMap, setShowMiniMap,
+    showExternalDeps, setShowExternalDeps,
+    showSnapshots, setShowSnapshots,
+    showHeatmap, setShowHeatmap,
+    showAiChat, setShowAiChat,
+    setShowSettings
+  } = useAppStore();
+
+  const { isLightMode, setIsLightMode } = useSettings();
 
   return (
     <div className="h-10 bg-surface border-b border-border flex items-center justify-between px-3 shrink-0">
@@ -43,7 +35,7 @@ export function EditorToolbar({
         {/* View Mode Toggle */}
         <div className="flex items-center bg-background rounded-md border border-border-subtle p-0.5">
           <button
-            onClick={() => onViewModeChange('2d')}
+            onClick={() => setViewMode('2d')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${
               viewMode === '2d'
                 ? 'bg-surface-raised text-text-main shadow-sm border border-border'
@@ -54,7 +46,7 @@ export function EditorToolbar({
             <span>2D Flow</span>
           </button>
           <button
-            onClick={() => onViewModeChange('3d')}
+            onClick={() => setViewMode('3d')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${
               viewMode === '3d'
                 ? 'bg-surface-raised text-text-main shadow-sm border border-border'
@@ -77,7 +69,7 @@ export function EditorToolbar({
               return (
                 <button
                   key={key}
-                  onClick={() => onLayerChange(key)}
+                  onClick={() => setActiveLayer(key)}
                   className={`flex items-center gap-1.5 px-2 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${
                     isActive
                       ? 'bg-surface-raised text-text-main shadow-sm border border-border'
@@ -183,15 +175,13 @@ export function EditorToolbar({
           </button>
         )}
 
-        {onSettingsClick && (
-          <button
-            onClick={onSettingsClick}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-text-dim hover:text-text-main hover:bg-surface-raised transition-colors cursor-pointer ml-1"
-            title="Settings"
-          >
-            <Settings size={14} />
-          </button>
-        )}
+        <button
+          onClick={() => setShowSettings(true)}
+          className="w-7 h-7 flex items-center justify-center rounded-md text-text-dim hover:text-text-main hover:bg-surface-raised transition-colors cursor-pointer ml-1"
+          title="Settings"
+        >
+          <Settings size={14} />
+        </button>
       </div>
     </div>
   );

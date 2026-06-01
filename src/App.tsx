@@ -56,43 +56,44 @@ function App() {
   } = useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl });
 
   // ─── UI State (Zustand) ──────────────────────────────────────
-  const {
-    viewMode, setViewMode,
-    activeLayer, setActiveLayer,
-    activeTab, setActiveTab,
-    selectedNode, setSelectedNode,
-    showSettings, setShowSettings,
-    showCommandPalette, setShowCommandPalette,
-    showMiniMap, setShowMiniMap,
-    showExternalDeps, setShowExternalDeps,
-    showSnapshots, setShowSnapshots,
-    showHeatmap, setShowHeatmap,
-    showTests,
-    churnData, setChurnData,
-    refactorTarget, setRefactorTarget,
-    propTrace, setPropTrace,
-    diffOverlay, setDiffOverlay,
-    nodesep, setNodesep,
-    ranksep, setRanksep,
-    layoutDirection, setLayoutDirection,
-    searchQuery, setSearchQuery,
-    searchMode, setSearchMode,
-    customFilters,
-  } = useAppStore();
+  const activeTab = useAppStore(s => s.activeTab);
+  const viewMode = useAppStore(s => s.viewMode);
+  const setViewMode = useAppStore(s => s.setViewMode);
+  const setActiveLayer = useAppStore(s => s.setActiveLayer);
+  const showSettings = useAppStore(s => s.showSettings);
+  const setShowSettings = useAppStore(s => s.setShowSettings);
+  const showCommandPalette = useAppStore(s => s.showCommandPalette);
+  const setShowCommandPalette = useAppStore(s => s.setShowCommandPalette);
+  const showMiniMap = useAppStore(s => s.showMiniMap);
+  const setShowMiniMap = useAppStore(s => s.setShowMiniMap);
+  const showSnapshots = useAppStore(s => s.showSnapshots);
+  const setShowSnapshots = useAppStore(s => s.setShowSnapshots);
+  const showHeatmap = useAppStore(s => s.showHeatmap);
+  const churnData = useAppStore(s => s.churnData);
+  const setChurnData = useAppStore(s => s.setChurnData);
+  const refactorTarget = useAppStore(s => s.refactorTarget);
+  const setRefactorTarget = useAppStore(s => s.setRefactorTarget);
+  const selectedNode = useAppStore(s => s.selectedNode);
+  const setSelectedNode = useAppStore(s => s.setSelectedNode);
+  const propTrace = useAppStore(s => s.propTrace);
+  const setPropTrace = useAppStore(s => s.setPropTrace);
+  const diffOverlay = useAppStore(s => s.diffOverlay);
+  const setDiffOverlay = useAppStore(s => s.setDiffOverlay);
+  const searchQuery = useAppStore(s => s.searchQuery);
+  const setSearchQuery = useAppStore(s => s.setSearchQuery);
+  const searchMode = useAppStore(s => s.searchMode);
+  const setSearchMode = useAppStore(s => s.setSearchMode);
+  const nodesep = useAppStore(s => s.nodesep);
+  const setNodesep = useAppStore(s => s.setNodesep);
+  const ranksep = useAppStore(s => s.ranksep);
+  const setRanksep = useAppStore(s => s.setRanksep);
+  const layoutDirection = useAppStore(s => s.layoutDirection);
+  const setLayoutDirection = useAppStore(s => s.setLayoutDirection);
 
   // ─── Graph Layout ────────────────────────────────────────────
   const { flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange } = useGraphLayout({
     rawGraphData,
-    activeLayer,
-    layoutDirection,
-    nodesep,
-    ranksep,
-    searchQuery,
-    searchMode,
     enrichmentMap,
-    showExternalDeps,
-    showTests,
-    customFilters,
     onDeleteNode: handleDeleteNode,
     workspacePath: selectedPath,
   });
@@ -127,22 +128,22 @@ function App() {
           setShowCommandPalette(true);
           break;
         case 'TOGGLE_VIEW_MODE':
-          setViewMode(useAppStore.getState().viewMode === '2d' ? '3d' : '2d');
+          useAppStore.getState().setViewMode(useAppStore.getState().viewMode === '2d' ? '3d' : '2d');
           break;
         case 'TOGGLE_MINIMAP':
-          setShowMiniMap(!useAppStore.getState().showMiniMap);
+          useAppStore.getState().setShowMiniMap(!useAppStore.getState().showMiniMap);
           break;
         case 'TOGGLE_EXTERNAL_DEPS':
-          setShowExternalDeps(!useAppStore.getState().showExternalDeps);
+          useAppStore.getState().setShowExternalDeps(!useAppStore.getState().showExternalDeps);
           break;
         case 'TOGGLE_HEATMAP':
-          setShowHeatmap(!useAppStore.getState().showHeatmap);
+          useAppStore.getState().setShowHeatmap(!useAppStore.getState().showHeatmap);
           break;
         case 'TOGGLE_SNAPSHOTS':
-          setShowSnapshots(!useAppStore.getState().showSnapshots);
+          useAppStore.getState().setShowSnapshots(!useAppStore.getState().showSnapshots);
           break;
         case 'TOGGLE_THEME':
-          setIsLightMode(prev => !prev);
+          setIsLightMode(!isLightMode);
           break;
         case 'RELOAD_WINDOW':
           window.location.reload();
@@ -176,7 +177,6 @@ function App() {
   if (!selectedPath && !isParsing) {
     return (
       <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
-        <TitleBar />
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-fuchsia-600/5 rounded-full blur-3xl animate-welcome-glow-2" />
@@ -270,7 +270,6 @@ function App() {
   if (isParsing && !selectedPath) {
     return (
       <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
-        <TitleBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center nebula-slide-up">
             <div className="w-12 h-12 border-4 border-surface-raised border-t-primary rounded-full animate-spin mb-4" />
@@ -289,7 +288,7 @@ function App() {
       <TitleBar />
 
       <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar />
 
         {activeTab === 'source-control' && <SourceControlPanel workspacePath={selectedPath} />}
 
@@ -305,23 +304,7 @@ function App() {
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-surface-raised border-l border-border">
-          <EditorToolbar
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            activeLayer={activeLayer}
-            onLayerChange={setActiveLayer}
-            onSettingsClick={() => setShowSettings(true)}
-            isLightMode={isLightMode}
-            setIsLightMode={setIsLightMode}
-            showMiniMap={showMiniMap}
-            setShowMiniMap={setShowMiniMap}
-            showExternalDeps={showExternalDeps}
-            setShowExternalDeps={setShowExternalDeps}
-            showSnapshots={showSnapshots}
-            setShowSnapshots={setShowSnapshots}
-            showHeatmap={showHeatmap}
-            setShowHeatmap={setShowHeatmap}
-          />
+          <EditorToolbar />
 
           {selectedPath && (
             <WorkspaceBreadcrumb path={selectedPath} onChangeDirectory={handleSelectDirectory} />

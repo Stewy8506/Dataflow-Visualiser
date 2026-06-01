@@ -226,9 +226,7 @@ Dataflow Visualiser is designed to be language and framework agnostic, but inclu
 - **Systems & Native**: `Rust` (Cargo workspace resolution & basic module mapping), `Python` (basic import & FastAPI/Flask endpoint extraction).
 - **Mobile Applications**: `Flutter / Dart` (basic Dart imports & automatic `pubspec.yaml` package mapping).
 - **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
-
-### 📅 To Be Added
-- **Enterprise & Systems**: `Java`, `C#`, `Go` (currently basic stubs in tree-sitter, needing full structural resolution).
+- **Enterprise & Backend**: `Java`, `C#`, `Go` (basic import extraction via tree-sitter bindings).
 
 ---
 

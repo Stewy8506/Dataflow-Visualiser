@@ -36,12 +36,11 @@ function NavItem({ icon, label, active, disabled, onClick }: NavItemProps) {
   );
 }
 
-interface SidebarProps {
-  activeTab: 'network' | 'source-control' | 'explorer';
-  setActiveTab: (tab: 'network' | 'source-control' | 'explorer') => void;
-}
+import { useAppStore } from '../../store/appStore';
 
-export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+export function Sidebar() {
+  const activeTab = useAppStore(s => s.activeTab);
+  const setActiveTab = useAppStore(s => s.setActiveTab);
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {

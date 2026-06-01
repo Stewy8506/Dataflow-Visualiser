@@ -346,6 +346,7 @@ function ReactFlowInner({
         zoomOnDoubleClick={false}
         className="codebase-flow"
         proOptions={{ hideAttribution: true }}
+        onlyRenderVisibleElements={true}
       >
         <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
         <Controls />

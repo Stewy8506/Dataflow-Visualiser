@@ -7,12 +7,18 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:default",
     "opener:default",
     "dialog:default",
     "store:default",
+    "fs:default",
     {
       "identifier": "fs:allow-read",
-      "allow": []
+      "allow": ["**"]
+    },
+    {
+      "identifier": "fs:allow-write",
+      "allow": ["**"]
     }
   ]
 }

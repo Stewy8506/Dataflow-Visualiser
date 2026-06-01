@@ -13,6 +13,40 @@ function getAccent(type: string, isBackend: boolean, isExternal: boolean) {
   return { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' };
 }
 
+function NodeHoverTooltip({ data, accent, churnCount }: { data: any, accent: any, churnCount: number }) {
+  return (
+    <div className="absolute left-1/2 -top-2 -translate-x-1/2 -translate-y-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-64 p-3 rounded-xl bg-surface border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl pointer-events-none delay-300">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.color }} />
+        <span className="text-xs font-semibold text-text-main truncate">{data.label}</span>
+      </div>
+      <div className="space-y-1 text-[10px]">
+        <div className="flex justify-between">
+          <span className="text-text-dim">Path:</span>
+          <span className="text-text-muted font-mono truncate max-w-[150px]">{data.path}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-text-dim">Type:</span>
+          <span className="text-text-muted">{data.subLabel || data.type}</span>
+        </div>
+        {churnCount > 0 && (
+          <div className="flex justify-between">
+            <span className="text-orange-400/80">Git Churn:</span>
+            <span className="text-orange-400 font-bold">{churnCount} modifications</span>
+          </div>
+        )}
+      </div>
+      {data.summary && (
+        <div className="mt-2 pt-2 border-t border-border-subtle">
+          <p className="text-[10px] text-text-muted leading-relaxed line-clamp-3">
+            {data.summary}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   const isSearchMatch = data.isSearchMatch ?? true;
   const diffStatus = data.diffStatus; // 'added' | 'removed' | null
@@ -166,38 +200,10 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
           boxShadow: selected ? `0 0 24px ${accent.color}40, 0 4px 16px rgba(0,0,0,0.4)` : (blastShadow || `0 4px 16px rgba(0, 0, 0, 0.3)`),
         }}
       >
+
+
         {/* Hover Tooltip Card */}
-        {!selected && (
-          <div className="absolute left-1/2 -top-2 -translate-x-1/2 -translate-y-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-64 p-3 rounded-xl bg-surface border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl pointer-events-none delay-300">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: accent.color }} />
-              <span className="text-xs font-semibold text-text-main truncate">{data.label}</span>
-            </div>
-            <div className="space-y-1 text-[10px]">
-              <div className="flex justify-between">
-                <span className="text-text-dim">Path:</span>
-                <span className="text-text-muted font-mono truncate max-w-[150px]">{data.path}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-dim">Type:</span>
-                <span className="text-text-muted">{data.subLabel || data.type}</span>
-              </div>
-              {churnCount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-orange-400/80">Git Churn:</span>
-                  <span className="text-orange-400 font-bold">{churnCount} modifications</span>
-                </div>
-              )}
-            </div>
-            {data.summary && (
-              <div className="mt-2 pt-2 border-t border-border-subtle">
-                <p className="text-[10px] text-text-muted leading-relaxed line-clamp-3">
-                  {data.summary}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        {!selected && <NodeHoverTooltip data={data} accent={accent} churnCount={churnCount} />}
         {/* Handles */}
         <Handle
           type="target"
