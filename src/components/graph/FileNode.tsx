@@ -91,6 +91,11 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
               Unused
             </span>
           )}
+          {data.vulnerabilities && data.vulnerabilities.length > 0 && (
+            <span className="text-[9px] uppercase tracking-wider font-black text-red-500 bg-red-500/20 px-1.5 py-0.5 rounded-md ml-1 border border-red-500/50" title={data.vulnerabilities.join('\n')}>
+              🛡️ {data.vulnerabilities.length} CVEs
+            </span>
+          )}
         </div>
         
         {!selected && (
@@ -368,6 +373,22 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                   </div>
                 </div>
               )}
+
+              {data.healthScore && (
+                <div 
+                  className={`group/health relative px-2 py-0.5 rounded text-[9px] font-semibold tracking-wider uppercase border cursor-help ${data.healthScore.color}`}
+                >
+                  Health: {data.healthScore.label}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/health:block w-max bg-[#1a1a24] text-text-main text-[10px] p-2 rounded border border-border-subtle shadow-xl z-50">
+                    <div className="font-bold border-b border-border-subtle pb-1 mb-1">Health Score</div>
+                    <div>Score: {data.healthScore.score}</div>
+                    <div className="text-text-dim mt-1">Lower is better.</div>
+                    <div className="text-text-dim mt-1">Uses Blast Radius (in),</div>
+                    <div className="text-text-dim">Coupling (out),</div>
+                    <div className="text-text-dim">and Complexity.</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -436,6 +457,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   prev.data.isExternal === next.data.isExternal &&
   prev.data.churnCount === next.data.churnCount &&
   prev.data.label === next.data.label &&
-  prev.data.semantic_group === next.data.semantic_group &&
-  prev.data.summary === next.data.summary
+  prev.data.summary === next.data.summary &&
+  prev.data.healthScore?.label === next.data.healthScore?.label &&
+  prev.data.vulnerabilities?.length === next.data.vulnerabilities?.length
 );

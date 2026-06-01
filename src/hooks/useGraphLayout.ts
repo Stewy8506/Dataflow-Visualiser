@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Edge, MarkerType, applyNodeChanges, NodeChange, applyEdgeChanges, EdgeChange } from '@xyflow/react';
 import LayoutWorker from '../workers/layout.worker?worker';
 import type { GraphData, GraphLayer, LayoutDirection, SearchMode, EnrichmentEntry } from '../types';
+import { calculateHealthScore } from '../utils/healthScore';
 
 interface UseGraphLayoutOptions {
   rawGraphData: GraphData | null;
@@ -174,6 +175,8 @@ export function useGraphLayout({
           isDeadCode,
           metrics: (n as any).metrics,
           tags: (n as any).tags,
+          vulnerabilities: (n as any).vulnerabilities,
+          healthScore: calculateHealthScore(n.id, rawGraphData.edges, (n as any).metrics),
           onDelete: () => onDeleteNode(n.id, n.id),
           direction: layoutDirection,
           layerIndex,

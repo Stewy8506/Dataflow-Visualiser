@@ -14,6 +14,10 @@ export function useSettings() {
     return localStorage.getItem('theme') === 'light';
   });
   const [preferredIde, setPreferredIde] = useState('code');
+  const [aiProvider, setAiProvider] = useState(localStorage.getItem('ai_provider') || 'gemini');
+  const [localBaseUrl, setLocalBaseUrl] = useState(
+    localStorage.getItem('local_base_url') || 'http://localhost:1234/v1'
+  );
 
   // Load persisted settings from Tauri store
   useEffect(() => {
@@ -49,5 +53,7 @@ export function useSettings() {
     isLightMode, setIsLightMode,
     preferredIde,
     handleSetPreferredIde,
+    aiProvider, setAiProvider,
+    localBaseUrl, setLocalBaseUrl,
   };
 }

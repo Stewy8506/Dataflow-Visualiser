@@ -163,6 +163,8 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.
 - **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
 - **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
+- **Dependency Version Risk (CVE/OSV)** — Cross-references your external dependencies against the `osv.dev` vulnerability database by parsing lockfiles (`package-lock.json`, `pubspec.lock`), flagging vulnerable packages with critical CVE badges.
+- **Dependency Health Score** — Calculates a composite health grade (A-F) for every file based on structural metrics: coupling (out-edges), blast-radius (in-edges), and internal code complexity.
 - **Git Churn Heatmap Overlay** — analyzes up to the last 100 commits to paint the graph with a red/orange volatility heatmap, letting you instantly spot highly modified, bug-prone components.
 - **Headless CI Dependency Export** — invoke the binary via the CLI (`--export-graph`) to silently parse the project and dump a deterministic JSON graph snapshot for PR diffing in GitHub Actions.
 
@@ -188,14 +190,15 @@ Never lose your place. The home screen features a chronological list of recent w
 ### Beautiful Dual-Theme Engine
 Crafted with a sleek, dark micro-IDE aesthetic by default. Features complete support for a crisp, high-contrast **Light Mode** that shifts all canvas components, headers, panels, and borders to light styling without sacrificing design premiumness.
 
-### 🧠 Deep Google Gemini AI Engine
-Dataflow Visualiser features a genuinely deep AI integration with Google Gemini, utilizing it for three distinct, high-impact jobs:
+### 🧠 Deep AI Engine (Cloud & Local)
+Dataflow Visualiser features a genuinely deep AI integration, utilizing it for **three distinct, high-impact jobs**:
 
 1. **Automated Semantic Domain Mapping** — The backend reads file context in chunks to automatically assign descriptive semantic domains and precise 1-2 sentence explanations to every file in your graph, making unfamiliar codebases instantly readable.
-2. **Executable Refactoring** — Preview structural changes and have Gemini directly rewrite the affected files, saving them to your local disk and instantly applying the necessary codebase updates.
+2. **Executable Refactoring** — Preview structural changes and have the AI directly rewrite the affected files, saving them to your local disk and instantly applying the necessary codebase updates.
 3. **Interactive File-Scoped Q&A** — A floating AI Chat Assistant is docked over your canvas. Click "Ask AI" on any node to instantly inject that specific file as context, allowing you to interrogate the exact implementation details of a single component without losing your place in the graph.
 
 - **Dynamic Model Discovery & Testing** — input your Gemini API Key to dynamically fetch available generative models directly from Google's endpoint (including `gemini-1.5-flash`) and quickly verify your credentials with built-in connectivity tests.
+- **Local AI Provider Support** — Total privacy mode. Point the engine to any local, OpenAI-compatible API endpoint (like **LMStudio**, **Ollama**, or **vLLM**) to run domain mapping, executable refactoring, and code Q&A entirely on your own hardware without sending code to the cloud.
 
 ### Native OS Security & Capabilities
 - **Strict Capability Auditing** — Rust backend operations explicitly enforce the Tauri `fs_scope()`. Even when circumventing frontend layers, the execution sandbox rejects access to files not explicitly authorized by the native OS directory picker.
@@ -215,11 +218,17 @@ Dataflow Visualiser features a genuinely deep AI integration with Google Gemini,
 
 Dataflow Visualiser is designed to be language and framework agnostic, but includes dedicated smart-resolution logic for the following architectures:
 
+### 🚀 Fully Shipped
 - **Web & Full-Stack**: `Angular` (NgModule/decorator resolution), `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
 - **Node.js & Backend Frameworks**: `NestJS` (controller/service/module wiring), `Express.js` (router/middleware chain awareness).
-- **Systems & Native**: `Rust` (Cargo workspace resolution), `Python`, `Java`, `C#`, `Go`.
-- **Mobile Applications**: `Flutter / Dart` (automatic `pubspec.yaml` package mapping).
+
+### 🚧 Half-Working (Basic Parsing)
+- **Systems & Native**: `Rust` (Cargo workspace resolution & basic module mapping), `Python` (basic import & FastAPI/Flask endpoint extraction).
+- **Mobile Applications**: `Flutter / Dart` (basic Dart imports & automatic `pubspec.yaml` package mapping).
 - **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
+
+### 📅 To Be Added
+- **Enterprise & Systems**: `Java`, `C#`, `Go` (currently basic stubs in tree-sitter, needing full structural resolution).
 
 ---
 
@@ -228,8 +237,8 @@ Dataflow Visualiser is designed to be language and framework agnostic, but inclu
 - **Frontend**: React 19, TypeScript, Vite, TailwindCSS 4
 - **Graph**: `@xyflow/react` v12, `dagre`, WebGL / Three.js
 - **Backend**: Rust, Tauri v2
-- **Parsing**: `oxc-parser`
-- **AI**: Google Gemini API (with dynamic model list retrieval)
+- **Parsing**: `oxc-parser`, `tree-sitter`
+- **AI**: Google Gemini API & Local LLMs (OpenAI-compatible endpoints)
 
 ---
 
@@ -294,6 +303,9 @@ npm run tauri build
 - [x] Advanced UI Graph Filtering (Hide Tests & Mocks)
 - [x] PNG canvas export
 - [x] JSON dependency graph export for CI diffing
+- [x] Local AI Provider integration (LMStudio, Ollama)
+- [x] Lockfile parsing (`package-lock.json`, `pubspec.lock`) & OSV Vulnerability cross-referencing
+- [x] Dependency Health Scoring based on coupling, complexity, and blast-radius
 
 ---
 

@@ -11,6 +11,10 @@ interface SettingsModalProps {
   setEnableAi: (val: boolean) => void;
   preferredIde: string;
   setPreferredIde: (val: string) => void;
+  aiProvider: string;
+  setAiProvider: (val: string) => void;
+  localBaseUrl: string;
+  setLocalBaseUrl: (val: string) => void;
   onClose: () => void;
 }
 
@@ -27,6 +31,8 @@ export function SettingsModal({
   selectedModel, setSelectedModel,
   enableAi, setEnableAi,
   preferredIde, setPreferredIde,
+  aiProvider, setAiProvider,
+  localBaseUrl, setLocalBaseUrl,
   onClose,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -46,18 +52,35 @@ export function SettingsModal({
   }, [apiKey]);
 
   const loadModels = async () => {
-    if (!apiKey) return;
+    if (aiProvider === 'gemini' && !apiKey) return;
     setIsLoadingModels(true);
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const data = await res.json();
-      if (data.models) {
-        const generateContentModels: GeminiModel[] = data.models.filter((m: GeminiModel) =>
-          m.supportedGenerationMethods?.includes('generateContent')
-        );
-        setAvailableModels(generateContentModels);
-        if (!selectedModel || !generateContentModels.find(m => m.name === selectedModel)) {
-          if (generateContentModels.length > 0) setSelectedModel(generateContentModels[0].name);
+      if (aiProvider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const data = await res.json();
+        if (data.models) {
+          const generateContentModels: GeminiModel[] = data.models.filter((m: GeminiModel) =>
+            m.supportedGenerationMethods?.includes('generateContent')
+          );
+          setAvailableModels(generateContentModels);
+          if (!selectedModel || !generateContentModels.find(m => m.name === selectedModel)) {
+            if (generateContentModels.length > 0) setSelectedModel(generateContentModels[0].name);
+          }
+        }
+      } else {
+        // OpenAI compatible /v1/models endpoint
+        const res = await fetch(`${localBaseUrl}/models`);
+        const data = await res.json();
+        if (data.data) {
+          const models: GeminiModel[] = data.data.map((m: any) => ({
+            name: m.id,
+            displayName: m.id,
+            supportedGenerationMethods: ['generateContent']
+          }));
+          setAvailableModels(models);
+          if (!selectedModel || !models.find(m => m.name === selectedModel)) {
+            if (models.length > 0) setSelectedModel(models[0].name);
+          }
         }
       }
     } catch (err) {
@@ -70,9 +93,15 @@ export function SettingsModal({
   const handleTestConnection = async () => {
     setTestStatus('testing');
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const data = await res.json();
-      setTestStatus(data.models?.length > 0 ? 'success' : 'error');
+      if (aiProvider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const data = await res.json();
+        setTestStatus(data.models?.length > 0 ? 'success' : 'error');
+      } else {
+        const res = await fetch(`${localBaseUrl}/models`);
+        const data = await res.json();
+        setTestStatus(data.data?.length > 0 ? 'success' : 'error');
+      }
     } catch {
       setTestStatus('error');
     }
@@ -83,6 +112,8 @@ export function SettingsModal({
     localStorage.setItem('gemini_api_key', apiKey);
     localStorage.setItem('gemini_model', selectedModel);
     localStorage.setItem('enable_ai_summary', String(enableAi));
+    localStorage.setItem('ai_provider', aiProvider);
+    localStorage.setItem('local_base_url', localBaseUrl);
     
     // Theme saving requires page reload for now as it's hooked into useSettings
     if (theme !== (localStorage.getItem('theme') || 'dark')) {
@@ -226,23 +257,49 @@ export function SettingsModal({
             {activeTab === 'ai' && (
               <div className="space-y-6 max-w-lg">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Google AI API Key</label>
-                  <div className="relative">
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={e => setApiKey(e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 pr-10 font-mono placeholder:text-text-dim/40"
-                    />
-                    <button
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
-                    >
-                      {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
+                  <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">AI Provider</label>
+                  <select
+                    value={aiProvider}
+                    onChange={e => setAiProvider(e.target.value)}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
+                  >
+                    <option value="gemini">Google Gemini (Cloud)</option>
+                    <option value="local">Local Model (OpenAI Compatible API)</option>
+                  </select>
                 </div>
+
+                {aiProvider === 'gemini' ? (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Google AI API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={e => setApiKey(e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Local API Base URL</label>
+                    <input
+                      type="text"
+                      value={localBaseUrl}
+                      onChange={e => setLocalBaseUrl(e.target.value)}
+                      placeholder="http://localhost:1234/v1"
+                      className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 font-mono placeholder:text-text-dim/40"
+                    />
+                    <p className="text-[10px] text-text-dim mt-1">E.g. http://localhost:1234/v1 for LMStudio or http://localhost:11434/v1 for Ollama</p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -258,7 +315,7 @@ export function SettingsModal({
                   <select
                     value={selectedModel}
                     onChange={e => setSelectedModel(e.target.value)}
-                    disabled={isLoadingModels || !apiKey}
+                    disabled={isLoadingModels || (aiProvider === 'gemini' && !apiKey) || (aiProvider === 'local' && !localBaseUrl)}
                     className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 disabled:opacity-40 appearance-none cursor-pointer"
                   >
                     {isLoadingModels ? (
@@ -266,7 +323,7 @@ export function SettingsModal({
                     ) : availableModels.length > 0 ? (
                       availableModels.map(m => (
                         <option key={m.name} value={m.name}>
-                          {m.displayName} ({m.name.replace('models/', '')})
+                          {m.displayName} {aiProvider === 'gemini' ? `(${m.name.replace('models/', '')})` : ''}
                         </option>
                       ))
                     ) : (
@@ -283,7 +340,7 @@ export function SettingsModal({
                   <div onClick={() => setEnableAi(!enableAi)} className={`nebula-switch ${enableAi ? 'active' : ''}`} />
                 </div>
 
-                {apiKey && (
+                {((aiProvider === 'gemini' && apiKey) || (aiProvider === 'local' && localBaseUrl)) && (
                   <button
                     onClick={handleTestConnection}
                     disabled={testStatus === 'testing'}

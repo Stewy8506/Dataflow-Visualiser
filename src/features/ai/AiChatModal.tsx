@@ -11,7 +11,7 @@ interface ChatMessage {
 
 export function AiChatModal() {
   const { showAiChat, setShowAiChat, selectedNode } = useAppStore();
-  const { apiKey, selectedModel } = useSettings();
+  const { apiKey, selectedModel, aiProvider, localBaseUrl } = useSettings();
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -43,6 +43,8 @@ export function AiChatModal() {
         fileContext,
         apiKey,
         model: selectedModel || 'gemini-1.5-flash',
+        aiProvider,
+        localBaseUrl,
       });
 
       setMessages(prev => [...prev, { role: 'assistant', text: responseText }]);

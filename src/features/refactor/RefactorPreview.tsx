@@ -40,7 +40,7 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
   const [isRefactoring, setIsRefactoring] = useState(false);
   const [refactorComplete, setRefactorComplete] = useState(false);
 
-  const { apiKey, selectedModel } = useSettings();
+  const { apiKey, selectedModel, aiProvider, localBaseUrl } = useSettings();
 
   const targetFilename = targetPath.split(/[/\\]/).pop() || '';
 
@@ -95,7 +95,9 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
         symbolName: symbolName ? symbolName : null,
         apiKey,
         model: selectedModel || 'gemini-1.5-flash',
-        affectedFiles: affectedFilePaths
+        affectedFiles: affectedFilePaths,
+        aiProvider,
+        localBaseUrl,
       });
       
       setRefactorComplete(true);

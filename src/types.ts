@@ -15,6 +15,7 @@ export interface ParsedNode {
   unused_exports?: string[];
   tags?: string[];
   metrics?: NodeMetrics;
+  vulnerabilities?: string[];
 }
 
 export interface ParsedEdge {
@@ -74,6 +75,8 @@ export interface FlowNodeData {
   summary?: string;
   metrics?: NodeMetrics;
   unused_exports?: string[];
+  vulnerabilities?: string[];
+  healthScore?: { score: number; color: string; label: string };
   layerIndex: number;
   direction: LayoutDirection;
   onDelete?: () => void;

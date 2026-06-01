@@ -37,6 +37,8 @@ function App() {
     isLightMode, setIsLightMode,
     preferredIde,
     handleSetPreferredIde,
+    aiProvider, setAiProvider,
+    localBaseUrl, setLocalBaseUrl,
   } = useSettings();
 
   // ─── Project Loader ──────────────────────────────────────────
@@ -51,7 +53,7 @@ function App() {
     handleSelectDirectory,
     handleOpenRecentProject,
     handleDeleteNode,
-  } = useProjectLoader({ apiKey, enableAi, selectedModel });
+  } = useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl });
 
   // ─── UI State (Zustand) ──────────────────────────────────────
   const {
@@ -191,7 +193,7 @@ function App() {
               <p className="text-text-muted mb-10 text-lg leading-relaxed font-sans">
                 Visualize your codebase architecture in stunning 2D and 3D graphs. Discover dependencies, analyze complexity, and refactor with AI-powered insights.
               </p>
-              
+
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleSelectDirectory}
@@ -216,7 +218,7 @@ function App() {
               <Clock size={16} className="text-blue-400" />
               <h2 className="text-lg font-semibold text-text-main tracking-tight">Recent Projects</h2>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto pr-2 space-y-3">
               {recentProjects.length === 0 ? (
                 <div className="text-sm text-text-muted italic bg-surface/50 rounded-xl p-6 border border-border-subtle text-center">
@@ -255,6 +257,8 @@ function App() {
             selectedModel={selectedModel} setSelectedModel={setSelectedModel}
             enableAi={enableAi} setEnableAi={setEnableAi}
             preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
+            aiProvider={aiProvider} setAiProvider={setAiProvider}
+            localBaseUrl={localBaseUrl} setLocalBaseUrl={setLocalBaseUrl}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -363,7 +367,7 @@ function App() {
               />
             )}
           </div>
-          
+
           <BottomPanel
             selectedNode={selectedNode}
             logs={logs}
@@ -389,7 +393,12 @@ function App() {
           apiKey={apiKey} setApiKey={setApiKey}
           selectedModel={selectedModel} setSelectedModel={setSelectedModel}
           enableAi={enableAi} setEnableAi={setEnableAi}
-          preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
+          preferredIde={preferredIde}
+          setPreferredIde={handleSetPreferredIde}
+          aiProvider={aiProvider}
+          setAiProvider={setAiProvider}
+          localBaseUrl={localBaseUrl}
+          setLocalBaseUrl={setLocalBaseUrl}
           onClose={() => setShowSettings(false)}
         />
       )}

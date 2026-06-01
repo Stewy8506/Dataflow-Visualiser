@@ -15,12 +15,12 @@ pub mod unused_exports;
 pub mod utils;
 
 use ignore::WalkBuilder;
+use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use rayon::prelude::*;
 use tauri::{Emitter, Window};
 
 use cpp::{CPP_PARSER, C_PARSER};
@@ -29,9 +29,9 @@ use go::GO_PARSER;
 use java::JAVA_PARSER;
 use javascript::extract_javascript_imports;
 
+use csharp::CSHARP_PARSER;
 use python::PYTHON_PARSER;
 use rust::RUST_PARSER;
-use csharp::CSHARP_PARSER;
 use tree_sitter_utils::extract_imports_with_parser;
 use utils::is_ignored;
 
@@ -57,6 +57,8 @@ pub struct ParsedNode {
     pub metrics: Option<NodeMetrics>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vulnerabilities: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -77,6 +79,7 @@ pub struct FileData {
     pub import_specifiers: Vec<(String, String)>,
     pub is_barrel_file: bool,
     pub is_router: bool,
+    #[allow(dead_code)]
     pub tags: Vec<String>,
     pub express_routes: Vec<(String, String)>,
 }
@@ -237,7 +240,10 @@ pub struct GraphData {
 }
 
 #[tauri::command]
-pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<GraphData, crate::error::AppError> {
+pub async fn parse_codebase(
+    _app: tauri::AppHandle,
+    path: String,
+) -> Result<GraphData, crate::error::AppError> {
     let mut nodes = Vec::new();
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
@@ -277,26 +283,61 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
         }
     }
 
-    let mut ext_deps = std::collections::HashSet::new();
+    let mut ext_deps: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if !is_flutter {
         let package_json_path = path_ref.join("package.json");
+        let package_lock_path = path_ref.join("package-lock.json");
+
         if package_json_path.exists() {
             if let Ok(content) = fs::read_to_string(&package_json_path) {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
-                        for k in deps.keys() {
-                            ext_deps.insert(k.clone());
+                        for (k, v) in deps {
+                            let ver = v.as_str().unwrap_or("").replace("^", "").replace("~", "");
+                            ext_deps.insert(k.clone(), ver);
                         }
                     }
                     if let Some(deps) = json.get("devDependencies").and_then(|v| v.as_object()) {
-                        for k in deps.keys() {
-                            ext_deps.insert(k.clone());
+                        for (k, v) in deps {
+                            let ver = v.as_str().unwrap_or("").replace("^", "").replace("~", "");
+                            ext_deps.insert(k.clone(), ver);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Overwrite with precise lockfile versions if possible
+        if package_lock_path.exists() {
+            if let Ok(content) = fs::read_to_string(&package_lock_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(packages) = json.get("packages").and_then(|v| v.as_object()) {
+                        for (key, val) in packages {
+                            if key.starts_with("node_modules/") {
+                                let pkg_name = key.replace("node_modules/", "");
+                                if ext_deps.contains_key(&pkg_name) {
+                                    if let Some(ver) = val.get("version").and_then(|v| v.as_str()) {
+                                        ext_deps.insert(pkg_name, ver.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    } else if let Some(dependencies) =
+                        json.get("dependencies").and_then(|v| v.as_object())
+                    {
+                        for (key, val) in dependencies {
+                            if ext_deps.contains_key(key) {
+                                if let Some(ver) = val.get("version").and_then(|v| v.as_str()) {
+                                    ext_deps.insert(key.clone(), ver.to_string());
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     } else {
+        let pubspec_lock_path = path_ref.join("pubspec.lock");
         if let Ok(content) = fs::read_to_string(&pubspec_path) {
             let mut in_deps = false;
             for line in content.lines() {
@@ -305,17 +346,92 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                     in_deps = true;
                 } else if !line.starts_with(' ') && !line.is_empty() {
                     in_deps = false;
-                } else if in_deps && trimmed.len() > 0 && !trimmed.starts_with('#') {
+                } else if in_deps && !trimmed.is_empty() && !trimmed.starts_with('#') {
                     let parts: Vec<&str> = trimmed.split(':').collect();
                     if !parts.is_empty() {
-                        ext_deps.insert(parts[0].trim().to_string());
+                        ext_deps.insert(parts[0].trim().to_string(), "".to_string());
+                    }
+                }
+            }
+        }
+
+        // Parse pubspec.lock manually
+        if pubspec_lock_path.exists() {
+            if let Ok(content) = fs::read_to_string(&pubspec_lock_path) {
+                let mut current_pkg = String::new();
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if line.starts_with("  ") && !line.starts_with("    ") && trimmed.ends_with(':')
+                    {
+                        current_pkg = trimmed[..trimmed.len() - 1].to_string();
+                    } else if line.starts_with("    version:")
+                        && ext_deps.contains_key(&current_pkg)
+                    {
+                        let parts: Vec<&str> = trimmed.split(':').collect();
+                        if parts.len() >= 2 {
+                            let ver = parts[1].trim().replace("\"", "");
+                            ext_deps.insert(current_pkg.clone(), ver);
+                        }
                     }
                 }
             }
         }
     }
 
-    for dep in &ext_deps {
+    // OSV Lookup
+    let mut vulnerabilities_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    // We only perform the OSV check if we have actual deps to check to save time
+    if !ext_deps.is_empty() {
+        let ecosystem = if is_flutter { "Pub" } else { "npm" };
+        let mut queries = Vec::new();
+
+        for (pkg, ver) in &ext_deps {
+            if !ver.is_empty() {
+                queries.push(serde_json::json!({
+                    "package": { "name": pkg, "ecosystem": ecosystem },
+                    "version": ver
+                }));
+            }
+        }
+
+        if !queries.is_empty() {
+            let req_body = serde_json::json!({ "queries": queries });
+            let client = reqwest::Client::new();
+            if let Ok(resp) = client
+                .post("https://api.osv.dev/v1/querybatch")
+                .json(&req_body)
+                .send()
+                .await
+            {
+                if let Ok(json_resp) = resp.json::<serde_json::Value>().await {
+                    if let Some(results) = json_resp.get("results").and_then(|r| r.as_array()) {
+                        let mut i = 0;
+                        for (pkg, _ver) in ext_deps.iter().filter(|(_, v)| !v.is_empty()) {
+                            if let Some(res) = results.get(i) {
+                                if let Some(vulns) = res.get("vulns").and_then(|v| v.as_array()) {
+                                    let mut v_list = Vec::new();
+                                    for vuln in vulns {
+                                        if let Some(id) = vuln.get("id").and_then(|i| i.as_str()) {
+                                            v_list.push(id.to_string());
+                                        }
+                                    }
+                                    if !v_list.is_empty() {
+                                        vulnerabilities_map.insert(pkg.clone(), v_list);
+                                    }
+                                }
+                            }
+                            i += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (dep, _) in &ext_deps {
+        let vulns = vulnerabilities_map.get(dep).cloned().unwrap_or_default();
         nodes.push(ParsedNode {
             id: format!("ext:{}", dep),
             label: dep.clone(),
@@ -329,6 +445,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
             unused_exports: Vec::new(),
             metrics: None,
             tags: Vec::new(),
+            vulnerabilities: vulns,
         });
     }
 
@@ -345,7 +462,22 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
                 if matches!(
                     ext,
-                    "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "java" | "cs" | "go"
+                    "js" | "ts"
+                        | "jsx"
+                        | "tsx"
+                        | "py"
+                        | "rs"
+                        | "dart"
+                        | "c"
+                        | "h"
+                        | "cpp"
+                        | "hpp"
+                        | "cc"
+                        | "cxx"
+                        | "hxx"
+                        | "java"
+                        | "cs"
+                        | "go"
                 ) {
                     paths_to_parse.push(file_path.to_path_buf());
                 }
@@ -373,6 +505,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 unused_exports: Vec::new(),
                 metrics: None,
                 tags: Vec::new(),
+                vulnerabilities: Vec::new(),
             };
 
             let mut imports = Vec::new();
@@ -387,27 +520,38 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
             let mut express_routes = Vec::new();
 
             if let Ok(source_text) = fs::read_to_string(&file_path) {
-                let re = Regex::new(
-                    r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
-                )
-                .unwrap();
+                let re =
+                    Regex::new(r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)")
+                        .unwrap();
                 function_count = re.find_iter(&source_text).count();
 
                 if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
-                    let (barrel, _exports, extracted_tags, extracted_routes) = extract_javascript_imports(
-                        &source_text,
-                        &file_path,
-                        &mut imports,
-                        &mut api_calls,
-                        &mut exported_symbols,
-                        &mut import_specifiers,
-                    );
+                    let (barrel, _exports, extracted_tags, extracted_routes) =
+                        extract_javascript_imports(
+                            &source_text,
+                            &file_path,
+                            &mut imports,
+                            &mut api_calls,
+                            &mut exported_symbols,
+                            &mut import_specifiers,
+                        );
                     is_barrel_file = barrel;
                     tags.extend(extracted_tags);
                     express_routes.extend(extracted_routes);
                 } else if matches!(
                     ext,
-                    "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "java" | "cs" | "go"
+                    "py" | "rs"
+                        | "dart"
+                        | "c"
+                        | "h"
+                        | "cpp"
+                        | "hpp"
+                        | "cc"
+                        | "cxx"
+                        | "hxx"
+                        | "java"
+                        | "cs"
+                        | "go"
                 ) {
                     match ext {
                         "py" => PYTHON_PARSER.with(|p| {
@@ -534,6 +678,8 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
 
     let cmake_data = cmake::parse_cmake_projects(path_ref);
 
+    let ext_deps_set: std::collections::HashSet<String> = ext_deps.keys().cloned().collect();
+
     Ok(graph_builder::build_graph(
         &files_data,
         nodes,
@@ -542,7 +688,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
         &node_index,
         &alias_resolver,
         &cmake_data,
-        &ext_deps,
+        &ext_deps_set,
     ))
 }
 
@@ -694,6 +840,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                 complexity_score: score.to_string(),
                             }),
                             tags: Vec::new(),
+                            vulnerabilities: Vec::new(),
                         };
 
                         let alias_resolver = AliasResolver::new(path_ref);

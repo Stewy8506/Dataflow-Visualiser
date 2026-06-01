@@ -9,9 +9,11 @@ interface UseProjectLoaderOptions {
   apiKey: string;
   enableAi: boolean;
   selectedModel: string;
+  aiProvider: string;
+  localBaseUrl: string;
 }
 
-export function useProjectLoader({ apiKey, enableAi, selectedModel }: UseProjectLoaderOptions) {
+export function useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl }: UseProjectLoaderOptions) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -111,17 +113,17 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel }: UseProject
 
       await saveRecentProject(path);
 
-      if (apiKey && enableAi) {
-        setLogs(prev => [...prev, `> Found API Key, starting progressive AI enrichment with ${selectedModel}...`]);
+      if ((aiProvider === 'gemini' && apiKey && enableAi) || (aiProvider === 'local' && localBaseUrl && enableAi)) {
+        setLogs(prev => [...prev, `> Starting progressive AI enrichment with ${selectedModel} via ${aiProvider}...`]);
         setIsEnriching(true);
         try {
-          await invoke('enrich_graph_with_ai', { graphData: result, apiKey, model: selectedModel });
+          await invoke('enrich_graph_with_ai', { graphData: result, apiKey, model: selectedModel, aiProvider, localBaseUrl });
         } catch (aiErr) {
           console.error('AI Enrichment Error:', aiErr);
           setLogs(prev => [...prev, `> AI Error: ${String(aiErr)}`]);
           setIsEnriching(false);
         }
-      } else if (apiKey && !enableAi) {
+      } else if (!enableAi) {
         setLogs(prev => [...prev, '> AI summary generation is disabled in Settings.']);
       }
     } catch (e) {
@@ -133,7 +135,7 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel }: UseProject
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, enableAi, selectedModel, recentProjects]);
+  }, [apiKey, enableAi, selectedModel, aiProvider, localBaseUrl, recentProjects]);
 
   const handleSelectDirectory = useCallback(async () => {
     try {

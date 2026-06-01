@@ -46,6 +46,33 @@ struct GeminiResponse {
     candidates: Vec<GeminiResponseCandidate>,
 }
 
+#[derive(Serialize)]
+struct OpenAiMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiRequest {
+    model: String,
+    messages: Vec<OpenAiMessage>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiResponse {
+    choices: Vec<OpenAiChoice>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiChoice {
+    message: OpenAiMessageContent,
+}
+
+#[derive(Deserialize)]
+struct OpenAiMessageContent {
+    content: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct AiNodeResult {
     id: String,
@@ -58,21 +85,115 @@ struct AiResult {
     nodes: Vec<AiNodeResult>,
 }
 
+async fn call_llm(
+    ai_provider: &str,
+    api_key: &str,
+    model: &str,
+    local_base_url: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+
+    if ai_provider == "local" {
+        let url = format!("{}/chat/completions", local_base_url);
+        let request_body = OpenAiRequest {
+            model: model.to_string(),
+            messages: vec![OpenAiMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+        };
+
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let response_text = response.text().await.map_err(|e| e.to_string())?;
+        let openai_response: OpenAiResponse =
+            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+
+        if let Some(choice) = openai_response.choices.first() {
+            Ok(choice.message.content.clone())
+        } else {
+            Err("Empty response from local AI".to_string())
+        }
+    } else {
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
+            model, api_key
+        );
+
+        let request_body = GeminiRequest {
+            contents: vec![GeminiRequestContent {
+                parts: vec![GeminiRequestPart {
+                    text: prompt.to_string(),
+                }],
+            }],
+            generation_config: GenerationConfig {
+                response_mime_type: "application/json".to_string(),
+            },
+        };
+
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let response_text = response.text().await.map_err(|e| e.to_string())?;
+        let gemini_response: GeminiResponse =
+            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+
+        let text = gemini_response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .map(|p| p.text.trim().to_string())
+            .ok_or("Empty response from AI")?;
+
+        Ok(text)
+    }
+}
+
+fn extract_json(text: &str) -> &str {
+    if let Some(start) = text.find("```json") {
+        if let Some(end) = text[start + 7..].find("```") {
+            &text[start + 7..start + 7 + end]
+        } else {
+            &text[start + 7..]
+        }
+    } else if let Some(start) = text.find('{') {
+        if let Some(end) = text.rfind('}') {
+            &text[start..=end]
+        } else {
+            text
+        }
+    } else {
+        text
+    }
+}
+
 #[tauri::command]
 pub async fn enrich_graph_with_ai(
     window: Window,
     graph_data: GraphData,
     api_key: String,
     model: String,
+    ai_provider: String,
+    local_base_url: String,
 ) -> Result<(), String> {
-    if api_key.is_empty() {
+    if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
     }
 
     tauri::async_runtime::spawn(async move {
-        let client = reqwest::Client::new();
         let chunk_size = 10;
-
         let nodes = graph_data.nodes.clone();
 
         for chunk in nodes.chunks(chunk_size) {
@@ -106,64 +227,12 @@ pub async fn enrich_graph_with_ai(
                 prompt.push_str("\n```\n\n");
             }
 
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
-                model, api_key
-            );
-
-            let request_body = GeminiRequest {
-                contents: vec![GeminiRequestContent {
-                    parts: vec![GeminiRequestPart { text: prompt }],
-                }],
-                generation_config: GenerationConfig {
-                    response_mime_type: "application/json".to_string(),
-                },
-            };
-
-            let response = client
-                .post(&url)
-                .header("Content-Type", "application/json")
-                .json(&request_body)
-                .send()
-                .await;
-
-            if let Ok(resp) = response {
-                if let Ok(response_text) = resp.text().await {
-                    if let Ok(gemini_response) =
-                        serde_json::from_str::<GeminiResponse>(&response_text)
-                    {
-                        if let Some(candidate) = gemini_response.candidates.first() {
-                            if let Some(part) = candidate.content.parts.first() {
-                                let text = part.text.trim();
-
-                                let json_str = if let Some(start) = text.find("```json") {
-                                    if let Some(end) = text[start + 7..].find("```") {
-                                        &text[start + 7..start + 7 + end]
-                                    } else {
-                                        &text[start + 7..]
-                                    }
-                                } else if let Some(start) = text.find('{') {
-                                    if let Some(end) = text.rfind('}') {
-                                        &text[start..=end]
-                                    } else {
-                                        text
-                                    }
-                                } else {
-                                    text
-                                };
-
-                                let json_str = json_str.trim();
-
-                                if let Ok(ai_result) = serde_json::from_str::<AiResult>(json_str) {
-                                    let _ = window.emit("ai_nodes_enriched", &ai_result.nodes);
-                                } else {
-                                    eprintln!("Failed to parse AI JSON result: {}", json_str);
-                                }
-                            }
-                        }
-                    } else {
-                        eprintln!("Failed to parse Gemini response: {}", response_text);
-                    }
+            if let Ok(response_text) = call_llm(&ai_provider, &api_key, &model, &local_base_url, &prompt).await {
+                let json_str = extract_json(&response_text).trim();
+                if let Ok(ai_result) = serde_json::from_str::<AiResult>(json_str) {
+                    let _ = window.emit("ai_nodes_enriched", &ai_result.nodes);
+                } else {
+                    eprintln!("Failed to parse AI JSON result: {}", json_str);
                 }
             }
         }
@@ -193,12 +262,13 @@ pub async fn execute_ai_refactor(
     api_key: String,
     model: String,
     affected_files: Vec<String>,
+    ai_provider: String,
+    local_base_url: String,
 ) -> Result<Vec<RefactorFileUpdate>, String> {
-    if api_key.is_empty() {
+    if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
     }
 
-    let client = reqwest::Client::new();
     let mut prompt = format!(
         "You are an expert refactoring assistant. We are renaming a file or symbol.\n\
         Target File: {}\n\
@@ -234,56 +304,10 @@ pub async fn execute_ai_refactor(
         prompt.push_str("\n```\n\n");
     }
 
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
-        model, api_key
-    );
-
-    let request_body = GeminiRequest {
-        contents: vec![GeminiRequestContent {
-            parts: vec![GeminiRequestPart { text: prompt }],
-        }],
-        generation_config: GenerationConfig {
-            response_mime_type: "application/json".to_string(),
-        },
-    };
-
-    let response = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let response_text = response.text().await.map_err(|e| e.to_string())?;
-
-    let gemini_response: GeminiResponse =
-        serde_json::from_str(&response_text).map_err(|e| e.to_string())?;
-    let text = gemini_response
-        .candidates
-        .first()
-        .and_then(|c| c.content.parts.first())
-        .map(|p| p.text.trim())
-        .ok_or("Empty response from AI")?;
-
-    let json_str = if let Some(start) = text.find("```json") {
-        if let Some(end) = text[start + 7..].find("```") {
-            &text[start + 7..start + 7 + end]
-        } else {
-            &text[start + 7..]
-        }
-    } else if let Some(start) = text.find('{') {
-        if let Some(end) = text.rfind('}') {
-            &text[start..=end]
-        } else {
-            text
-        }
-    } else {
-        text
-    };
-
-    let ai_result: AiRefactorResult = serde_json::from_str(json_str.trim())
+    let response_text = call_llm(&ai_provider, &api_key, &model, &local_base_url, &prompt).await?;
+    
+    let json_str = extract_json(&response_text).trim();
+    let ai_result: AiRefactorResult = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
     // Apply the updates to the file system
@@ -308,74 +332,121 @@ struct GeminiChatContent {
     parts: Vec<GeminiRequestPart>,
 }
 
+#[derive(Serialize)]
+struct GeminiChatRequest {
+    contents: Vec<GeminiChatContent>,
+    #[serde(rename = "generationConfig")]
+    generation_config: GenerationConfig,
+}
+
 #[tauri::command]
 pub async fn ask_assistant(
     history: Vec<ChatMessage>,
     file_context: Option<String>,
     api_key: String,
     model: String,
+    ai_provider: String,
+    local_base_url: String,
 ) -> Result<String, String> {
-    if api_key.is_empty() {
+    if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
     }
 
     let client = reqwest::Client::new();
-    let mut contents = Vec::new();
 
-    for msg in history {
-        contents.push(GeminiChatContent {
-            role: if msg.role == "assistant" { "model".to_string() } else { "user".to_string() },
-            parts: vec![GeminiRequestPart { text: msg.text }],
-        });
-    }
+    if ai_provider == "local" {
+        let url = format!("{}/chat/completions", local_base_url);
+        let mut messages = Vec::new();
+        
+        for msg in history {
+            messages.push(OpenAiMessage {
+                role: msg.role,
+                content: msg.text,
+            });
+        }
 
-    if let Some(ctx) = file_context {
-        if let Some(last) = contents.last_mut() {
-            if last.role == "user" {
-                let current_text = last.parts[0].text.clone();
-                last.parts[0].text = format!("{}\n\nContext:\n```\n{}\n```", current_text, ctx);
+        if let Some(ctx) = file_context {
+            if let Some(last) = messages.last_mut() {
+                if last.role == "user" {
+                    let current_text = last.content.clone();
+                    last.content = format!("{}\n\nContext:\n```\n{}\n```", current_text, ctx);
+                }
             }
         }
+
+        let request_body = OpenAiRequest {
+            model: model.to_string(),
+            messages,
+        };
+
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let response_text = response.text().await.map_err(|e| e.to_string())?;
+        let openai_response: OpenAiResponse =
+            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+
+        if let Some(choice) = openai_response.choices.first() {
+            Ok(choice.message.content.clone())
+        } else {
+            Err("Empty response from local AI".to_string())
+        }
+    } else {
+        let mut contents = Vec::new();
+
+        for msg in history {
+            contents.push(GeminiChatContent {
+                role: if msg.role == "assistant" { "model".to_string() } else { "user".to_string() },
+                parts: vec![GeminiRequestPart { text: msg.text }],
+            });
+        }
+
+        if let Some(ctx) = file_context {
+            if let Some(last) = contents.last_mut() {
+                if last.role == "user" {
+                    let current_text = last.parts[0].text.clone();
+                    last.parts[0].text = format!("{}\n\nContext:\n```\n{}\n```", current_text, ctx);
+                }
+            }
+        }
+
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
+            model, api_key
+        );
+
+        let request_body = GeminiChatRequest {
+            contents,
+            generation_config: GenerationConfig {
+                response_mime_type: "text/plain".to_string(),
+            },
+        };
+
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+
+        let gemini_response: GeminiResponse =
+            serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}\nResponse was: {}", e, response_text))?;
+        
+        let text = gemini_response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .map(|p| p.text.trim().to_string())
+            .ok_or("Empty response from AI")?;
+
+        Ok(text)
     }
-
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/{}:generateContent?key={}",
-        model, api_key
-    );
-
-    #[derive(Serialize)]
-    struct GeminiChatRequest {
-        contents: Vec<GeminiChatContent>,
-        #[serde(rename = "generationConfig")]
-        generation_config: GenerationConfig,
-    }
-
-    let request_body = GeminiChatRequest {
-        contents,
-        generation_config: GenerationConfig {
-            response_mime_type: "text/plain".to_string(),
-        },
-    };
-
-    let response = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-
-    let gemini_response: GeminiResponse =
-        serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}\nResponse was: {}", e, response_text))?;
-    
-    let text = gemini_response
-        .candidates
-        .first()
-        .and_then(|c| c.content.parts.first())
-        .map(|p| p.text.trim().to_string())
-        .ok_or("Empty response from AI")?;
-
-    Ok(text)
 }
