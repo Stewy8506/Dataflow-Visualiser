@@ -21,9 +21,11 @@ interface HeaderProps {
   setShowHeatmap?: (val: boolean) => void;
   showTests?: boolean;
   setShowTests?: (val: boolean) => void;
+  showSemanticEdges?: boolean;
+  setShowSemanticEdges?: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots, showHeatmap, setShowHeatmap, showTests, setShowTests }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots, showHeatmap, setShowHeatmap, showTests, setShowTests, showSemanticEdges, setShowSemanticEdges }: HeaderProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
@@ -157,6 +159,21 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
             title="Toggle Tests & Mocks"
           >
             <div className="font-bold text-xs flex items-center justify-center">T</div>
+          </button>
+        )}
+
+        {/* Semantic Edges Toggle */}
+        {viewMode === '2d' && setShowSemanticEdges && (
+          <button
+            onClick={() => setShowSemanticEdges(!showSemanticEdges)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              showSemanticEdges 
+                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
+                : 'text-text-dim hover:text-text-main hover:bg-glass-light border border-transparent'
+            }`}
+            title="Toggle Semantic/Custom Edges"
+          >
+            <div className="font-bold text-xs flex items-center justify-center">S</div>
           </button>
         )}
 

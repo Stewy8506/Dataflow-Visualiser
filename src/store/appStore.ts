@@ -13,6 +13,7 @@ interface AppState {
   showSnapshots: boolean;
   showHeatmap: boolean;
   showTests: boolean;
+  showSemanticEdges: boolean;
   churnData: Record<string, number> | null;
   refactorTarget: string | null;
   propTrace: any | null;
@@ -36,6 +37,7 @@ interface AppState {
   setShowSnapshots: (show: boolean) => void;
   setShowHeatmap: (show: boolean) => void;
   setShowTests: (show: boolean) => void;
+  setShowSemanticEdges: (show: boolean) => void;
   setChurnData: (data: Record<string, number> | null) => void;
   setRefactorTarget: (target: string | null) => void;
   setPropTrace: (trace: any | null) => void;
@@ -61,6 +63,7 @@ export const useAppStore = create<AppState>((set) => ({
   showSnapshots: false,
   showHeatmap: false,
   showTests: true,
+  showSemanticEdges: true,
   churnData: null,
   refactorTarget: null,
   propTrace: null,
@@ -84,6 +87,7 @@ export const useAppStore = create<AppState>((set) => ({
   setShowSnapshots: (show) => set({ showSnapshots: show }),
   setShowHeatmap: (show) => set({ showHeatmap: show }),
   setShowTests: (show) => set({ showTests: show }),
+  setShowSemanticEdges: (show) => set({ showSemanticEdges: show }),
   setChurnData: (data) => set({ churnData: data }),
   setRefactorTarget: (target) => set({ refactorTarget: target }),
   setPropTrace: (trace) => set({ propTrace: trace }),

@@ -1,4 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link } from 'lucide-react';
 import type { GraphLayer } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { useSettings } from '../../hooks/useSettings';
@@ -23,6 +23,7 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
     showSnapshots, setShowSnapshots,
     showHeatmap, setShowHeatmap,
     showAiChat, setShowAiChat,
+    showSemanticEdges, setShowSemanticEdges,
     setShowSettings
   } = useAppStore();
 
@@ -112,6 +113,20 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
             title="Toggle External Dependencies"
           >
             <Package size={14} />
+          </button>
+        )}
+
+        {viewMode === '2d' && (
+          <button
+            onClick={() => setShowSemanticEdges(!showSemanticEdges)}
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              showSemanticEdges 
+                ? 'bg-indigo-500/20 text-indigo-400' 
+                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
+            }`}
+            title="Toggle Semantic/Custom Edges"
+          >
+            <Link size={14} />
           </button>
         )}
 

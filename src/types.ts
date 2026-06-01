@@ -23,6 +23,7 @@ export interface ParsedEdge {
   target: string;
   via: string | null;
   is_data_source?: boolean;
+  edge_type?: string;
 }
 
 export interface GraphData {

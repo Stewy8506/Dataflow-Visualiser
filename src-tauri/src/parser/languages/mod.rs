@@ -1,4 +1,5 @@
 pub mod cmake;
+pub mod cargo;
 pub mod cpp;
 pub mod csharp;
 pub mod dart;

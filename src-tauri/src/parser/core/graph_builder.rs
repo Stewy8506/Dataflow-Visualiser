@@ -1,11 +1,12 @@
+use regex::Regex;
 use std::collections::HashSet;
 use std::path::Path;
-use regex::Regex;
 
-use crate::parser::{AliasResolver, FileData, GraphData, ParsedEdge, ParsedNode};
-use crate::parser::languages::nextjs::resolve_nextjs_edges;
+use crate::parser::languages::cargo::CargoWorkspaceData;
 use crate::parser::languages::cmake::CMakeData;
+use crate::parser::languages::nextjs::resolve_nextjs_edges;
 use crate::parser::utils::utils::resolve_import_path;
+use crate::parser::{AliasResolver, FileData, GraphData, ParsedEdge, ParsedNode};
 
 /// Resolve all import edges, match API calls to endpoints,
 /// flatten barrel files, and construct the final GraphData.
@@ -17,6 +18,7 @@ pub fn build_graph(
     node_index: &std::collections::HashMap<String, usize>,
     alias_resolver: &AliasResolver,
     cmake_data: &CMakeData,
+    cargo_data: &CargoWorkspaceData,
     ext_deps: &HashSet<String>,
 ) -> GraphData {
     let mut edges: Vec<ParsedEdge> = Vec::new();
@@ -87,9 +89,19 @@ pub fn build_graph(
 
             if target_id.is_none() {
                 let scoped_pkg = if import_str.0.starts_with('@') {
-                    import_str.0.split('/').take(2).collect::<Vec<_>>().join("/")
+                    import_str
+                        .0
+                        .split('/')
+                        .take(2)
+                        .collect::<Vec<_>>()
+                        .join("/")
                 } else {
-                    import_str.0.split('/').next().unwrap_or(&import_str.0).to_string()
+                    import_str
+                        .0
+                        .split('/')
+                        .next()
+                        .unwrap_or(&import_str.0)
+                        .to_string()
                 };
                 if ext_deps.contains(&scoped_pkg) {
                     target_id = Some(format!("ext:{}", scoped_pkg));
@@ -122,7 +134,9 @@ pub fn build_graph(
                             }
                         }
                     }
-                    if via.is_some() { break; }
+                    if via.is_some() {
+                        break;
+                    }
                 }
 
                 edges.push(ParsedEdge {
@@ -130,6 +144,71 @@ pub fn build_graph(
                     target: target_node,
                     via,
                     is_data_source: import_str.1,
+                    edge_type: "import".to_string(),
+                });
+            }
+        }
+    }
+
+    let mut symbol_to_node: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for fd in files_data {
+        for sym in &fd.exported_symbols {
+            symbol_to_node.insert(sym.clone(), fd.id.clone());
+        }
+    }
+
+    let mut di_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for fd in files_data {
+        for (target_str, edge_type) in &fd.custom_edges {
+            if edge_type == "DiBinding" {
+                if let Some((iface, concrete)) = target_str.split_once('|') {
+                    di_map.insert(iface.to_string(), concrete.to_string());
+                }
+            }
+        }
+    }
+
+    // ── Custom edges ────────────────────────────────────────────────────────
+    for file_data in files_data {
+        for (target_str, edge_type) in &file_data.custom_edges {
+            if edge_type == "DiBinding" {
+                continue;
+            }
+
+            let mut resolved_target_str = target_str.clone();
+            let resolved_edge_type = edge_type.clone();
+
+            if edge_type == "Injection" {
+                if let Some(concrete) = di_map.get(target_str) {
+                    resolved_target_str = concrete.clone();
+                    // We resolve the injection interface to concrete implementation.
+                    // The edge represents the injection of the concrete class.
+                }
+            }
+
+            let mut target_id = None;
+            if let Some(idx) = resolve_import_path(
+                &file_data.path,
+                workspace_root,
+                &resolved_target_str,
+                package_name,
+                node_index,
+                &nodes,
+                alias_resolver,
+            ) {
+                target_id = Some(nodes[idx].id.clone());
+            } else if let Some(resolved_id) = symbol_to_node.get(&resolved_target_str) {
+                target_id = Some(resolved_id.clone());
+            }
+
+            if let Some(target) = target_id {
+                edges.push(ParsedEdge {
+                    source: file_data.id.clone(),
+                    target,
+                    via: None,
+                    is_data_source: false,
+                    edge_type: resolved_edge_type,
                 });
             }
         }
@@ -147,7 +226,8 @@ pub fn build_graph(
             for backend_file in files_data {
                 for endpoint in &backend_file.api_endpoints {
                     let endpoint_pattern = param_re.replace_all(endpoint, "[^/]+");
-                    let endpoint_regex_str = format!("(?i){}$", endpoint_pattern.replace('?', "\\?"));
+                    let endpoint_regex_str =
+                        format!("(?i){}$", endpoint_pattern.replace('?', "\\?"));
                     let matched = if let Ok(re) = Regex::new(&endpoint_regex_str) {
                         re.is_match(clean_api)
                     } else {
@@ -159,6 +239,7 @@ pub fn build_graph(
                             target: backend_file.id.clone(),
                             via: Some("API Call".to_string()),
                             is_data_source: true,
+                            edge_type: "api_call".to_string(),
                         });
                     }
                 }
@@ -178,6 +259,46 @@ pub fn build_graph(
                         target: dep_node.id.clone(),
                         via: Some(format!("CMake Requires {}", dep)),
                         is_data_source: false,
+                        edge_type: "cmake".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // ── Cargo Workspace edges ─────────────────────────────────────────────────
+    for (crate_dir, deps) in &cargo_data.member_deps {
+        let crate_dir_str = crate_dir.to_string_lossy().replace('\\', "/");
+        let mut source_id = None;
+        for n in &nodes {
+            if n.id.starts_with(&crate_dir_str)
+                && (n.id.ends_with("lib.rs") || n.id.ends_with("main.rs"))
+            {
+                source_id = Some(n.id.clone());
+                break;
+            }
+        }
+
+        if let Some(src) = source_id {
+            for dep in deps {
+                let dep_str = dep.to_string_lossy().replace('\\', "/");
+                let mut target_id = None;
+                for n in &nodes {
+                    if n.id.starts_with(&dep_str)
+                        && (n.id.ends_with("lib.rs") || n.id.ends_with("main.rs"))
+                    {
+                        target_id = Some(n.id.clone());
+                        break;
+                    }
+                }
+
+                if let Some(tgt) = target_id {
+                    edges.push(ParsedEdge {
+                        source: src.clone(),
+                        target: tgt,
+                        via: Some("Cargo Workspace".to_string()),
+                        is_data_source: false,
+                        edge_type: "Workspace".to_string(),
                     });
                 }
             }
@@ -188,10 +309,19 @@ pub fn build_graph(
     resolve_nextjs_edges(&nodes, &mut edges);
 
     // ── Barrel / router flattening ───────────────────────────────────────────
-    let barrel_ids: Vec<String> = files_data.iter().filter(|f| f.is_barrel_file).map(|f| f.id.clone()).collect();
+    let barrel_ids: Vec<String> = files_data
+        .iter()
+        .filter(|f| f.is_barrel_file)
+        .map(|f| f.id.clone())
+        .collect();
     let router_ids: Vec<String> = files_data
         .iter()
-        .filter(|f| f.is_router || f.id.contains("/api/") || f.id.contains("route.ts") || f.id.contains("route.js"))
+        .filter(|f| {
+            f.is_router
+                || f.id.contains("/api/")
+                || f.id.contains("route.ts")
+                || f.id.contains("route.js")
+        })
         .map(|f| f.id.clone())
         .collect();
 
@@ -200,12 +330,24 @@ pub fn build_graph(
 
     let mut final_edges = edges;
     for bypass_id in &ids_to_bypass {
-        let incoming: Vec<ParsedEdge> = final_edges.iter().filter(|e| &e.target == bypass_id).cloned().collect();
-        let outgoing: Vec<ParsedEdge> = final_edges.iter().filter(|e| &e.source == bypass_id).cloned().collect();
+        let incoming: Vec<ParsedEdge> = final_edges
+            .iter()
+            .filter(|e| &e.target == bypass_id)
+            .cloned()
+            .collect();
+        let outgoing: Vec<ParsedEdge> = final_edges
+            .iter()
+            .filter(|e| &e.source == bypass_id)
+            .cloned()
+            .collect();
         for inc in &incoming {
             for out in &outgoing {
                 if inc.source != out.target {
-                    let proxy_filename = Path::new(bypass_id).file_name().unwrap_or_default().to_string_lossy().to_string();
+                    let proxy_filename = Path::new(bypass_id)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
                     let new_via = match &inc.via {
                         None => Some(proxy_filename),
                         Some(v) => Some(format!("{}, {}", v, proxy_filename)),
@@ -215,6 +357,7 @@ pub fn build_graph(
                         target: out.target.clone(),
                         via: new_via,
                         is_data_source: inc.is_data_source || out.is_data_source,
+                        edge_type: inc.edge_type.clone(),
                     });
                 }
             }
@@ -233,5 +376,8 @@ pub fn build_graph(
         &ids_to_bypass,
     );
 
-    GraphData { nodes: final_nodes, edges: final_edges }
+    GraphData {
+        nodes: final_nodes,
+        edges: final_edges,
+    }
 }

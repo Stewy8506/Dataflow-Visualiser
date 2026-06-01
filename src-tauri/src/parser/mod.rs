@@ -12,19 +12,19 @@ use std::path::Path;
 use tauri::{Emitter, Window};
 
 use languages::cpp::{CPP_PARSER, C_PARSER};
+use languages::csharp::CSHARP_PARSER;
 use languages::dart::DART_PARSER;
 use languages::go::GO_PARSER;
 use languages::java::JAVA_PARSER;
 use languages::javascript::extract_javascript_imports;
-use languages::csharp::CSHARP_PARSER;
 use languages::python::PYTHON_PARSER;
 use languages::rust::RUST_PARSER;
 
 use utils::tree_sitter_utils::extract_imports_with_parser;
 use utils::utils::is_ignored;
 
-pub use utils::alias::AliasResolver;
 pub use core::models::{FileData, GraphData, NodeMetrics, ParsedEdge, ParsedNode};
+pub use utils::alias::AliasResolver;
 
 #[tauri::command]
 pub async fn parse_codebase(
@@ -246,6 +246,7 @@ pub async fn parse_codebase(
             };
 
             let mut imports = Vec::new();
+            let mut custom_edges = Vec::new();
             let mut api_calls = Vec::new();
             let mut api_endpoints = Vec::new();
             let mut exported_symbols = Vec::new();
@@ -297,6 +298,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -306,6 +308,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -315,6 +318,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -324,6 +328,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -333,6 +338,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -342,6 +348,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -351,6 +358,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -360,6 +368,7 @@ pub async fn parse_codebase(
                                 &source_text,
                                 ext,
                                 &mut imports,
+                                &mut custom_edges,
                                 &mut api_endpoints,
                             );
                         }),
@@ -387,6 +396,7 @@ pub async fn parse_codebase(
                 id,
                 path: file_path,
                 imports,
+                custom_edges,
                 api_calls,
                 api_endpoints,
                 exported_symbols,
@@ -414,6 +424,7 @@ pub async fn parse_codebase(
         .collect();
 
     let cmake_data = languages::cmake::parse_cmake_projects(path_ref);
+    let cargo_data = languages::cargo::parse_cargo_workspaces(path_ref);
 
     let ext_deps_set: std::collections::HashSet<String> = ext_deps.keys().cloned().collect();
 
@@ -425,6 +436,7 @@ pub async fn parse_codebase(
         &node_index,
         &alias_resolver,
         &cmake_data,
+        &cargo_data,
         &ext_deps_set,
     ))
 }
@@ -433,6 +445,7 @@ pub async fn parse_codebase(
 struct NodeUpdatedPayload {
     node: ParsedNode,
     resolved_imports: Vec<(String, bool)>,
+    resolved_custom_edges: Vec<(String, String)>,
 }
 
 #[tauri::command]
@@ -481,6 +494,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                             .to_string();
 
                         let mut imports = Vec::new();
+                        let mut custom_edges = Vec::new();
                         let mut api_calls = Vec::new();
                         let mut api_endpoints = Vec::new();
                         let mut function_count = 0;
@@ -511,6 +525,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut custom_edges,
                                             &mut api_endpoints,
                                         )
                                     }),
@@ -520,6 +535,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut custom_edges,
                                             &mut api_endpoints,
                                         )
                                     }),
@@ -529,6 +545,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut custom_edges,
                                             &mut api_endpoints,
                                         )
                                     }),
@@ -538,6 +555,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut custom_edges,
                                             &mut api_endpoints,
                                         )
                                     }),
@@ -547,6 +565,7 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                             &source_text,
                                             ext,
                                             &mut imports,
+                                            &mut custom_edges,
                                             &mut api_endpoints,
                                         )
                                     }),
@@ -591,11 +610,17 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                             resolved_imports.push((clean.to_string(), is_data));
                         }
 
+                        let mut resolved_custom_edges = Vec::new();
+                        for (tgt, etype) in custom_edges {
+                            resolved_custom_edges.push((tgt, etype));
+                        }
+
                         let _ = window.emit(
                             "node_updated",
                             NodeUpdatedPayload {
                                 node,
                                 resolved_imports,
+                                resolved_custom_edges,
                             },
                         );
                     }

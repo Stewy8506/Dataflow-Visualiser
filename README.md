@@ -226,12 +226,15 @@ Dataflow Visualiser is designed to be language and framework agnostic, but inclu
 ### 🚀 Fully Shipped
 - **Web & Full-Stack**: `Angular` (NgModule/decorator resolution), `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
 - **Node.js & Backend Frameworks**: `NestJS` (controller/service/module wiring), `Express.js` (router/middleware chain awareness).
+- **Python**: Deep parsing for `Django` (ORM model relationships like ForeignKey/OneToOne) and `Celery` (async task execution edges).
+- **Rust**: Full `Cargo Workspace` resolution and cross-crate dependency mapping.
+- **Java**: `Spring Boot` deep parsing, extracting `@Autowired`, `@Inject`, and `@Bean` dependency injection wiring edges.
+- **C#**: `.NET DI` deep parsing, extracting `AddTransient/AddScoped/AddSingleton` interface bindings and automatically mapping injected interfaces directly to concrete implementation classes.
+- **Dart/Flutter**: Widget tree extraction for `StatelessWidget`/`StatefulWidget` build method rendering hierarchies.
 
 ### 🚧 Half-Working (Basic Parsing)
-- **Systems & Native**: `Rust` (Cargo workspace resolution & basic module mapping), `Python` (basic import & FastAPI/Flask endpoint extraction).
-- **Mobile Applications**: `Flutter / Dart` (basic Dart imports & automatic `pubspec.yaml` package mapping).
 - **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
-- **Enterprise & Backend**: `Java`, `C#`, `Go` (basic import extraction via tree-sitter bindings).
+- **Go**: (basic import extraction via tree-sitter bindings).
 
 ---
 

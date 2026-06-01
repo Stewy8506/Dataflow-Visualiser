@@ -29,6 +29,7 @@ export function useGraphLayout({
     searchMode,
     showExternalDeps,
     showTests,
+    showSemanticEdges,
     customFilters
   } = useAppStore();
 
@@ -124,9 +125,16 @@ export function useGraphLayout({
       }
 
       const validNodeIds = new Set(filteredRawNodes.map(n => n.id));
-      const filteredRawEdges = rawGraphData.edges.filter(e =>
-        validNodeIds.has(e.source) && validNodeIds.has(e.target)
-      );
+      const filteredRawEdges = rawGraphData.edges.filter(e => {
+        if (!validNodeIds.has(e.source) || !validNodeIds.has(e.target)) return false;
+        
+        // Filter semantic edges if disabled
+        if (!showSemanticEdges) {
+          const isStructuralEdge = e.edge_type === 'import' || e.edge_type === 'api_call' || e.edge_type === 'cmake' || e.edge_type === 'nextjs' || !e.edge_type;
+          if (!isStructuralEdge) return false;
+        }
+        return true;
+      });
 
       const initialNodes = filteredRawNodes.map(n => {
         let subLabel = 'File';
@@ -180,21 +188,45 @@ export function useGraphLayout({
         };
       });
 
-      const initialEdges: Edge[] = filteredRawEdges.map((e, i) => ({
-        id: `e-${i}`,
-        source: e.target, // Visually: imported file feeds up into importer
-        target: e.source,
-        type: 'default',
-        animated: false,
-        data: { originalSource: e.source, originalTarget: e.target },
-        label: e.via ? (/^(GET|POST|PUT|DELETE|PATCH|USE|ALL) /.test(e.via) ? e.via : `via ${e.via}`) : undefined,
-        labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
-        labelBgStyle: { fill: '#111118', fillOpacity: 0.9, stroke: '#1e1e2a', strokeWidth: 1 },
-        labelBgPadding: [6, 3],
-        labelBgBorderRadius: 6,
-        style: { stroke: '#334155', strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#334155' },
-      }));
+      const initialEdges: Edge[] = filteredRawEdges.map((e, i) => {
+        let color = '#334155';
+        let dashArray: string | undefined = undefined;
+        let label = e.via ? (/^(GET|POST|PUT|DELETE|PATCH|USE|ALL) /.test(e.via) ? e.via : `via ${e.via}`) : undefined;
+
+        if (e.edge_type === 'DatabaseRelation') {
+           color = '#10b981';
+           label = e.via || 'Relation';
+        } else if (e.edge_type === 'WidgetTree') {
+           color = '#0ea5e9';
+           label = e.via || 'Widget';
+        } else if (e.edge_type === 'Injection') {
+           color = '#8b5cf6';
+           label = e.via || 'Injected';
+        } else if (e.edge_type === 'Workspace') {
+           color = '#f59e0b';
+           label = e.via || 'Workspace';
+        } else if (e.edge_type === 'AsyncExecution') {
+           color = '#ec4899';
+           dashArray = '5 5';
+           label = e.via || 'Async';
+        }
+
+        return {
+          id: `e-${i}`,
+          source: e.target, // Visually: imported file feeds up into importer
+          target: e.source,
+          type: 'default',
+          animated: e.edge_type === 'AsyncExecution',
+          data: { originalSource: e.source, originalTarget: e.target },
+          label,
+          labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
+          labelBgStyle: { fill: '#111118', fillOpacity: 0.9, stroke: '#1e1e2a', strokeWidth: 1 },
+          labelBgPadding: [6, 3],
+          labelBgBorderRadius: 6,
+          style: { stroke: color, strokeWidth: 2, strokeDasharray: dashArray },
+          markerEnd: { type: MarkerType.ArrowClosed, color },
+        };
+      });
 
       const dagreEdges: Edge[] = filteredRawEdges.map((e, i) => ({
         id: `e-${i}`,
@@ -265,7 +297,7 @@ export function useGraphLayout({
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, customFilters, onDeleteNode, savedPositions]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, showSemanticEdges, customFilters, onDeleteNode, savedPositions]);
 
   // Merge AI enrichment into nodes without triggering dagre relayout
   const enrichedFlowNodes = useMemo(() => {

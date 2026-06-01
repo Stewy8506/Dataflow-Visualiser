@@ -44,6 +44,7 @@ pub fn resolve_nextjs_edges(nodes: &[ParsedNode], edges: &mut Vec<ParsedEdge>) {
                 target: r_node.id.clone(),
                 via: None,
                 is_data_source: true,
+                edge_type: "nextjs".to_string(),
             });
         }
     }
@@ -78,6 +79,7 @@ pub fn resolve_nextjs_edges(nodes: &[ParsedNode], edges: &mut Vec<ParsedEdge>) {
                         target: l_node.id.clone(),
                         via: None,
                         is_data_source: true,
+                        edge_type: "nextjs".to_string(),
                     });
                 }
             }

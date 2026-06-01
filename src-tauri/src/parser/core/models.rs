@@ -33,12 +33,19 @@ pub struct ParsedEdge {
     pub target: String,
     pub via: Option<String>,
     pub is_data_source: bool,
+    #[serde(default = "default_edge_type")]
+    pub edge_type: String,
+}
+
+fn default_edge_type() -> String {
+    "import".to_string()
 }
 
 pub struct FileData {
     pub id: String,
     pub path: PathBuf,
     pub imports: Vec<(String, bool)>,
+    pub custom_edges: Vec<(String, String)>, // (target_import_string, edge_type)
     pub api_calls: Vec<String>,
     pub api_endpoints: Vec<String>,
     pub exported_symbols: Vec<String>,
