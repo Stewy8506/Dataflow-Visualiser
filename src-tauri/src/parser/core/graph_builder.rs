@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::path::Path;
 use regex::Regex;
 
-use super::{AliasResolver, FileData, GraphData, ParsedEdge, ParsedNode};
-use super::nextjs::resolve_nextjs_edges;
-use super::cmake::CMakeData;
-use super::utils::resolve_import_path;
+use crate::parser::{AliasResolver, FileData, GraphData, ParsedEdge, ParsedNode};
+use crate::parser::languages::nextjs::resolve_nextjs_edges;
+use crate::parser::languages::cmake::CMakeData;
+use crate::parser::utils::utils::resolve_import_path;
 
 /// Resolve all import edges, match API calls to endpoints,
 /// flatten barrel files, and construct the final GraphData.
@@ -223,7 +223,7 @@ pub fn build_graph(
     }
 
     // ── Unused export detection ───────────────────────────────────────────────
-    let final_nodes = crate::parser::unused_exports::annotate_unused_exports(
+    let final_nodes = crate::parser::utils::unused_exports::annotate_unused_exports(
         nodes,
         files_data,
         workspace_root,

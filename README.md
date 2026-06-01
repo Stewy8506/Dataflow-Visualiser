@@ -77,18 +77,20 @@ Dataflow-Visualiser/
 │   │   ├── state.rs              # Shared application state
 │   │   └── parser/               # AST parsing engine
 │   │       ├── mod.rs            # Orchestration: file walking & dispatch
-│   │       ├── graph_builder.rs  # Edge resolution, barrel flattening, CMake & API wiring
-│   │       ├── unused_exports.rs # Unused export annotation
-│   │       ├── javascript.rs     # oxc-parser JS/TS ingestion + dynamic import/require
-│   │       ├── nextjs.rs         # Next.js routing & layout implicit edges
-│   │       ├── python.rs         # Python import extraction
-│   │       ├── rust.rs           # Rust module resolution
-│   │       ├── dart.rs           # Dart package resolution
-│   │       ├── cmake.rs          # CMake component dependency parsing
-│   │       ├── cpp.rs            # C/C++ include extraction
-│   │       ├── props.rs          # React prop trace command
-│   │       ├── tree_sitter_utils.rs # tree-sitter helpers
-│   │       └── utils.rs          # Import path resolution & alias handling
+│   │       ├── core/             # Core models & graph construction
+│   │       │   ├── graph_builder.rs
+│   │       │   └── models.rs
+│   │       ├── languages/        # Language-specific AST extractors
+│   │       │   ├── javascript.rs # oxc-parser JS/TS ingestion + dynamic imports
+│   │       │   ├── rust.rs       # Rust module resolution
+│   │       │   ├── python.rs     # Python import extraction
+│   │       │   └── ...           # (cpp, csharp, go, java, dart, cmake, nextjs)
+│   │       └── utils/            # Analyzers and resolution helpers
+│   │           ├── alias.rs      # TypeScript path alias resolution
+│   │           ├── osv.rs        # Vulnerability lookups via OSV API
+│   │           ├── props.rs      # React prop trace command
+│   │           ├── unused_exports.rs # Unused export annotation
+│   │           └── tree_sitter_utils.rs
 │   ├── Cargo.toml                # Rust dependencies
 │   └── build.rs                  # Tauri build script
 ├── src/                          # React Frontend

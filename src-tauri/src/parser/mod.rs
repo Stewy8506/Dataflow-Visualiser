@@ -1,21 +1,8 @@
-pub mod alias;
-pub mod cmake;
-pub mod cpp;
-pub mod csharp;
-pub mod dart;
-pub mod go;
-pub mod graph_builder;
-pub mod java;
-pub mod javascript;
-pub mod models;
-pub mod nextjs;
-pub mod osv;
-pub mod props;
-pub mod python;
-pub mod rust;
-pub mod tree_sitter_utils;
-pub mod unused_exports;
-pub mod utils;use ignore::WalkBuilder;
+pub mod core;
+pub mod languages;
+pub mod utils;
+
+use ignore::WalkBuilder;
 use rayon::prelude::*;
 use regex::Regex;
 use serde::Serialize;
@@ -24,20 +11,20 @@ use std::fs;
 use std::path::Path;
 use tauri::{Emitter, Window};
 
-use cpp::{CPP_PARSER, C_PARSER};
-use dart::DART_PARSER;
-use go::GO_PARSER;
-use java::JAVA_PARSER;
-use javascript::extract_javascript_imports;
+use languages::cpp::{CPP_PARSER, C_PARSER};
+use languages::dart::DART_PARSER;
+use languages::go::GO_PARSER;
+use languages::java::JAVA_PARSER;
+use languages::javascript::extract_javascript_imports;
+use languages::csharp::CSHARP_PARSER;
+use languages::python::PYTHON_PARSER;
+use languages::rust::RUST_PARSER;
 
-use csharp::CSHARP_PARSER;
-use python::PYTHON_PARSER;
-use rust::RUST_PARSER;
-use tree_sitter_utils::extract_imports_with_parser;
-use utils::is_ignored;
+use utils::tree_sitter_utils::extract_imports_with_parser;
+use utils::utils::is_ignored;
 
-pub use alias::AliasResolver;
-pub use models::{FileData, GraphData, NodeMetrics, ParsedEdge, ParsedNode};
+pub use utils::alias::AliasResolver;
+pub use core::models::{FileData, GraphData, NodeMetrics, ParsedEdge, ParsedNode};
 
 #[tauri::command]
 pub async fn parse_codebase(
@@ -178,7 +165,7 @@ pub async fn parse_codebase(
         }
     }
 
-    let vulnerabilities_map = osv::check_vulnerabilities(&ext_deps, is_flutter).await;
+    let vulnerabilities_map = utils::osv::check_vulnerabilities(&ext_deps, is_flutter).await;
 
     for (dep, _) in &ext_deps {
         let vulns = vulnerabilities_map.get(dep).cloned().unwrap_or_default();
@@ -426,11 +413,11 @@ pub async fn parse_codebase(
         .map(|(i, n)| (n.id.to_lowercase(), i))
         .collect();
 
-    let cmake_data = cmake::parse_cmake_projects(path_ref);
+    let cmake_data = languages::cmake::parse_cmake_projects(path_ref);
 
     let ext_deps_set: std::collections::HashSet<String> = ext_deps.keys().cloned().collect();
 
-    Ok(graph_builder::build_graph(
+    Ok(core::graph_builder::build_graph(
         &files_data,
         nodes,
         path_ref,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
-use crate::parser::utils::is_ignored;
+use crate::parser::utils::utils::is_ignored;
 
 pub struct CMakeData {
     pub component_deps: HashMap<PathBuf, Vec<String>>,

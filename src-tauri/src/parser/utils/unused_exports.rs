@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::collections::HashSet;
 
-use super::{AliasResolver, FileData, ParsedNode};
+use crate::parser::{AliasResolver, FileData, ParsedNode};
 use super::utils::resolve_import_path;
 
 /// Walk the import specifier list and mark which exports of each file

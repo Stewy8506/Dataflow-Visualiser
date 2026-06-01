@@ -1,4 +1,4 @@
-use super::{ParsedNode, ParsedEdge};
+use crate::parser::{ParsedNode, ParsedEdge};
 use std::path::Path;
 
 pub fn resolve_nextjs_edges(nodes: &[ParsedNode], edges: &mut Vec<ParsedEdge>) {

@@ -66,7 +66,7 @@ pub fn run() {
             pty::write_pty,
             pty::resize_pty,
             refactor::preview_refactor,
-            parser::props::trace_prop,
+            parser::utils::props::trace_prop,
             snapshots::save_snapshot,
             snapshots::list_snapshots,
             snapshots::diff_snapshots

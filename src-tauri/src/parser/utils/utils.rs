@@ -1,4 +1,4 @@
-use super::{ParsedNode, AliasResolver};
+use crate::parser::{ParsedNode, AliasResolver};
 use ignore::DirEntry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
