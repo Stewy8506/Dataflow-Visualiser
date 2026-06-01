@@ -149,6 +149,7 @@ Dataflow-Visualiser/
 - **Architectural Mapping:** Visualizes codebases with a layout algorithm powered by Dagre and optimized with Web Workers for large repositories.
 - **AI Codebase Assistant:** Interactive Gemini-powered floating chat to ask questions about specific files or the entire repository.
 - **Dynamic File Filtering:** Exclude specific directories, extensions, or tests/mocks dynamically.
+- **Platform & Mobile Directory Filtering:** Automatically detects Flutter or React Native setups and filters out platform-specific native directories (like `android`, `ios`, `windows`, `macos`, `linux`, `web`) to focus on core code.
 - **Performance Optimized:** Uses native Rust parsing (Tree-Sitter + Rayon), Web Workers for layout, and Zustand for frontend state.
 
 ### Predictive Blast-Radius Analytics
@@ -165,6 +166,7 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.
 - **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
 - **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
+- **Adjacency Matrix View** — Visualizes file relationships and dependencies in a structured tabular matrix (Rows: Importer, Columns: Imported) under the bottom panel to inspect coupling patterns.
 - **Dependency Version Risk (CVE/OSV)** — Cross-references your external dependencies against the `osv.dev` vulnerability database by parsing lockfiles (`package-lock.json`, `pubspec.lock`), flagging vulnerable packages with critical CVE badges.
 - **Dependency Health Score** — Calculates a composite health grade (A-F) for every file based on structural metrics: coupling (out-edges), blast-radius (in-edges), and internal code complexity.
 - **Git Churn Heatmap Overlay** — analyzes up to the last 100 commits to paint the graph with a red/orange volatility heatmap, letting you instantly spot highly modified, bug-prone components.
@@ -211,8 +213,9 @@ Dataflow Visualiser features a genuinely deep AI integration, utilizing it for *
 - **Staging & Commits** — Stage, unstage, and commit files without leaving the application.
 
 ### Integrated PTY Terminal
-- Built-in, resizable interactive terminal powered by `portable-pty`.
-- Run commands, start dev servers, or use standard CLI tools in the same window as your graph.
+- **Built-in Interactive Terminal** — Powered by `portable-pty` for real-time shell execution directly inside the resizable bottom panel.
+- **Multi-Shell Selection** — Switch dynamically between `PowerShell`, Command Prompt (`cmd.exe`), `Bash`, or `Zsh` depending on operating system availability.
+- **Integrated Workflow** — Run commands, start development servers, or run lint/test scripts in the same window as your dependency graph.
 
 ---
 
