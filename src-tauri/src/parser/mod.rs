@@ -1,7 +1,10 @@
 pub mod cmake;
 pub mod cpp;
+pub mod csharp;
 pub mod dart;
+pub mod go;
 pub mod graph_builder;
+pub mod java;
 pub mod javascript;
 pub mod nextjs;
 pub mod props;
@@ -17,14 +20,18 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use rayon::prelude::*;
 use tauri::{Emitter, Window};
 
 use cpp::{CPP_PARSER, C_PARSER};
 use dart::DART_PARSER;
+use go::GO_PARSER;
+use java::JAVA_PARSER;
 use javascript::extract_javascript_imports;
 
 use python::PYTHON_PARSER;
 use rust::RUST_PARSER;
+use csharp::CSHARP_PARSER;
 use tree_sitter_utils::extract_imports_with_parser;
 use utils::is_ignored;
 
@@ -226,11 +233,11 @@ pub struct GraphData {
 }
 
 #[tauri::command]
-pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<GraphData, String> {
+pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<GraphData, crate::error::AppError> {
     let mut nodes = Vec::new();
     let path_ref = Path::new(&path);
     if !path_ref.exists() {
-        return Err("Path does not exist".to_string());
+        return Err(crate::error::AppError::PathNotFound(path.clone()));
     }
 
     let alias_resolver = AliasResolver::new(path_ref);
@@ -320,8 +327,7 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
         });
     }
 
-    let mut files_data = Vec::new();
-
+    let mut paths_to_parse = Vec::new();
     for result in WalkBuilder::new(path_ref)
         .hidden(true)
         .git_ignore(true)
@@ -334,149 +340,178 @@ pub async fn parse_codebase(_app: tauri::AppHandle, path: String) -> Result<Grap
                 let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
                 if matches!(
                     ext,
-                    "js" | "ts"
-                        | "jsx"
-                        | "tsx"
-                        | "py"
-                        | "rs"
-                        | "dart"
-                        | "c"
-                        | "h"
-                        | "cpp"
-                        | "hpp"
-                        | "cc"
-                        | "cxx"
-                        | "hxx"
+                    "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "java" | "cs" | "go"
                 ) {
-                    let id = file_path.to_string_lossy().replace('\\', "/");
-                    let label = file_path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
-
-                    nodes.push(ParsedNode {
-                        id: id.clone(),
-                        label,
-                        group: ext.to_string(),
-                        semantic_group: None,
-                        summary: None,
-                        unused_exports: Vec::new(),
-                        metrics: None,
-                    });
-
-                    let mut imports = Vec::new();
-                    let mut api_calls = Vec::new();
-                    let mut api_endpoints = Vec::new();
-                    let mut exported_symbols = Vec::new();
-                    let mut import_specifiers = Vec::new();
-                    let mut is_barrel_file = false;
-                    let is_router = false;
-                    let mut function_count = 0;
-
-                    if let Ok(source_text) = fs::read_to_string(file_path) {
-                        let re = Regex::new(
-                            r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
-                        )
-                        .unwrap();
-                        function_count = re.find_iter(&source_text).count();
-
-                        if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
-                            let (barrel, _exports) = extract_javascript_imports(
-                                &source_text,
-                                &file_path,
-                                &mut imports,
-                                &mut api_calls,
-                                &mut exported_symbols,
-                                &mut import_specifiers,
-                            );
-                            is_barrel_file = barrel;
-                        } else if matches!(
-                            ext,
-                            "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx"
-                        ) {
-                            match ext {
-                                "py" => PYTHON_PARSER.with(|p| {
-                                    extract_imports_with_parser(
-                                        &mut p.borrow_mut(),
-                                        &source_text,
-                                        ext,
-                                        &mut imports,
-                                        &mut api_endpoints,
-                                    );
-                                }),
-                                "rs" => RUST_PARSER.with(|p| {
-                                    extract_imports_with_parser(
-                                        &mut p.borrow_mut(),
-                                        &source_text,
-                                        ext,
-                                        &mut imports,
-                                        &mut api_endpoints,
-                                    );
-                                }),
-                                "dart" => DART_PARSER.with(|p| {
-                                    extract_imports_with_parser(
-                                        &mut p.borrow_mut(),
-                                        &source_text,
-                                        ext,
-                                        &mut imports,
-                                        &mut api_endpoints,
-                                    );
-                                }),
-                                "c" | "h" => C_PARSER.with(|p| {
-                                    extract_imports_with_parser(
-                                        &mut p.borrow_mut(),
-                                        &source_text,
-                                        ext,
-                                        &mut imports,
-                                        &mut api_endpoints,
-                                    );
-                                }),
-                                "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
-                                    extract_imports_with_parser(
-                                        &mut p.borrow_mut(),
-                                        &source_text,
-                                        ext,
-                                        &mut imports,
-                                        &mut api_endpoints,
-                                    );
-                                }),
-                                _ => unreachable!(),
-                            }
-                        }
-                    }
-
-                    let import_count = imports.len();
-                    let score = if function_count > 10 || import_count > 15 {
-                        "High"
-                    } else if function_count > 3 || import_count > 5 {
-                        "Medium"
-                    } else {
-                        "Low"
-                    };
-
-                    if let Some(node) = nodes.last_mut() {
-                        node.metrics = Some(NodeMetrics {
-                            function_count,
-                            import_count,
-                            complexity_score: score.to_string(),
-                        });
-                    }
-
-                    files_data.push(FileData {
-                        id,
-                        path: file_path.to_path_buf(),
-                        imports,
-                        api_calls,
-                        api_endpoints,
-                        exported_symbols,
-                        import_specifiers,
-                        is_barrel_file,
-                        is_router,
-                    });
+                    paths_to_parse.push(file_path.to_path_buf());
                 }
             }
         }
+    }
+
+    let parsed_results: Vec<(ParsedNode, FileData)> = paths_to_parse
+        .into_par_iter()
+        .map(|file_path| {
+            let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            let id = file_path.to_string_lossy().replace('\\', "/");
+            let label = file_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            let mut node = ParsedNode {
+                id: id.clone(),
+                label,
+                group: ext.to_string(),
+                semantic_group: None,
+                summary: None,
+                unused_exports: Vec::new(),
+                metrics: None,
+            };
+
+            let mut imports = Vec::new();
+            let mut api_calls = Vec::new();
+            let mut api_endpoints = Vec::new();
+            let mut exported_symbols = Vec::new();
+            let mut import_specifiers = Vec::new();
+            let mut is_barrel_file = false;
+            let is_router = false;
+            let mut function_count = 0;
+
+            if let Ok(source_text) = fs::read_to_string(&file_path) {
+                let re = Regex::new(
+                    r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
+                )
+                .unwrap();
+                function_count = re.find_iter(&source_text).count();
+
+                if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
+                    let (barrel, _exports) = extract_javascript_imports(
+                        &source_text,
+                        &file_path,
+                        &mut imports,
+                        &mut api_calls,
+                        &mut exported_symbols,
+                        &mut import_specifiers,
+                    );
+                    is_barrel_file = barrel;
+                } else if matches!(
+                    ext,
+                    "py" | "rs" | "dart" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "java" | "cs" | "go"
+                ) {
+                    match ext {
+                        "py" => PYTHON_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "rs" => RUST_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "dart" => DART_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "c" | "h" => C_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "java" => JAVA_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "cs" => CSHARP_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        "go" => GO_PARSER.with(|p| {
+                            extract_imports_with_parser(
+                                &mut p.borrow_mut(),
+                                &source_text,
+                                ext,
+                                &mut imports,
+                                &mut api_endpoints,
+                            );
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
+            }
+
+            let import_count = imports.len();
+            let score = if function_count > 10 || import_count > 15 {
+                "High"
+            } else if function_count > 3 || import_count > 5 {
+                "Medium"
+            } else {
+                "Low"
+            };
+
+            node.metrics = Some(NodeMetrics {
+                function_count,
+                import_count,
+                complexity_score: score.to_string(),
+            });
+
+            let file_data = FileData {
+                id,
+                path: file_path,
+                imports,
+                api_calls,
+                api_endpoints,
+                exported_symbols,
+                import_specifiers,
+                is_barrel_file,
+                is_router,
+            };
+
+            (node, file_data)
+        })
+        .collect();
+
+    let mut files_data = Vec::with_capacity(parsed_results.len());
+    for (node, file_data) in parsed_results {
+        nodes.push(node);
+        files_data.push(file_data);
     }
 
     let node_index: HashMap<String, usize> = nodes
@@ -506,7 +541,7 @@ struct NodeUpdatedPayload {
 }
 
 #[tauri::command]
-pub async fn watch_codebase(path: String, window: Window) -> Result<(), String> {
+pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::error::AppError> {
     use notify::{EventKind, RecursiveMode, Watcher};
 
     tauri::async_runtime::spawn(async move {

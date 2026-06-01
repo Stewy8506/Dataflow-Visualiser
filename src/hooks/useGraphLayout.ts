@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Edge, MarkerType, applyNodeChanges, NodeChange, applyEdgeChanges, EdgeChange } from '@xyflow/react';
-import { getLayoutedElements } from '../utils/layout';
+import LayoutWorker from '../workers/layout.worker?worker';
 import type { GraphData, GraphLayer, LayoutDirection, SearchMode, EnrichmentEntry } from '../types';
 
 interface UseGraphLayoutOptions {
@@ -13,6 +13,7 @@ interface UseGraphLayoutOptions {
   searchMode: SearchMode;
   enrichmentMap: Map<string, EnrichmentEntry>;
   showExternalDeps: boolean;
+  showTests: boolean;
   onDeleteNode: (nodeId: string, nodePath: string) => void;
   workspacePath: string | null;
 }
@@ -29,6 +30,7 @@ export function useGraphLayout({
   searchMode,
   enrichmentMap,
   showExternalDeps,
+  showTests,
   onDeleteNode,
   workspacePath,
 }: UseGraphLayoutOptions) {
@@ -47,6 +49,15 @@ export function useGraphLayout({
     }
   }, [workspacePath]);
 
+  const workerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    workerRef.current = new LayoutWorker();
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
   useEffect(() => {
     if (!rawGraphData) return;
 
@@ -63,6 +74,20 @@ export function useGraphLayout({
         const pkgName = n.id.replace('ext:', '');
         const isDefaultTooling = DEFAULT_TOOLING_REGEX.test(pkgName);
         if ((inDegrees.get(n.id) || 0) === 0 && isDefaultTooling) return false;
+      }
+
+      if (!showTests) {
+        const pathLower = n.id.toLowerCase();
+        if (
+          pathLower.includes('.test.') || 
+          pathLower.includes('.spec.') || 
+          pathLower.includes('/tests/') || 
+          pathLower.includes('/__tests__/') ||
+          pathLower.includes('/mocks/') ||
+          pathLower.includes('__mocks__')
+        ) {
+          return false;
+        }
       }
 
       const isBackend = n.id.includes('/api/') || n.label.startsWith('route.') || n.id.includes('/server/') || n.id.includes('/backend/') || n.id.includes('src-tauri');
@@ -162,41 +187,58 @@ export function useGraphLayout({
       target: e.target,
     }));
 
-    const { nodes: layoutedNodes } = getLayoutedElements(initialNodes, dagreEdges, layoutDirection, nodesep, ranksep);
+    if (!workerRef.current) return;
 
-    // Apply saved positions overriding dagre
-    const nodesWithSavedPositions = layoutedNodes.map((n: any) => {
-      const savedPos = savedPositions[n.id];
-      if (savedPos) {
-        return { ...n, position: savedPos };
+    workerRef.current.onmessage = (e) => {
+      if (e.data.type === 'success') {
+        const { nodes: layoutedNodes } = e.data.data;
+        
+        // Apply saved positions overriding dagre
+        const nodesWithSavedPositions = layoutedNodes.map((n: any) => {
+          const savedPos = savedPositions[n.id];
+          if (savedPos) {
+            return { ...n, position: savedPos };
+          }
+          return n;
+        });
+
+        const nodeById = new Map<string, any>(nodesWithSavedPositions.map((n: any) => [n.id, n]));
+        const styledEdges = initialEdges.map(edge => {
+          const sourceNode = nodeById.get(edge.source);
+          const targetNode = nodeById.get(edge.target);
+          let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
+          let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
+
+          if (sourceNode && targetNode) {
+            if (layoutDirection === 'TB') {
+              if (targetNode.position.y < sourceNode.position.y) {
+                sourceHandle = 'top-source'; targetHandle = 'bottom-target';
+              }
+            } else {
+              if (targetNode.position.x < sourceNode.position.x) {
+                sourceHandle = 'left-source'; targetHandle = 'right-target';
+              }
+            }
+          }
+          return { ...edge, sourceHandle, targetHandle };
+        });
+
+        setFlowNodes(nodesWithSavedPositions);
+        setFlowEdges(styledEdges);
+      } else {
+        console.error("Layout worker error:", e.data.error);
       }
-      return n;
+    };
+
+    workerRef.current.postMessage({
+      nodes: initialNodes,
+      edges: dagreEdges,
+      direction: layoutDirection,
+      nodesep,
+      ranksep
     });
 
-    const nodeById = new Map(nodesWithSavedPositions.map(n => [n.id, n]));
-    const styledEdges = initialEdges.map(e => {
-      const sourceNode = nodeById.get(e.source);
-      const targetNode = nodeById.get(e.target);
-      let sourceHandle = layoutDirection === 'TB' ? 'bottom' : 'right';
-      let targetHandle = layoutDirection === 'TB' ? 'top' : 'left';
-
-      if (sourceNode && targetNode) {
-        if (layoutDirection === 'TB') {
-          if (targetNode.position.y < sourceNode.position.y) {
-            sourceHandle = 'top-source'; targetHandle = 'bottom-target';
-          }
-        } else {
-          if (targetNode.position.x < sourceNode.position.x) {
-            sourceHandle = 'left-source'; targetHandle = 'right-target';
-          }
-        }
-      }
-      return { ...e, sourceHandle, targetHandle };
-    });
-
-    setFlowNodes(nodesWithSavedPositions);
-    setFlowEdges(styledEdges);
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, onDeleteNode, savedPositions]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, onDeleteNode, savedPositions]);
 
   // Merge AI enrichment into nodes without triggering dagre relayout
   const enrichedFlowNodes = useMemo(() => {

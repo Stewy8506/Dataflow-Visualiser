@@ -147,6 +147,7 @@ Dataflow-Visualiser/
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
+- **AI-Powered Executable Refactoring** — You can now seamlessly execute the refactoring preview. The Google Gemini API will directly rewrite the affected files and save them to your local disk, instantly applying the necessary codebase updates.
 
 ### Advanced Codebase Analysis
 - **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
@@ -207,7 +208,7 @@ Crafted with a sleek, dark micro-IDE aesthetic by default. Features complete sup
 Dataflow Visualiser is designed to be language and framework agnostic, but includes dedicated smart-resolution logic for the following architectures:
 
 - **Web & Full-Stack**: `Next.js` (App/Pages router mapping & API route collapsing), `React`, `Vue`, `Svelte` (via universal JS/TS AST parsing).
-- **Systems & Backend**: `Rust` (Cargo workspace resolution), `Python` (FastAPI, Django, Flask).
+- **Systems & Backend**: `Rust` (Cargo workspace resolution), `Python`, `Java`, `C#`, `Go`.
 - **Mobile Applications**: `Flutter / Dart` (automatic `pubspec.yaml` package mapping).
 - **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
 
@@ -269,6 +270,7 @@ npm run tauri build
 - [x] Circular dependency detection and highlighting
 - [x] External dependency mapping and wasted import flagging
 - [x] Refactor impact preview (exact file list and line change estimates)
+- [x] AI-Powered Executable Refactoring via Gemini
 - [x] Component prop tracing across React/JSX hierarchies
 - [x] Snapshot diffing and version drifting visualization
 - [x] Symbol-level drill-down inside file nodes
@@ -280,6 +282,7 @@ npm run tauri build
 - [x] Welcome dashboard with Recent Projects listing
 - [x] Persistent node layout across sessions
 - [x] `git2` crate — file churn overlay (volatility heatmap on nodes)
+- [x] Advanced UI Graph Filtering (Hide Tests & Mocks)
 - [x] PNG canvas export
 - [x] JSON dependency graph export for CI diffing
 

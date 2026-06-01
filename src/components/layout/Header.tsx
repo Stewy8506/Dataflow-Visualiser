@@ -19,9 +19,11 @@ interface HeaderProps {
   setShowSnapshots?: (val: boolean) => void;
   showHeatmap?: boolean;
   setShowHeatmap?: (val: boolean) => void;
+  showTests?: boolean;
+  setShowTests?: (val: boolean) => void;
 }
 
-export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots, showHeatmap, setShowHeatmap }: HeaderProps) {
+export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange, onSettingsClick, onChangeDirectory, isLightMode, setIsLightMode, showMiniMap, setShowMiniMap, showExternalDeps, setShowExternalDeps, showSnapshots, setShowSnapshots, showHeatmap, setShowHeatmap, showTests, setShowTests }: HeaderProps) {
   const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
     { key: 'ui', icon: Layout, label: 'UI Layer' },
     { key: 'backend', icon: Server, label: 'Backend' },
@@ -140,6 +142,21 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
             title="Toggle Git Churn Heatmap"
           >
             <Flame size={15} />
+          </button>
+        )}
+
+        {/* Tests Toggle */}
+        {viewMode === '2d' && setShowTests && (
+          <button
+            onClick={() => setShowTests(!showTests)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer ${
+              showTests 
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                : 'text-text-dim hover:text-text-main hover:bg-glass-light border border-transparent'
+            }`}
+            title="Toggle Tests & Mocks"
+          >
+            <div className="font-bold text-xs flex items-center justify-center">T</div>
           </button>
         )}
 

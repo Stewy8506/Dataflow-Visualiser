@@ -50,6 +50,12 @@ pub fn extract_imports_with_parser(
                 && kind == "preproc_include"
             {
                 target_node = Some(node);
+            } else if ext == "java" && kind == "import_declaration" {
+                target_node = Some(node);
+            } else if ext == "cs" && kind == "using_directive" {
+                target_node = Some(node);
+            } else if ext == "go" && kind == "import_spec" {
+                target_node = Some(node);
             }
 
             if let Some(n) = target_node {

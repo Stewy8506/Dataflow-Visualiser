@@ -166,3 +166,17 @@ pub fn resolve_import_path(
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_normalize_path() {
+        let path = PathBuf::from("a/b/../c/./d");
+        let normalized = normalize_path(&path);
+        let expected = PathBuf::from("a/c/d");
+        assert_eq!(normalized, expected);
+    }
+}

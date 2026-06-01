@@ -64,6 +64,7 @@ function App() {
   const [showExternalDeps, setShowExternalDeps] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showTests, setShowTests] = useState(true);
   const [churnData, setChurnData] = useState<Record<string, number> | null>(null);
   const [refactorTarget, setRefactorTarget] = useState<string | null>(null);
   const [propTrace, setPropTrace] = useState<any | null>(null);
@@ -85,6 +86,7 @@ function App() {
     searchMode,
     enrichmentMap,
     showExternalDeps,
+    showTests,
     onDeleteNode: handleDeleteNode,
     workspacePath: selectedPath,
   });
@@ -311,6 +313,8 @@ function App() {
             setShowSnapshots={setShowSnapshots}
             showHeatmap={showHeatmap}
             setShowHeatmap={setShowHeatmap}
+            showTests={showTests}
+            setShowTests={setShowTests}
           />
 
           {selectedPath && (

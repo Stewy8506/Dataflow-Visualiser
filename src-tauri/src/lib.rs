@@ -6,6 +6,7 @@ mod pty;
 mod state;
 mod refactor;
 mod snapshots;
+mod error;
 
 use state::AppState;
 
@@ -49,6 +50,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             parser::parse_codebase,
             ai::enrich_graph_with_ai,
+            ai::execute_ai_refactor,
             commands::delete_file,
             commands::open_in_ide,
             parser::watch_codebase,

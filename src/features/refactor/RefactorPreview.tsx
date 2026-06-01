@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X, Search, FileEdit, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Search, FileEdit, AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
+import { useSettings } from '../../hooks/useSettings';
 
 interface RefactorMatch {
   line: number;
@@ -36,6 +37,10 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [isRefactoring, setIsRefactoring] = useState(false);
+  const [refactorComplete, setRefactorComplete] = useState(false);
+
+  const { apiKey, selectedModel } = useSettings();
 
   const targetFilename = targetPath.split(/[/\\]/).pop() || '';
 
@@ -71,19 +76,37 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
     });
   };
 
-  const handleApply = async () => {
-    if (!impact) return;
-    
-    // Open all affected files in IDE
-    for (const file of impact.affected_files) {
-      try {
-        await invoke('open_in_ide', { path: file.path });
-      } catch (e) {
-        console.error("Failed to open file", e);
-      }
+  const handleExecuteRefactor = async () => {
+    if (!impact || impact.affected_files.length === 0) return;
+    if (!apiKey) {
+      setError("API Key is required to execute AI refactoring. Please set it in Settings.");
+      return;
     }
-    onClose();
+    
+    setIsRefactoring(true);
+    setError(null);
+    try {
+      const affectedFilePaths = impact.affected_files.map(f => f.path);
+      
+      await invoke('execute_ai_refactor', {
+        workspacePath,
+        targetPath,
+        newName: newName || 'NewName',
+        symbolName: symbolName ? symbolName : null,
+        apiKey,
+        model: selectedModel || 'gemini-1.5-flash',
+        affectedFiles: affectedFilePaths
+      });
+      
+      setRefactorComplete(true);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsRefactoring(false);
+    }
   };
+
+
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center nebula-fade-in">
@@ -159,6 +182,18 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                   <AlertTriangle size={20} />
                   <span className="text-sm font-medium">{error}</span>
                 </div>
+              </div>
+            ) : refactorComplete ? (
+              <div className="h-full flex flex-col items-center justify-center text-emerald-400 gap-4">
+                <CheckCircle2 size={48} className="animate-pulse" />
+                <h3 className="text-xl font-bold">Refactor Applied Successfully!</h3>
+                <p className="text-sm text-text-dim max-w-sm text-center">The dependent files have been updated by AI. Please review the changes in your IDE or source control.</p>
+                <button
+                  onClick={onClose}
+                  className="mt-4 px-6 py-2 bg-surface-raised border border-border hover:bg-surface text-text-main rounded-lg transition-colors"
+                >
+                  Close
+                </button>
               </div>
             ) : impact ? (
               <div className="space-y-6">
@@ -237,12 +272,16 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
             Cancel
           </button>
           <button
-            onClick={handleApply}
-            disabled={!impact || impact.total_files === 0}
+            onClick={handleExecuteRefactor}
+            disabled={!impact || impact.total_files === 0 || isRefactoring || refactorComplete}
             className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
           >
-            <CheckCircle2 size={16} />
-            Open Affected Files
+            {isRefactoring ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Sparkles size={16} />
+            )}
+            {isRefactoring ? "Refactoring..." : "Execute AI Refactor"}
           </button>
         </div>
 
