@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "dataflow-visualiser",
+  "productName": "CodeMapper",
   "version": "1.0.0",
   "identifier": "com.dasan.dataflow-visualiser",
   "build": {
@@ -19,6 +19,14 @@
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://api.github.com/repos/Stewy8506/Dataflow-Visualiser/releases/latest"
+      ],
+      "pubkey": "UPDATE_PUBKEY_PLACEHOLDER"
     }
   },
   "bundle": {

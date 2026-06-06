@@ -34,7 +34,7 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
       {/* Left side: View Mode and Layers */}
       <div className="flex items-center gap-2">
         {/* View Mode Toggle */}
-        <div className="flex items-center bg-background rounded-md border border-border-subtle p-0.5">
+        <div className="view-toggle-btn flex items-center bg-background rounded-md border border-border-subtle p-0.5">
           <button
             onClick={() => setViewMode('2d')}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${

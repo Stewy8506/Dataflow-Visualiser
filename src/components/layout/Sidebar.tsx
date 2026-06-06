@@ -55,7 +55,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex-shrink-0 w-[52px] h-full flex flex-col items-center py-4 bg-surface border-r border-border z-20">
+    <div className="sidebar-container flex-shrink-0 w-[52px] h-full flex flex-col items-center py-4 bg-surface border-r border-border z-20">
       {/* App Icon */}
       <div className="w-8 h-8 rounded bg-text-main flex items-center justify-center mb-6 shadow-sm">
         <Network size={16} className="text-background" />

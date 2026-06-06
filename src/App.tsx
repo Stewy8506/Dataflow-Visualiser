@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { FolderOpen, Sparkles, Clock, FolderGit2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import './App.css';
 
 // Components
@@ -19,6 +20,8 @@ import { ThreeDGraph } from './components/graph/ThreeDGraph';
 import { RefactorPreview } from './features/refactor/RefactorPreview';
 import { SnapshotPanel } from './features/snapshots/SnapshotPanel';
 import { AiChatModal } from './features/ai/AiChatModal';
+import { InteractiveTour } from './features/onboarding/InteractiveTour';
+import { KeyboardShortcutsModal } from './features/onboarding/KeyboardShortcutsModal';
 import { invoke } from '@tauri-apps/api/core';
 
 // Hooks
@@ -176,7 +179,8 @@ function App() {
   // ─── Welcome Screen ──────────────────────────────────────────
   if (!selectedPath && !isParsing) {
     return (
-      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
+      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden bg-dot-grid">
+        <div className="noise-overlay" />
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-fuchsia-600/5 rounded-full blur-3xl animate-welcome-glow-2" />
@@ -185,11 +189,16 @@ function App() {
         <div className="flex-1 flex flex-col md:flex-row overflow-y-auto z-10">
           {/* Left Hero Section */}
           <div className="flex-1 flex flex-col justify-center px-12 lg:px-24 py-12">
-            <div className="max-w-xl nebula-slide-up">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="max-w-xl nebula-slide-up"
+            >
               <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-8">
                 <Sparkles className="text-white" size={28} />
               </div>
-              <h1 className="text-5xl font-sans font-bold text-text-main mb-4 tracking-tight">CodeMapper</h1>
+              <h1 className="text-5xl font-sans font-bold text-text-main mb-4 tracking-tight gradient-text">CodeMapper</h1>
               <p className="text-text-muted mb-10 text-lg leading-relaxed font-sans">
                 Visualize your codebase architecture in stunning 2D and 3D graphs. Discover dependencies, analyze complexity, and refactor with AI-powered insights.
               </p>
@@ -197,7 +206,7 @@ function App() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleSelectDirectory}
-                  className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl transition-all duration-200 font-semibold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 cursor-pointer"
+                  className="btn-primary flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl transition-all duration-200 font-semibold cursor-pointer"
                 >
                   <FolderOpen size={20} />
                   <span>Open Project Folder</span>
@@ -208,12 +217,23 @@ function App() {
                 >
                   Settings
                 </button>
+                <button
+                  onClick={() => alert('Demo Repo feature coming in v1.1!')}
+                  className="px-6 py-4 rounded-xl font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 transition-all duration-200 cursor-pointer"
+                >
+                  Try Sample Repo
+                </button>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Right Recent Projects Section */}
-          <div className="w-full md:w-[400px] lg:w-[500px] border-t md:border-t-0 md:border-l border-border bg-surface/30 backdrop-blur-md flex flex-col px-8 py-12">
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+            className="w-full md:w-[400px] lg:w-[500px] border-t md:border-t-0 md:border-l border-border bg-surface/30 backdrop-blur-md flex flex-col px-8 py-12"
+          >
             <div className="flex items-center gap-3 mb-8">
               <Clock size={16} className="text-blue-400" />
               <h2 className="text-lg font-semibold text-text-main tracking-tight">Recent Projects</h2>
@@ -248,7 +268,7 @@ function App() {
                 })
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {showSettings && (
@@ -285,6 +305,7 @@ function App() {
   // ─── Main Workspace ──────────────────────────────────────────
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-background text-text-main font-sans">
+      <div className="noise-overlay" />
       <TitleBar />
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -418,6 +439,9 @@ function App() {
         viewMode={viewMode}
         showMiniMap={showMiniMap}
       />
+
+      <InteractiveTour />
+      <KeyboardShortcutsModal />
     </div>
   );
 }

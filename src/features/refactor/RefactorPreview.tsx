@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Search, FileEdit, AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
+import { DiffEditor } from '@monaco-editor/react';
 
 interface RefactorMatch {
   line: number;
@@ -243,15 +244,34 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
 
                           {/* File Details (Matches) */}
                           {expandedFiles.has(file.path) && (
-                            <div className="border-t border-border-subtle bg-background/50 p-3 space-y-2">
-                              {file.matches.map((match: any, j: number) => (
-                                <div key={j} className="flex items-start gap-3 text-xs">
-                                  <div className="w-8 text-right text-text-dim shrink-0 font-mono mt-0.5 select-none">{match.line}</div>
-                                  <div className="flex-1 font-mono text-text-muted bg-surface-raised px-2 py-1.5 rounded overflow-x-auto whitespace-pre">
-                                    {match.context}
+                            <div className="border-t border-border-subtle bg-background/50 p-3 space-y-4">
+                              {file.matches.map((match: any, j: number) => {
+                                const modContext = symbolName ? match.context.replace(new RegExp(symbolName, 'g'), newName || 'NewName') : match.context;
+                                const lang = file.path.endsWith('.rs') ? 'rust' : file.path.endsWith('.tsx') || file.path.endsWith('.ts') ? 'typescript' : 'javascript';
+                                return (
+                                  <div key={j} className="flex items-start gap-3 text-xs">
+                                    <div className="w-8 text-right text-text-dim shrink-0 font-mono mt-2 select-none">L{match.line}</div>
+                                    <div className="flex-1 border border-border rounded overflow-hidden shadow-sm h-[120px]">
+                                      <DiffEditor
+                                        height="120px"
+                                        language={lang}
+                                        original={match.context}
+                                        modified={modContext}
+                                        theme="vs-dark"
+                                        options={{
+                                          readOnly: true,
+                                          minimap: { enabled: false },
+                                          scrollBeyondLastLine: false,
+                                          lineNumbers: 'off',
+                                          renderSideBySide: false,
+                                          overviewRulerLanes: 0,
+                                          hideCursorInOverviewRuler: true,
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>

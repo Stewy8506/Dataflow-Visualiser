@@ -155,6 +155,7 @@ Dataflow-Visualiser/
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
 - **AI-Powered Executable Refactoring** — You can now seamlessly execute the refactoring preview. The Google Gemini API will directly rewrite the affected files and save them to your local disk, instantly applying the necessary codebase updates.
+- **Inline Diff Editor** — Powered by Monaco Editor, visually review exactly what the AI intends to change line-by-line before approving the refactor.
 
 ### Advanced Codebase Analysis
 - **Dead Code Detection** — instantly identifies orphaned files and flags unused exports across your entire workspace, helping you safely prune legacy code.
@@ -312,6 +313,10 @@ npm run tauri build
 - [x] Local AI Provider integration (LMStudio, Ollama)
 - [x] Lockfile parsing (`package-lock.json`, `pubspec.lock`) & OSV Vulnerability cross-referencing
 - [x] Dependency Health Scoring based on coupling, complexity, and blast-radius
+- [x] Interactive Onboarding Tours & Keyboard Shortcut Mapping (`driver.js`)
+- [x] Inline Monaco Diff Editor for AI Refactoring Previews
+- [x] Automated Multi-Platform CI/CD Pipelines (macOS, Windows, Ubuntu) via GitHub Actions
+- [x] Built-in Tauri v2 Auto-Updater Support
 
 ---
 
