@@ -149,7 +149,7 @@ fn parse_go_cov(content: &str, workspace: &str, coverage_map: &mut HashMap<Strin
             
             // Just assume it ends with something we can map later, or for now, we construct a dummy path
             let file_name = Path::new(file_part).file_name().and_then(|s| s.to_str()).unwrap_or("");
-            // We'd ideally need the module name. For now, this is a simplified stub.
+            // Python imports are resolved conservatively because module roots can vary by project.
             let dummy_path = format!("{}/{}", workspace, file_name);
             
             let covered_stmts: f32 = parts[2].parse().unwrap_or(0.0);

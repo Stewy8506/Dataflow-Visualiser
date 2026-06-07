@@ -1,6 +1,7 @@
 use crate::parser::GraphData;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
 use tauri::{Emitter, Window};
 
 #[derive(Serialize)]
@@ -161,6 +162,20 @@ async fn call_llm(
     }
 }
 
+fn read_bounded_file(path: &Path, max_bytes: usize) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let clipped = if bytes.len() > max_bytes {
+        &bytes[..max_bytes]
+    } else {
+        &bytes
+    };
+    let mut content = String::from_utf8_lossy(clipped).to_string();
+    if bytes.len() > max_bytes {
+        content.push_str("\n\n/* content truncated */");
+    }
+    Ok(content)
+}
+
 fn extract_json(text: &str) -> &str {
     if let Some(start) = text.find("```json") {
         if let Some(end) = text[start + 7..].find("```") {
@@ -255,7 +270,7 @@ struct AiRefactorResult {
 
 #[tauri::command]
 pub async fn execute_ai_refactor(
-    _workspace_path: String,
+    workspace_path: String,
     target_path: String,
     new_name: String,
     symbol_name: Option<String>,
@@ -269,11 +284,13 @@ pub async fn execute_ai_refactor(
         return Err("API key is required".to_string());
     }
 
+    let safe_target = crate::security::ensure_path_in_workspace(&workspace_path, &target_path)?;
+
     let mut prompt = format!(
         "You are an expert refactoring assistant. We are renaming a file or symbol.\n\
         Target File: {}\n\
         New Name: {}\n",
-        target_path, new_name
+        safe_target.display(), new_name
     );
 
     if let Some(sym) = &symbol_name {
@@ -296,9 +313,10 @@ pub async fn execute_ai_refactor(
     );
 
     for file_path in &affected_files {
-        prompt.push_str(&format!("File Path: {}\n", file_path));
+        let safe_path = crate::security::ensure_path_in_workspace(&workspace_path, file_path)?;
+        prompt.push_str(&format!("File Path: {}\n", safe_path.display()));
         prompt.push_str("Content:\n```\n");
-        if let Ok(content) = fs::read_to_string(file_path) {
+        if let Ok(content) = read_bounded_file(&safe_path, 120_000) {
             prompt.push_str(&content);
         }
         prompt.push_str("\n```\n\n");
@@ -314,9 +332,13 @@ pub async fn execute_ai_refactor(
 }
 
 #[tauri::command]
-pub async fn apply_ai_refactor(updates: Vec<RefactorFileUpdate>) -> Result<(), String> {
+pub async fn apply_ai_refactor(
+    workspace_path: String,
+    updates: Vec<RefactorFileUpdate>,
+) -> Result<(), String> {
     for update in updates {
-        if let Err(e) = fs::write(&update.path, &update.new_content) {
+        let safe_path = crate::security::ensure_path_in_workspace(&workspace_path, &update.path)?;
+        if let Err(e) = fs::write(&safe_path, &update.new_content) {
             return Err(format!("Failed to write file {}: {}", update.path, e));
         }
     }
@@ -345,7 +367,8 @@ struct GeminiChatRequest {
 #[tauri::command]
 pub async fn ask_assistant(
     history: Vec<ChatMessage>,
-    file_context: Option<String>,
+    workspace_path: Option<String>,
+    file_path: Option<String>,
     api_key: String,
     model: String,
     ai_provider: String,
@@ -354,6 +377,14 @@ pub async fn ask_assistant(
     if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
     }
+
+    let file_context = match (workspace_path.as_deref(), file_path.as_deref()) {
+        (Some(workspace), Some(path)) => {
+            let safe_path = crate::security::ensure_path_in_workspace(workspace, path)?;
+            Some(read_bounded_file(&safe_path, 80_000)?)
+        }
+        _ => None,
+    };
 
     let client = reqwest::Client::new();
 

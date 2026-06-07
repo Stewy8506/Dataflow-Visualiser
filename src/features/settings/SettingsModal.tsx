@@ -15,6 +15,10 @@ interface SettingsModalProps {
   setAiProvider: (val: string) => void;
   localBaseUrl: string;
   setLocalBaseUrl: (val: string) => void;
+  isLightMode: boolean;
+  setIsLightMode: (val: boolean) => void;
+  startupBehavior: 'welcome' | 'restore';
+  setStartupBehavior: (val: 'welcome' | 'restore') => void;
   onClose: () => void;
 }
 
@@ -33,6 +37,8 @@ export function SettingsModal({
   preferredIde, setPreferredIde,
   aiProvider, setAiProvider,
   localBaseUrl, setLocalBaseUrl,
+  isLightMode, setIsLightMode,
+  startupBehavior, setStartupBehavior,
   onClose,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -41,8 +47,7 @@ export function SettingsModal({
   const [showApiKey, setShowApiKey] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
-  // Mocked state for new settings
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(isLightMode ? 'light' : 'dark');
   
   const { customFilters, setCustomFilters } = useAppStore();
   const { layoutDirection, setLayoutDirection, nodesep, setNodesep, ranksep, setRanksep } = useAppStore();
@@ -109,18 +114,7 @@ export function SettingsModal({
   };
 
   const handleSave = () => {
-    localStorage.setItem('gemini_api_key', apiKey);
-    localStorage.setItem('gemini_model', selectedModel);
-    localStorage.setItem('enable_ai_summary', String(enableAi));
-    localStorage.setItem('ai_provider', aiProvider);
-    localStorage.setItem('local_base_url', localBaseUrl);
-    
-    // Theme saving requires page reload for now as it's hooked into useSettings
-    if (theme !== (localStorage.getItem('theme') || 'dark')) {
-      localStorage.setItem('theme', theme);
-      window.location.reload();
-    }
-    
+    setIsLightMode(theme === 'light');
     onClose();
   };
 
@@ -187,11 +181,12 @@ export function SettingsModal({
                 <div className="space-y-2">
                   <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Startup Behavior</label>
                   <select
-                    disabled
-                    className="w-full bg-surface-raised/50 border border-border rounded-lg px-4 py-2.5 text-sm text-text-dim outline-none cursor-not-allowed"
+                    value={startupBehavior}
+                    onChange={e => setStartupBehavior(e.target.value as 'welcome' | 'restore')}
+                    className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
                   >
-                    <option>Restore last workspace</option>
-                    <option>Show Welcome Screen</option>
+                    <option value="welcome">Show Welcome Screen</option>
+                    <option value="restore">Restore last workspace</option>
                   </select>
                 </div>
               </div>
@@ -306,7 +301,7 @@ export function SettingsModal({
                     <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase">AI Model</label>
                     <button
                       onClick={loadModels}
-                      disabled={!apiKey || isLoadingModels}
+                      disabled={isLoadingModels || (aiProvider === 'gemini' && !apiKey) || (aiProvider === 'local' && !localBaseUrl)}
                       className="p-1 text-text-dim hover:text-blue-400 disabled:opacity-30 transition-colors cursor-pointer"
                     >
                       <RefreshCw size={13} className={isLoadingModels ? 'animate-spin' : ''} />
@@ -401,7 +396,7 @@ export function SettingsModal({
                   <div className="text-sm text-text-main">Toggle Settings</div>
                   <div className="text-right"><kbd className="px-2 py-1 bg-surface border border-border rounded text-xs text-text-muted font-mono">Ctrl/Cmd + ,</kbd></div>
                 </div>
-                <p className="text-xs text-text-dim italic">Custom keybindings are coming soon.</p>
+                <p className="text-xs text-text-dim italic">Shortcuts are currently fixed to keep command access predictable.</p>
               </div>
             )}
           </div>

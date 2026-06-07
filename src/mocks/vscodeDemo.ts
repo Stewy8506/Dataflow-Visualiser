@@ -711,7 +711,7 @@ body {
   color: #ffffff;
 }`,
 
-  "/README.md": `# Visual Studio Code — CodeMapper Live Preview
+  "/README.md": `# Visual Studio Code - Dataflow Visualiser Live Preview
 
 This is the mock sandbox representation of the Visual Studio Code repository (\`microsoft/vscode\`).
 It maps out dependency structures across multiple language paradigms:

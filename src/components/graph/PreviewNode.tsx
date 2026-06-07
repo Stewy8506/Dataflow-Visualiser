@@ -109,7 +109,7 @@ export const PreviewNode = memo(({ data, selected }: PreviewNodeProps) => {
           }
 
           try {
-            const content = await invoke<string>('read_file_content', { path: pathToCheck });
+            const content = await invoke<string>('read_file_content', { workspace: workspacePath, path: pathToCheck });
             return { content, finalPath: pathToCheck };
           } catch {
             return null;

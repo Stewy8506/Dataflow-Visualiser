@@ -144,7 +144,7 @@ Dataflow-Visualiser/
 - **Edge Weight & Opacity** — scaled to actual import frequency from AST data.
 - **Smart Dynamic Handle Routing** — post-Dagre layout resolves bezier handle direction per edge to eliminate crossing lines.
 - **Color-Coded Directionality** — blue (incoming), green (outgoing) with matching arrowheads.
-- **Persistent Layout Storage** — securely saves custom node drag positions to `localStorage` seamlessly bridging between automated layout and manual curation.
+- **Persistent Layout Storage** — saves custom node drag positions through Tauri Store, bridging automated layout and manual curation across sessions.
 - **High-Quality PNG Export** — export the interactive graph directly to a clean, transparent PNG image file.
 - **Architectural Mapping:** Visualizes codebases with a layout algorithm powered by Dagre and optimized with Web Workers for large repositories.
 - **AI Codebase Assistant:** Interactive Gemini-powered floating chat to ask questions about specific files or the entire repository.
@@ -210,7 +210,7 @@ Dataflow Visualiser features a genuinely deep AI integration, utilizing it for *
 - **Local AI Provider Support** — Total privacy mode. Point the engine to any local, OpenAI-compatible API endpoint (like **LMStudio**, **Ollama**, or **vLLM**) to run domain mapping, executable refactoring, and code Q&A entirely on your own hardware without sending code to the cloud.
 
 ### Native OS Security & Capabilities
-- **Strict Capability Auditing** — Rust backend operations explicitly enforce the Tauri `fs_scope()`. Even when circumventing frontend layers, the execution sandbox rejects access to files not explicitly authorized by the native OS directory picker.
+- **Workspace-Bounded Native Operations** — Rust backend file reads, deletes, snapshot writes, and AI refactor writes validate paths against the selected workspace before touching disk.
 
 ### Interactive Git Integration
 - **Full History Timeline** — View commit history directly in a bottom panel.

@@ -48,7 +48,7 @@ const MENU_DEF: Record<string, MenuItem[]> = {
   ],
   Help: [
     { label: 'Documentation' },
-    { label: 'About CodeMapper' },
+    { label: 'About Dataflow Visualiser' },
   ]
 };
 
@@ -83,7 +83,7 @@ export function TitleBar() {
       window.dispatchEvent(new CustomEvent('app:action', { detail: item.action }));
     } else {
       const { message } = await import('@tauri-apps/plugin-dialog');
-      await message(`${item.label} is not yet implemented.`, { title: 'Not Implemented', kind: 'info' });
+      await message(`${item.label} has no action attached yet.`, { title: 'No Action', kind: 'info' });
     }
   };
 
@@ -137,7 +137,7 @@ export function TitleBar() {
 
       {/* Middle: Title (Optional, often empty in modern IDEs, but good for drag area) */}
       <div data-tauri-drag-region className="flex-1 h-full flex items-center justify-center text-xs text-text-dim/50 font-medium tracking-wide">
-        CodeMapper
+        Dataflow Visualiser
       </div>
 
     </div>

@@ -38,7 +38,7 @@ export function Header({ viewMode, onViewModeChange, activeLayer, onLayerChange,
       <div className="flex items-center gap-2 pr-3 border-r border-border">
         <Sparkles size={16} className="text-blue-400" />
         <span className="text-sm font-bold tracking-tight text-text-main">
-          CodeMapper
+          Dataflow Visualiser
         </span>
       </div>
 

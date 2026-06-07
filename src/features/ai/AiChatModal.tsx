@@ -9,7 +9,11 @@ interface ChatMessage {
   text: string;
 }
 
-export function AiChatModal() {
+interface AiChatModalProps {
+  workspacePath: string | null;
+}
+
+export function AiChatModal({ workspacePath }: AiChatModalProps) {
   const { showAiChat, setShowAiChat, selectedNode } = useAppStore();
   const { apiKey, selectedModel, aiProvider, localBaseUrl } = useSettings();
   
@@ -27,7 +31,9 @@ export function AiChatModal() {
   if (!showAiChat) return null;
 
   const handleSend = async () => {
-    if (!input.trim() || !apiKey) return;
+    if (!input.trim()) return;
+    if (aiProvider === 'gemini' && !apiKey) return;
+    if (aiProvider === 'local' && !localBaseUrl) return;
 
     const userMessage: ChatMessage = { role: 'user', text: input };
     setMessages(prev => [...prev, userMessage]);
@@ -36,11 +42,12 @@ export function AiChatModal() {
 
     try {
       const history = [...messages, userMessage];
-      const fileContext = selectedNode?.data?.path || null;
+      const filePath = selectedNode?.data?.path || null;
 
       const responseText: string = await invoke('ask_assistant', {
         history,
-        fileContext,
+        workspacePath,
+        filePath,
         apiKey,
         model: selectedModel || 'gemini-1.5-flash',
         aiProvider,
@@ -132,7 +139,7 @@ export function AiChatModal() {
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || (aiProvider === 'gemini' && !apiKey) || (aiProvider === 'local' && !localBaseUrl)}
             className="absolute right-2 text-text-dim hover:text-blue-400 disabled:opacity-30 disabled:hover:text-text-dim transition-colors"
           >
             <Send size={16} />

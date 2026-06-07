@@ -55,7 +55,7 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
           if (workspacePath === 'https://github.com/microsoft/vscode') {
             pkgContent = '{"dependencies": {"react": "latest", "react-dom": "latest"}}';
           } else {
-            pkgContent = await invoke<string>('read_file_content', { path: packageJsonPath });
+            pkgContent = await invoke<string>('read_file_content', { workspace: workspacePath, path: packageJsonPath });
           }
           const pkg = JSON.parse(pkgContent);
           const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -116,7 +116,7 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
            }
 
            try {
-             const content = await invoke<string>('read_file_content', { path: pathToCheck });
+             const content = await invoke<string>('read_file_content', { workspace: workspacePath, path: pathToCheck });
              return { content, finalPath: pathToCheck };
            } catch {
              return null;

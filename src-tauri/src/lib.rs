@@ -3,6 +3,7 @@ mod commands;
 mod git;
 mod parser;
 mod pty;
+mod security;
 mod state;
 mod refactor;
 mod snapshots;
@@ -65,6 +66,7 @@ pub fn run() {
             git::get_git_history,
             git::get_commit_diff,
             git::get_git_churn,
+            git::git_sync,
             pty::spawn_pty,
             pty::write_pty,
             pty::resize_pty,
@@ -73,6 +75,7 @@ pub fn run() {
             snapshots::save_snapshot,
             snapshots::list_snapshots,
             snapshots::diff_snapshots,
+            snapshots::delete_snapshot,
             parser::utils::test_coverage::compute_test_coverage
         ])
         .run(tauri::generate_context!())

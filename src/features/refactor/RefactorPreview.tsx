@@ -79,8 +79,12 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
 
   const handleGenerateRefactor = async () => {
     if (!impact || impact.affected_files.length === 0) return;
-    if (!apiKey) {
-      setError("API Key is required to execute AI refactoring.");
+    if (aiProvider === 'gemini' && !apiKey) {
+      setError("Gemini API key is required to execute AI refactoring.");
+      return;
+    }
+    if (aiProvider === 'local' && !localBaseUrl) {
+      setError("Local AI base URL is required to execute AI refactoring.");
       return;
     }
     
@@ -113,7 +117,7 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
     if (!aiUpdates) return;
     setRefactoringStep('complete'); // Assuming it's fast
     try {
-      await invoke('apply_ai_refactor', { updates: aiUpdates });
+      await invoke('apply_ai_refactor', { workspacePath, updates: aiUpdates });
     } catch (err) {
       setError(String(err));
       setRefactoringStep('reviewing');

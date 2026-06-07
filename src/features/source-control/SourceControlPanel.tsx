@@ -3,8 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { GitCommit, Plus, Minus, Check, User, Clock, X, FileText, RefreshCw } from 'lucide-react';
 
 interface GitFileStatus {
-  path: String;
-  status: String;
+  path: string;
+  status: string;
   staged: boolean;
 }
 
@@ -50,6 +50,7 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
   const [commits, setCommits] = useState<GitCommitInfo[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   
   // Hover & selection states
   const [hoveredCommit, setHoveredCommit] = useState<GitCommitInfo | null>(null);
@@ -113,9 +114,16 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
   const handleSync = async () => {
     if (!workspacePath) return;
     setLoading(true);
-    // Fake sync delay since backend doesn't implement git pull/push yet
-    await new Promise(r => setTimeout(r, 1000));
-    setLoading(false);
+    setSyncMessage(null);
+    try {
+      const result: { message: string; pulled: boolean; pushed: boolean } = await invoke('git_sync', { workspace: workspacePath });
+      setSyncMessage(`${result.message}${result.pulled ? ' after fast-forward pull' : ''}${result.pushed ? ' and push' : ''}.`);
+      fetchData();
+    } catch (e) {
+      setSyncMessage(`Sync failed: ${String(e)}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCommitClick = async (commit: GitCommitInfo) => {
@@ -221,6 +229,11 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
               <><Check size={14} /> Commit</>
             )}
           </button>
+          {syncMessage && (
+            <div className={`text-[10px] leading-relaxed ${syncMessage.startsWith('Sync failed') ? 'text-rose-400' : 'text-text-dim'}`}>
+              {syncMessage}
+            </div>
+          )}
         </div>
 
         {/* Changes Area */}
@@ -237,7 +250,7 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
                     <span className="text-xs text-text-main truncate">{file.path}</span>
                   </div>
                   <button
-                    onClick={() => handleUnstage(file.path as string)}
+                    onClick={() => handleUnstage(file.path)}
                     className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-border rounded text-text-dim hover:text-text-main cursor-pointer"
                     title="Unstage"
                   >
@@ -260,7 +273,7 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
                   <span className="text-xs text-text-main truncate">{file.path}</span>
                 </div>
                 <button
-                  onClick={() => handleStage(file.path as string)}
+                onClick={() => handleStage(file.path)}
                   className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-border rounded text-text-dim hover:text-text-main cursor-pointer"
                   title="Stage"
                 >

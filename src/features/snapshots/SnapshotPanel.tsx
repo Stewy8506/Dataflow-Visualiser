@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { X, Save, History, SplitSquareHorizontal, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { X, Save, History, SplitSquareHorizontal, CheckCircle2, AlertTriangle, ArrowRight, Trash2 } from 'lucide-react';
 
 interface SnapshotMeta {
   name: string;
@@ -95,6 +95,17 @@ export function SnapshotPanel({ workspacePath, graphData, onClose, onApplyDiff }
     onApplyDiff(null);
   };
 
+  const handleDeleteSnapshot = async (name: string) => {
+    try {
+      await invoke('delete_snapshot', { workspacePath, name });
+      if (snapshotA === name) setSnapshotA('');
+      if (snapshotB === name) setSnapshotB('');
+      await loadSnapshots();
+    } catch (e) {
+      console.error("Failed to delete snapshot", e);
+    }
+  };
+
   return (
     <div className="absolute top-16 right-4 z-50 w-96 bg-surface border border-border shadow-[0_24px_64px_rgba(0,0,0,0.4)] rounded-2xl overflow-hidden flex flex-col nebula-slide-up">
       {/* Header */}
@@ -142,9 +153,18 @@ export function SnapshotPanel({ workspacePath, graphData, onClose, onApplyDiff }
             ) : (
               snapshots.map((snap, i) => (
                 <div key={i} className="p-3 bg-surface border border-border-subtle rounded-lg flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-text-main">{snap.name}</span>
-                    <span className="text-[10px] text-text-dim font-mono">{new Date(snap.timestamp).toLocaleDateString()}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-text-main truncate">{snap.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-text-dim font-mono">{new Date(snap.timestamp).toLocaleDateString()}</span>
+                      <button
+                        onClick={() => handleDeleteSnapshot(snap.name)}
+                        className="p-1 rounded text-text-dim hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        title="Delete snapshot"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-text-muted font-mono">
                     <span>{snap.node_count} nodes</span>

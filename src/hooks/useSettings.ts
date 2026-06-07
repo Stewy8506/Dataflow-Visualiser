@@ -8,7 +8,8 @@ const defaultSettings = {
   enable_ai_summary: true,
   theme: 'dark',
   ai_provider: 'gemini',
-  local_base_url: 'http://localhost:1234/v1'
+  local_base_url: 'http://localhost:1234/v1',
+  startup_behavior: 'welcome'
 };
 
 export function useSettings() {
@@ -19,6 +20,7 @@ export function useSettings() {
   const [preferredIde, setPreferredIde] = useState('code');
   const [aiProvider, setAiProvider] = useState('gemini');
   const [localBaseUrl, setLocalBaseUrl] = useState('http://localhost:1234/v1');
+  const [startupBehavior, setStartupBehavior] = useState<'welcome' | 'restore'>('welcome');
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load persisted settings from Tauri store
@@ -31,8 +33,9 @@ export function useSettings() {
         store.get<boolean>('enable_ai_summary'),
         store.get<string>('theme'),
         store.get<string>('ai_provider'),
-        store.get<string>('local_base_url')
-      ]).then(([ide, key, model, enable, theme, provider, baseUrl]) => {
+        store.get<string>('local_base_url'),
+        store.get<'welcome' | 'restore'>('startup_behavior')
+      ]).then(([ide, key, model, enable, theme, provider, baseUrl, startup]) => {
         if (ide !== undefined && ide !== null) setPreferredIde(ide);
         if (key !== undefined && key !== null) setApiKey(key);
         if (model !== undefined && model !== null) setSelectedModel(model);
@@ -40,6 +43,7 @@ export function useSettings() {
         if (theme !== undefined && theme !== null) setIsLightMode(theme === 'light');
         if (provider !== undefined && provider !== null) setAiProvider(provider);
         if (baseUrl !== undefined && baseUrl !== null) setLocalBaseUrl(baseUrl);
+        if (startup === 'welcome' || startup === 'restore') setStartupBehavior(startup);
         setIsLoaded(true);
       });
     });
@@ -68,6 +72,7 @@ export function useSettings() {
   const handleSetPreferredIde = (val: string) => { setPreferredIde(val); saveSetting('preferredIde', val); };
   const handleSetAiProvider = (val: string) => { setAiProvider(val); saveSetting('ai_provider', val); };
   const handleSetLocalBaseUrl = (val: string) => { setLocalBaseUrl(val); saveSetting('local_base_url', val); };
+  const handleSetStartupBehavior = (val: 'welcome' | 'restore') => { setStartupBehavior(val); saveSetting('startup_behavior', val); };
 
   return {
     apiKey, setApiKey: handleSetApiKey,
@@ -77,5 +82,6 @@ export function useSettings() {
     preferredIde, handleSetPreferredIde,
     aiProvider, setAiProvider: handleSetAiProvider,
     localBaseUrl, setLocalBaseUrl: handleSetLocalBaseUrl,
+    startupBehavior, setStartupBehavior: handleSetStartupBehavior,
   };
 }

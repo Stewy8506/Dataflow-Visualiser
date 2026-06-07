@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CodeMapper",
+  "productName": "Dataflow Visualiser",
   "version": "1.0.0",
   "identifier": "com.dasan.dataflow-visualiser",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "dataflow-visualiser",
+        "title": "Dataflow Visualiser",
         "width": 800,
         "height": 600
       }

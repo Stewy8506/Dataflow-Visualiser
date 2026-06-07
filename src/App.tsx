@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { FolderOpen, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import './App.css';
@@ -43,7 +43,9 @@ function App() {
     handleSetPreferredIde,
     aiProvider, setAiProvider,
     localBaseUrl, setLocalBaseUrl,
+    startupBehavior, setStartupBehavior,
   } = useSettings();
+  const didAttemptStartupRestore = useRef(false);
 
   // ─── Project Loader ──────────────────────────────────────────
   const {
@@ -134,6 +136,20 @@ function App() {
   }, []);
 
   // ─── Tauri Window Size & Fullscreen Controller ────────────────
+  useEffect(() => {
+    if (
+      didAttemptStartupRestore.current ||
+      startupBehavior !== 'restore' ||
+      selectedPath ||
+      isParsing ||
+      recentProjects.length === 0
+    ) {
+      return;
+    }
+    didAttemptStartupRestore.current = true;
+    handleOpenRecentProject(recentProjects[0]);
+  }, [startupBehavior, selectedPath, isParsing, recentProjects, handleOpenRecentProject]);
+
   useEffect(() => {
     const handleWindowResize = async () => {
       try {
@@ -255,7 +271,7 @@ function App() {
                 / codebase mapper
               </div>
               <h1 className="text-6xl font-serif italic font-normal text-white mb-4 tracking-tight">
-                CodeMapper
+                Dataflow Visualiser
               </h1>
               <p className="text-zinc-400 mb-8 text-base leading-relaxed font-sans font-light max-w-sm">
                 Visualize codebase architecture, mapping file dependencies and components in a clean, spatial view.
@@ -337,6 +353,10 @@ function App() {
             preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
             aiProvider={aiProvider} setAiProvider={setAiProvider}
             localBaseUrl={localBaseUrl} setLocalBaseUrl={setLocalBaseUrl}
+            isLightMode={isLightMode}
+            setIsLightMode={setIsLightMode}
+            startupBehavior={startupBehavior}
+            setStartupBehavior={setStartupBehavior}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -446,6 +466,10 @@ function App() {
           setAiProvider={setAiProvider}
           localBaseUrl={localBaseUrl}
           setLocalBaseUrl={setLocalBaseUrl}
+          isLightMode={isLightMode}
+          setIsLightMode={setIsLightMode}
+          startupBehavior={startupBehavior}
+          setStartupBehavior={setStartupBehavior}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -467,7 +491,7 @@ function App() {
         />
       )}
 
-      <AiChatModal />
+      <AiChatModal workspacePath={selectedPath} />
 
       <CommandPalette
         isOpen={showCommandPalette}

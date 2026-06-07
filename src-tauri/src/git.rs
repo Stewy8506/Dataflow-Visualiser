@@ -1,4 +1,4 @@
-use git2::{Repository, StatusOptions};
+use git2::{Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository, StatusOptions};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -17,6 +17,27 @@ pub struct GitCommitInfo {
     pub author: String,
     pub message: String,
     pub timestamp: i64,
+}
+
+#[derive(Serialize)]
+pub struct GitSyncResult {
+    pub branch: String,
+    pub fetched: bool,
+    pub pulled: bool,
+    pub pushed: bool,
+    pub message: String,
+}
+
+fn remote_callbacks<'a>() -> RemoteCallbacks<'a> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed_types| {
+        if let Some(username) = username_from_url {
+            Cred::ssh_key_from_agent(username).or_else(|_| Cred::default())
+        } else {
+            Cred::default()
+        }
+    });
+    callbacks
 }
 
 #[tauri::command]
@@ -113,6 +134,66 @@ pub async fn git_commit(workspace: String, message: String) -> Result<(), String
     .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn git_sync(workspace: String) -> Result<GitSyncResult, String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let head = repo.head().map_err(|e| e.to_string())?;
+    let branch = head
+        .shorthand()
+        .ok_or_else(|| "Detached HEAD cannot be synced".to_string())?
+        .to_string();
+    drop(head);
+
+    let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
+
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.remote_callbacks(remote_callbacks());
+    remote
+        .fetch(&[branch.as_str()], Some(&mut fetch_options), None)
+        .map_err(|e| e.to_string())?;
+
+    let fetch_ref = format!("refs/remotes/origin/{}", branch);
+    let fetch_oid = repo
+        .find_reference(&fetch_ref)
+        .and_then(|r| r.target().ok_or_else(|| git2::Error::from_str("Missing fetched target")))
+        .map_err(|e| e.to_string())?;
+    let fetch_commit = repo.find_annotated_commit(fetch_oid).map_err(|e| e.to_string())?;
+    let (analysis, _preference) = repo
+        .merge_analysis(&[&fetch_commit])
+        .map_err(|e| e.to_string())?;
+
+    let pulled = if analysis.is_up_to_date() {
+        false
+    } else if analysis.is_fast_forward() {
+        let local_ref = format!("refs/heads/{}", branch);
+        let mut reference = repo.find_reference(&local_ref).map_err(|e| e.to_string())?;
+        reference
+            .set_target(fetch_oid, "Fast-forward from origin")
+            .map_err(|e| e.to_string())?;
+        repo.set_head(&local_ref).map_err(|e| e.to_string())?;
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
+            .map_err(|e| e.to_string())?;
+        true
+    } else {
+        return Err("Remote branch has diverged. Resolve locally before syncing.".to_string());
+    };
+
+    let mut push_options = PushOptions::new();
+    push_options.remote_callbacks(remote_callbacks());
+    let push_refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
+    remote
+        .push(&[push_refspec.as_str()], Some(&mut push_options))
+        .map_err(|e| e.to_string())?;
+
+    Ok(GitSyncResult {
+        branch: branch.clone(),
+        fetched: true,
+        pulled,
+        pushed: true,
+        message: format!("Synced {}", branch),
+    })
 }
 
 #[tauri::command]

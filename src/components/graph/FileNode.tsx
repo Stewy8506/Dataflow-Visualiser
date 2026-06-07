@@ -262,7 +262,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                     });
                     if (confirmed) {
                       try {
-                        await invoke('delete_file', { path: data.path });
+                        await invoke('delete_file', { workspace: data.workspacePath, path: data.path });
                         if (data.onDelete) data.onDelete();
                       } catch (err) {
                         console.error('Failed to delete file:', err);

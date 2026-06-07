@@ -39,6 +39,12 @@ pub async fn preview_refactor(
 
     let target_ref = Path::new(&target_path);
     let target_basename = target_ref.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let target_filename = target_ref.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let target_without_ext = target_path
+        .replace('\\', "/")
+        .trim_end_matches(&target_filename)
+        .trim_end_matches('/')
+        .to_string();
 
     let search_term = if let Some(sym) = &symbol_name {
         sym.clone()
@@ -46,8 +52,14 @@ pub async fn preview_refactor(
         target_basename.clone()
     };
 
-    // Very basic heuristic: look for lines containing the basename or symbol
-    let re = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(&search_term))).unwrap();
+    let symbol_re = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(&search_term))).unwrap();
+    let file_ref_re = Regex::new(&format!(
+        r#"(?i)(from\s+["'][^"']*{}["']|import\(["'][^"']*{}["']\)|require\(["'][^"']*{}["']\))"#,
+        regex::escape(&target_basename),
+        regex::escape(&target_basename),
+        regex::escape(&target_basename)
+    ))
+    .unwrap();
 
     let walker = WalkBuilder::new(&workspace_path)
         .hidden(true)
@@ -75,13 +87,34 @@ pub async fn preview_refactor(
                     let mut file_matches = Vec::new();
                     
                     for (i, line) in content.lines().enumerate() {
-                        if let Some(mat) = re.find(line) {
+                        if let Some(mat) = file_ref_re.find(line) {
+                            file_matches.push(RefactorMatch {
+                                line: i + 1,
+                                column: mat.start(),
+                                context: line.trim().to_string(),
+                                match_type: "import-path".to_string(),
+                            });
+                            continue;
+                        }
+
+                        let normalized_line = line.replace('\\', "/");
+                        if !target_without_ext.is_empty() && normalized_line.contains(&target_without_ext) {
+                            file_matches.push(RefactorMatch {
+                                line: i + 1,
+                                column: normalized_line.find(&target_without_ext).unwrap_or(0),
+                                context: line.trim().to_string(),
+                                match_type: "path-reference".to_string(),
+                            });
+                            continue;
+                        }
+
+                        if let Some(mat) = symbol_re.find(line) {
                             file_matches.push(RefactorMatch {
                                 line: i + 1,
                                 column: mat.start(),
                                 context: line.trim().to_string(),
                                 match_type: if line.contains("import ") || line.contains("require(") {
-                                    "import".to_string()
+                                    "import-symbol".to_string()
                                 } else {
                                     "usage".to_string()
                                 },

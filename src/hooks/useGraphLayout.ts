@@ -4,6 +4,7 @@ import LayoutWorker from '../workers/layout.worker?worker';
 import type { GraphData, EnrichmentEntry } from '../types';
 import { calculateHealthScore } from '../utils/healthScore';
 import { useAppStore } from '../store/appStore';
+import { load } from '@tauri-apps/plugin-store';
 
 interface UseGraphLayoutOptions {
   rawGraphData: GraphData | null;
@@ -36,17 +37,24 @@ export function useGraphLayout({
 
   const [flowNodes, setFlowNodes] = useState<any[]>([]);
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
+  const [savedPositions, setSavedPositions] = useState<Record<string, { x: number; y: number }>>({});
 
-  // Load saved positions synchronously from localStorage
-  const savedPositions = useMemo(() => {
-    if (!workspacePath) return {};
-    try {
-      const data = localStorage.getItem(`layout-${workspacePath}`);
-      return data ? JSON.parse(data) : {};
-    } catch (e) {
-      console.error("Failed to parse saved positions", e);
-      return {};
+  useEffect(() => {
+    let cancelled = false;
+    if (!workspacePath) {
+      setSavedPositions({});
+      return;
     }
+
+    load('layout.json', { autoSave: true, defaults: {} }).then(async store => {
+      const data = await store.get<Record<string, { x: number; y: number }>>(`layout-${workspacePath}`);
+      if (!cancelled) setSavedPositions(data || {});
+    }).catch(e => {
+      console.error("Failed to load saved positions", e);
+      if (!cancelled) setSavedPositions({});
+    });
+
+    return () => { cancelled = true; };
   }, [workspacePath]);
 
   const workerRef = useRef<Worker | null>(null);
@@ -331,7 +339,7 @@ export function useGraphLayout({
       const positionChanges = changes.filter(c => c.type === 'position' && c.dragging === false);
       if (positionChanges.length > 0 && workspacePath) {
         try {
-          const currentSaved = JSON.parse(localStorage.getItem(`layout-${workspacePath}`) || '{}');
+          const currentSaved = { ...savedPositions };
           let modified = false;
           
           updatedNodes.forEach(node => {
@@ -342,8 +350,11 @@ export function useGraphLayout({
           });
           
           if (modified) {
-            localStorage.setItem(`layout-${workspacePath}`, JSON.stringify(currentSaved));
-            // Note: We don't update the savedPositions useMemo state here 
+            void load('layout.json', { autoSave: true, defaults: {} }).then(async store => {
+              await store.set(`layout-${workspacePath}`, currentSaved);
+              await store.save();
+            });
+            // Note: We don't update the savedPositions state here
             // because we don't want to trigger a full recalculation/relayout of everything
             // just from a drag. The updatedNodes state already has the new position.
           }
