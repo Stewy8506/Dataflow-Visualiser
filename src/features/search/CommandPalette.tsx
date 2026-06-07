@@ -49,12 +49,35 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Command History Suggestions State
+  const [recentHistory, setRecentHistory] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('command_palette_recent');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const recordCommandTrigger = (id: string) => {
+    // Only record core menu actions, not file jump actions which can be random/hundreds
+    if (id.startsWith('file-')) return;
+    
+    setRecentHistory(prev => {
+      const filtered = prev.filter(x => x !== id);
+      const next = [id, ...filtered].slice(0, 4);
+      localStorage.setItem('command_palette_recent', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const actions: CommandAction[] = useMemo(() => [
     {
       id: 'change-dir',
       label: 'Change Project Directory',
       description: 'Open a different project folder',
       icon: <FolderOpen size={16} />,
+      shortcut: 'Ctrl+O',
       action: () => { onChangeDirectory(); onClose(); },
     },
     {
@@ -62,6 +85,7 @@ export function CommandPalette({
       label: 'Open Settings',
       description: 'API keys, model selection, IDE preference',
       icon: <Settings size={16} />,
+      shortcut: 'Ctrl+,',
       action: () => { onOpenSettings(); onClose(); },
     },
     {
@@ -69,6 +93,7 @@ export function CommandPalette({
       label: isLightMode ? 'Switch to Dark Mode' : 'Switch to Light Mode',
       description: 'Toggle between dark and light themes',
       icon: isLightMode ? <Moon size={16} /> : <Sun size={16} />,
+      shortcut: 'Ctrl+T',
       action: () => { onToggleTheme(); onClose(); },
     },
     {
@@ -76,6 +101,7 @@ export function CommandPalette({
       label: 'Switch to 2D Flow View',
       description: 'Hierarchical DAG layout',
       icon: <Spline size={16} />,
+      shortcut: 'Alt+2',
       action: () => { onSetViewMode('2d'); onClose(); },
     },
     {
@@ -83,6 +109,7 @@ export function CommandPalette({
       label: 'Switch to 3D Graph View',
       description: 'Force-directed 3D layout',
       icon: <Box size={16} />,
+      shortcut: 'Alt+3',
       action: () => { onSetViewMode('3d'); onClose(); },
     },
     {
@@ -90,6 +117,7 @@ export function CommandPalette({
       label: showMiniMap ? 'Hide Mini Map' : 'Show Mini Map',
       description: 'Toggle the mini map overlay',
       icon: <Map size={16} />,
+      shortcut: 'Ctrl+M',
       action: () => { onToggleMiniMap(); onClose(); },
     },
     {
@@ -97,6 +125,7 @@ export function CommandPalette({
       label: 'Show All Layers',
       description: 'Display both UI and backend nodes',
       icon: <Layers size={16} />,
+      shortcut: 'Alt+O',
       action: () => { onSetLayer('overall'); onClose(); },
     },
     {
@@ -104,6 +133,7 @@ export function CommandPalette({
       label: 'Show UI Layer Only',
       description: 'Filter to frontend components',
       icon: <Layout size={16} />,
+      shortcut: 'Alt+U',
       action: () => { onSetLayer('ui'); onClose(); },
     },
     {
@@ -111,6 +141,7 @@ export function CommandPalette({
       label: 'Show Backend Layer Only',
       description: 'Filter to backend services and APIs',
       icon: <Server size={16} />,
+      shortcut: 'Alt+B',
       action: () => { onSetLayer('backend'); onClose(); },
     },
   ], [isLightMode, showMiniMap, viewMode, onChangeDirectory, onClose, onOpenSettings, onToggleTheme, onSetViewMode, onToggleMiniMap, onSetLayer]);
@@ -142,6 +173,17 @@ export function CommandPalette({
       (a.description && a.description.toLowerCase().includes(q))
     );
   }, [query, actions, allActions]);
+
+  const recentActionPills = useMemo(() => {
+    return recentHistory
+      .map(id => actions.find(a => a.id === id))
+      .filter((a): a is CommandAction => !!a);
+  }, [recentHistory, actions]);
+
+  const handleTriggerAction = (action: CommandAction) => {
+    recordCommandTrigger(action.id);
+    action.action();
+  };
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -175,12 +217,28 @@ export function CommandPalette({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filtered[selectedIndex]) {
-        filtered[selectedIndex].action();
+        handleTriggerAction(filtered[selectedIndex]);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
     }
+  };
+
+  const renderShortcutBadges = (shortcutStr: string) => {
+    const parts = shortcutStr.split('+').map(p => p.trim());
+    return (
+      <div className="flex items-center gap-0.5 shrink-0 font-mono text-[9px] select-none">
+        {parts.map((part, index) => (
+          <span key={index} className="flex items-center gap-0.5">
+            {index > 0 && <span className="text-text-dim/60 font-sans text-[9px] mx-0.5">+</span>}
+            <kbd className="px-1.5 py-0.5 bg-surface-raised border border-border rounded text-text-dim font-bold shadow-sm">
+              {part}
+            </kbd>
+          </span>
+        ))}
+      </div>
+    );
   };
 
   if (!isOpen) return null;
@@ -197,7 +255,7 @@ export function CommandPalette({
       >
         <div className="bg-surface border border-border rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.6)] overflow-hidden">
           {/* Search input */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-border-subtle">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-border-subtle bg-surface-raised/10">
             <Command size={16} className="text-text-dim shrink-0" />
             <input
               ref={inputRef}
@@ -212,6 +270,25 @@ export function CommandPalette({
             </kbd>
           </div>
 
+          {/* Recent History Suggestions Row */}
+          {recentActionPills.length > 0 && (
+            <div className="flex items-center gap-2 px-5 py-2 bg-surface-raised/45 border-b border-border-subtle overflow-x-auto select-none shrink-0">
+              <span className="text-[9px] font-bold text-text-dim uppercase tracking-wider shrink-0">Recent:</span>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                {recentActionPills.map(action => (
+                  <button
+                    key={action.id}
+                    onClick={() => handleTriggerAction(action)}
+                    className="flex items-center gap-1 px-2.5 py-0.5 text-[9px] bg-background hover:bg-surface border border-border hover:border-blue-500/40 text-text-dim hover:text-text-main rounded-full transition-all cursor-pointer shrink-0 font-medium"
+                  >
+                    <span className="opacity-80 shrink-0 scale-75">{action.icon}</span>
+                    <span>{action.label.replace('Switch to ', '').replace('Show ', '').replace(' Only', '')}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Results */}
           <div ref={listRef} className="max-h-[320px] overflow-y-auto py-2">
             {filtered.length === 0 ? (
@@ -222,7 +299,7 @@ export function CommandPalette({
               filtered.map((action, i) => (
                 <button
                   key={action.id}
-                  onClick={action.action}
+                  onClick={() => handleTriggerAction(action)}
                   onMouseEnter={() => setSelectedIndex(i)}
                   className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors cursor-pointer ${
                     i === selectedIndex
@@ -234,23 +311,19 @@ export function CommandPalette({
                     {action.icon}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-sm font-medium truncate">{action.label}</span>
+                    <span className="text-sm font-semibold truncate">{action.label}</span>
                     {action.description && (
-                      <span className="text-[11px] text-text-dim truncate">{action.description}</span>
+                      <span className="text-[11px] text-text-dim truncate mt-0.5">{action.description}</span>
                     )}
                   </div>
-                  {action.shortcut && (
-                    <kbd className="px-1.5 py-0.5 bg-surface border border-border-subtle rounded text-[10px] text-text-dim font-mono shrink-0">
-                      {action.shortcut}
-                    </kbd>
-                  )}
+                  {action.shortcut && renderShortcutBadges(action.shortcut)}
                 </button>
               ))
             )}
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-4 px-5 py-2.5 border-t border-border-subtle text-[10px] text-text-dim">
+          <div className="flex items-center gap-4 px-5 py-2.5 border-t border-border-subtle text-[10px] text-text-dim select-none">
             <span className="flex items-center gap-1">
               <kbd className="px-1 py-0.5 bg-surface-raised border border-border-subtle rounded font-mono">↑↓</kbd>
               Navigate

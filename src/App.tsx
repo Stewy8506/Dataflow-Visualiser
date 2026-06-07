@@ -22,6 +22,8 @@ import { SnapshotPanel } from './features/snapshots/SnapshotPanel';
 import { AiChatModal } from './features/ai/AiChatModal';
 import { InteractiveTour } from './features/onboarding/InteractiveTour';
 import { KeyboardShortcutsModal } from './features/onboarding/KeyboardShortcutsModal';
+import { DocumentationModal } from './features/docs/DocumentationModal';
+import { SupportModal } from './features/support/SupportModal';
 import { invoke } from '@tauri-apps/api/core';
 
 // Hooks
@@ -96,6 +98,10 @@ function App() {
     setSelectedNode,
     setPropTrace,
     setDiffOverlay,
+    showDocs,
+    setShowDocs,
+    showSupport,
+    setShowSupport,
   } = useAppStore(useShallow(s => ({
     activeTab: s.activeTab,
     viewMode: s.viewMode,
@@ -121,6 +127,10 @@ function App() {
     setSelectedNode: s.setSelectedNode,
     setPropTrace: s.setPropTrace,
     setDiffOverlay: s.setDiffOverlay,
+    showDocs: s.showDocs,
+    setShowDocs: s.setShowDocs,
+    showSupport: s.showSupport,
+    setShowSupport: s.setShowSupport,
   })));
 
   // ─── Graph Layout ────────────────────────────────────────────
@@ -249,6 +259,12 @@ function App() {
           break;
         case 'RELOAD_WINDOW':
           window.location.reload();
+          break;
+        case 'OPEN_DOCS':
+          useAppStore.getState().setShowDocs(true);
+          break;
+        case 'OPEN_SUPPORT':
+          useAppStore.getState().setShowSupport(true);
           break;
       }
     };
@@ -567,6 +583,14 @@ function App() {
 
       <InteractiveTour />
       <KeyboardShortcutsModal />
+
+      {showDocs && (
+        <DocumentationModal onClose={() => setShowDocs(false)} />
+      )}
+
+      {showSupport && (
+        <SupportModal onClose={() => setShowSupport(false)} />
+      )}
     </div>
   );
 }

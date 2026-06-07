@@ -42,6 +42,8 @@ export function Sidebar() {
   const activeTab = useAppStore(s => s.activeTab);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const setShowSettings = useAppStore(s => s.setShowSettings);
+  const setShowDocs = useAppStore(s => s.setShowDocs);
+  const setShowSupport = useAppStore(s => s.setShowSupport);
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {
@@ -90,8 +92,16 @@ export function Sidebar() {
       </div>
 
       <div className="flex flex-col items-center space-y-2 pt-4 border-t border-border">
-        <NavItem icon={<FileText size={18} />} label="Documentation" disabled />
-        <NavItem icon={<LifeBuoy size={18} />} label="Support" disabled />
+        <NavItem 
+          icon={<FileText size={18} />} 
+          label="Documentation" 
+          onClick={() => setShowDocs(true)} 
+        />
+        <NavItem 
+          icon={<LifeBuoy size={18} />} 
+          label="Support" 
+          onClick={() => setShowSupport(true)} 
+        />
         <button
           onClick={() => setCollapsed(true)}
           className="w-10 h-10 flex items-center justify-center rounded-lg text-text-dim hover:text-text-main hover:bg-surface-raised transition-colors cursor-pointer mt-2"

@@ -47,8 +47,9 @@ const MENU_DEF: Record<string, MenuItem[]> = {
     { label: 'New Terminal' },
   ],
   Help: [
-    { label: 'Documentation' },
-    { label: 'About Dataflow Visualiser' },
+    { label: 'Documentation', action: 'OPEN_DOCS' },
+    { label: 'Support & Diagnostics', action: 'OPEN_SUPPORT' },
+    { label: 'About Dataflow Visualiser', action: 'OPEN_SUPPORT' },
   ]
 };
 
@@ -135,7 +136,7 @@ export function TitleBar() {
         </div>
       </div>
 
-      {/* Middle: Title (Optional, often empty in modern IDEs, but good for drag area) */}
+      {/* Middle: Title */}
       <div data-tauri-drag-region className="flex-1 h-full flex items-center justify-center text-xs text-text-dim/50 font-medium tracking-wide">
         Dataflow Visualiser
       </div>

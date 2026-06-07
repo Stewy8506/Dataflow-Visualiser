@@ -58,6 +58,7 @@ pub fn run() {
             commands::delete_file,
             commands::open_in_ide,
             commands::read_file_content,
+            commands::read_sys_platform,
             parser::watch_codebase,
             git::get_git_status,
             git::git_stage_file,

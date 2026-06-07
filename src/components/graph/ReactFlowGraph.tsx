@@ -1,4 +1,6 @@
-import { useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { BarChart3, Activity, ChevronLeft } from 'lucide-react';
+
 import {
   ReactFlow,
   MiniMap,
@@ -136,6 +138,56 @@ function ReactFlowInner({
     return detectCycles(initialEdges);
   }, [initialEdges]);
 
+  // ── Metrics Calculation ──────────────────────────────────────
+  const workspaceNodes = useMemo(() => {
+    return initialNodes.filter(node => !node.id.startsWith('ext:'));
+  }, [initialNodes]);
+
+  const deadCodePercent = useMemo(() => {
+    if (workspaceNodes.length === 0) return 0;
+    const importedNodeIds = new Set(
+      initialEdges.map(e => e.data?.originalTarget || e.source).filter(Boolean)
+    );
+    const entryPoints = ['main', 'index', 'app', 'vite.config', 'tailwind.config'];
+    const deadNodes = workspaceNodes.filter(node => {
+      const labelLower = node.data?.label?.toLowerCase() || '';
+      const isEntry = entryPoints.some(ep => labelLower.startsWith(ep));
+      return !importedNodeIds.has(node.id) && !isEntry;
+    });
+    return Math.round((deadNodes.length / workspaceNodes.length) * 100);
+  }, [workspaceNodes, initialEdges]);
+
+  const languageStats = useMemo(() => {
+    const stats: Record<string, number> = {};
+    let totalCount = 0;
+    workspaceNodes.forEach(node => {
+      const ext = node.id.split('.').pop()?.toLowerCase() || 'other';
+      stats[ext] = (stats[ext] || 0) + 1;
+      totalCount++;
+    });
+    return Object.entries(stats)
+      .map(([ext, count]) => ({
+        ext: ext.toUpperCase(),
+        count,
+        percent: totalCount > 0 ? Math.round((count / totalCount) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+  }, [workspaceNodes]);
+
+  const getLanguageColor = (ext: string) => {
+    switch (ext) {
+      case 'TSX': return 'bg-blue-500';
+      case 'TS': return 'bg-sky-400';
+      case 'JSX': return 'bg-amber-400';
+      case 'JS': return 'bg-yellow-400';
+      case 'RS': return 'bg-orange-500';
+      case 'PY': return 'bg-emerald-500';
+      default: return 'bg-indigo-400';
+    }
+  };
+
+
   // ── Styled nodes (memoized — no setState, no double-render) ────
   const styledNodes = useMemo(() => {
     return initialNodes.map(node => {
@@ -197,14 +249,30 @@ function ReactFlowInner({
       };
 
       let isSearchMatch = true;
-      if (searchQuery && searchMode === 'highlight') {
-         const query = searchQuery.toLowerCase();
-         const semanticGroup = node.data.semantic_group || '';
-         const summary = node.data.summary || '';
-         isSearchMatch = node.id.toLowerCase().includes(query) || 
-                         node.data.label.toLowerCase().includes(query) ||
-                         semanticGroup.toLowerCase().includes(query) ||
-                         summary.toLowerCase().includes(query);
+      if (searchQuery) {
+         const query = searchQuery.toLowerCase().trim();
+         const isInCycle = cycleResult.nodesInCycles.has(node.id);
+         if (query === '[tsx]') {
+           isSearchMatch = node.id.toLowerCase().endsWith('.tsx') || node.data.label.toLowerCase().endsWith('.tsx');
+         } else if (query === '[backend]') {
+           isSearchMatch = node.id.toLowerCase().endsWith('.rs') || node.id.toLowerCase().includes('/backend/') || node.id.toLowerCase().includes('/src-tauri/') || node.data.layer === 'backend';
+         } else if (query === '[external]') {
+           isSearchMatch = node.id.toLowerCase().startsWith('ext:') || !!node.data.isExternal;
+         } else if (query === '[circular]') {
+           isSearchMatch = isInCycle;
+         } else if (query === '[unused]') {
+           const importedNodeIds = new Set(
+             initialEdges.map(e => e.data?.originalTarget || e.source).filter(Boolean)
+           );
+           isSearchMatch = !importedNodeIds.has(node.id) && !['main', 'index', 'app', 'vite.config', 'tailwind.config'].some(ep => node.data?.label?.toLowerCase().startsWith(ep));
+         } else if (searchMode === 'highlight' || searchMode === 'collapse') {
+           const semanticGroup = node.data.semantic_group || '';
+           const summary = node.data.summary || '';
+           isSearchMatch = node.id.toLowerCase().includes(query) || 
+                           node.data.label.toLowerCase().includes(query) ||
+                           semanticGroup.toLowerCase().includes(query) ||
+                           summary.toLowerCase().includes(query);
+         }
       }
 
       const isSelected = activeNodeId === node.id;
@@ -215,6 +283,8 @@ function ReactFlowInner({
          const nodePath = node.data?.path?.replace(/\\/g, '/');
          churnCount = effectiveChurnData[nodePath] || 0;
       }
+
+      const shouldHide = searchMode === 'collapse' && searchQuery && !isSearchMatch;
 
       return {
         ...node,
@@ -231,12 +301,13 @@ function ReactFlowInner({
         },
         style: {
           ...node.style,
-          opacity: (isConnected && isSearchMatch) ? 1 : 0.15,
-          pointerEvents: (isConnected && isSearchMatch) ? 'all' : 'none',
+          opacity: shouldHide ? 0 : (isConnected && isSearchMatch) ? 1 : 0.15,
+          pointerEvents: shouldHide || !(isConnected && isSearchMatch) ? 'none' : 'all',
+          ...(shouldHide ? { display: 'none' } : {}),
         }
       };
     });
-  }, [initialNodes, blastRadius, activeNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData]);
+  }, [initialNodes, blastRadius, activeNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData, cycleResult, initialEdges]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -385,9 +456,116 @@ function ReactFlowInner({
   }, [isLightMode]);
 
 
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
+
   return (
     <div className="w-full h-full bg-background relative" onWheel={handleWheel}>
+      {/* Expandable Stats Panel Overlay */}
+      <div className="absolute left-4 top-4 z-20 transition-all duration-300">
+        {!isStatsExpanded ? (
+          <button
+            onClick={() => setIsStatsExpanded(true)}
+            className="w-10 h-10 rounded-xl bg-surface/90 hover:bg-surface-raised border border-border shadow-lg flex items-center justify-center cursor-pointer transition-colors text-text-dim hover:text-text-main"
+            title="Show Codebase Metrics"
+          >
+            <BarChart3 size={18} />
+          </button>
+        ) : (
+          <div className="w-72 bg-surface/95 backdrop-blur-md border border-border rounded-xl shadow-xl p-4 flex flex-col gap-3 nebula-slide-right select-none">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+              <div className="flex items-center gap-2">
+                <Activity size={16} className="text-blue-400" />
+                <span className="text-xs font-bold text-text-main uppercase tracking-wider">Codebase Metrics</span>
+              </div>
+              <button
+                onClick={() => setIsStatsExpanded(false)}
+                className="p-1 text-text-dim hover:text-text-main hover:bg-surface-raised rounded transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+
+            {/* Grid Metrics */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Files Count */}
+              <div className="bg-background/45 border border-border/50 rounded-lg p-2.5 flex flex-col">
+                <span className="text-[9px] font-bold text-text-dim uppercase tracking-wide">Files</span>
+                <span className="text-lg font-extrabold text-text-main leading-tight mt-1">{workspaceNodes.length}</span>
+              </div>
+
+              {/* Edge/Relation Count */}
+              <div className="bg-background/45 border border-border/50 rounded-lg p-2.5 flex flex-col">
+                <span className="text-[9px] font-bold text-text-dim uppercase tracking-wide">Relations</span>
+                <span className="text-lg font-extrabold text-text-main leading-tight mt-1">
+                  {initialEdges.filter(e => !e.source.startsWith('ext:') && !e.target.startsWith('ext:')).length}
+                </span>
+              </div>
+
+              {/* Cycles */}
+              <div className={`border rounded-lg p-2.5 flex flex-col ${
+                cycleResult.cycles.length > 0
+                  ? 'bg-red-500/5 border-red-500/20 text-red-400'
+                  : 'bg-background/45 border-border/50 text-text-main'
+              }`}>
+                <span className="text-[9px] font-bold text-text-dim uppercase tracking-wide">Circular</span>
+                <span className={`text-lg font-extrabold leading-tight mt-1 ${
+                  cycleResult.cycles.length > 0 ? 'text-red-400' : 'text-text-main'
+                }`}>
+                  {cycleResult.cycles.length}
+                </span>
+              </div>
+
+              {/* Dead Code */}
+              <div className={`border rounded-lg p-2.5 flex flex-col ${
+                deadCodePercent > 15
+                  ? 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+                  : 'bg-background/45 border-border/50 text-text-main'
+              }`}>
+                <span className="text-[9px] font-bold text-text-dim uppercase tracking-wide">Dead Code</span>
+                <span className={`text-lg font-extrabold leading-tight mt-1 ${
+                  deadCodePercent > 15 ? 'text-amber-400' : 'text-text-main'
+                }`}>
+                  {deadCodePercent}%
+                </span>
+              </div>
+            </div>
+
+            {/* Language Breakdown */}
+            {languageStats.length > 0 && (
+              <div className="space-y-2 mt-1">
+                <span className="text-[9px] font-bold text-text-dim uppercase tracking-wide">Languages</span>
+                
+                {/* Horizontal Stack Bar */}
+                <div className="h-2 w-full bg-background rounded-full overflow-hidden flex">
+                  {languageStats.map((stat) => (
+                    <div
+                      key={stat.ext}
+                      className={getLanguageColor(stat.ext)}
+                      style={{ width: `${stat.percent}%` }}
+                      title={`${stat.ext}: ${stat.count} files (${stat.percent}%)`}
+                    />
+                  ))}
+                </div>
+
+                {/* Legend */}
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-text-dim">
+                  {languageStats.map((stat) => (
+                    <div key={stat.ext} className="flex items-center gap-1 truncate">
+                      <div className={`w-1.5 h-1.5 rounded-full ${getLanguageColor(stat.ext)} shrink-0`} />
+                      <span className="font-semibold text-text-main">{stat.ext}</span>
+                      <span>{stat.percent}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <ReactFlow
+
         nodes={styledNodes}
         edges={styledEdges}
         onNodesChange={onNodesChange}

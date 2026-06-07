@@ -22,3 +22,8 @@ pub async fn read_file_content(workspace: String, path: String) -> Result<String
     let safe_path = crate::security::ensure_path_in_workspace(&workspace, &path)?;
     std::fs::read_to_string(safe_path).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn read_sys_platform() -> String {
+    std::env::consts::OS.to_string()
+}
