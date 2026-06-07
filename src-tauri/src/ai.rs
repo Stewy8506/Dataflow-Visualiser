@@ -10,23 +10,11 @@ struct GeminiRequestPart {
 }
 
 #[derive(Serialize, Deserialize)]
-struct GeminiRequestContent {
-    parts: Vec<GeminiRequestPart>,
-}
-
-#[derive(Serialize, Deserialize)]
 struct GenerationConfig {
     #[serde(rename = "responseMimeType")]
     response_mime_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GeminiRequest {
-    contents: Vec<GeminiRequestContent>,
-    #[serde(rename = "generationConfig")]
-    generation_config: GenerationConfig,
 }
 
 #[derive(Deserialize)]
@@ -116,7 +104,7 @@ struct AnthropicResponse {
 #[derive(Deserialize)]
 struct AnthropicContentPart {
     #[serde(rename = "type")]
-    part_type: String,
+    _part_type: String,
     text: String,
 }
 
