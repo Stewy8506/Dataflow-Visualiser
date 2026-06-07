@@ -18,6 +18,8 @@ struct GeminiRequestContent {
 struct GenerationConfig {
     #[serde(rename = "responseMimeType")]
     response_mime_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -57,6 +59,8 @@ struct OpenAiMessage {
 struct OpenAiRequest {
     model: String,
     messages: Vec<OpenAiMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +96,7 @@ async fn call_llm(
     model: &str,
     local_base_url: &str,
     prompt: &str,
+    temperature: Option<f32>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -103,6 +108,7 @@ async fn call_llm(
                 role: "user".to_string(),
                 content: prompt.to_string(),
             }],
+            temperature,
         };
 
         let response = client
@@ -114,8 +120,8 @@ async fn call_llm(
             .map_err(|e| e.to_string())?;
 
         let response_text = response.text().await.map_err(|e| e.to_string())?;
-        let openai_response: OpenAiResponse =
-            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+        let openai_response: OpenAiResponse = serde_json::from_str(&response_text)
+            .map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
 
         if let Some(choice) = openai_response.choices.first() {
             Ok(choice.message.content.clone())
@@ -136,6 +142,7 @@ async fn call_llm(
             }],
             generation_config: GenerationConfig {
                 response_mime_type: "application/json".to_string(),
+                temperature,
             },
         };
 
@@ -148,8 +155,8 @@ async fn call_llm(
             .map_err(|e| e.to_string())?;
 
         let response_text = response.text().await.map_err(|e| e.to_string())?;
-        let gemini_response: GeminiResponse =
-            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+        let gemini_response: GeminiResponse = serde_json::from_str(&response_text)
+            .map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
 
         let text = gemini_response
             .candidates
@@ -202,6 +209,8 @@ pub async fn enrich_graph_with_ai(
     model: String,
     ai_provider: String,
     local_base_url: String,
+    temperature: Option<f32>,
+    custom_prompt: Option<String>,
 ) -> Result<(), String> {
     if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
@@ -212,10 +221,15 @@ pub async fn enrich_graph_with_ai(
         let nodes = graph_data.nodes.clone();
 
         for chunk in nodes.chunks(chunk_size) {
-            let mut prompt = String::from(
-                "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
-                Also, provide a short 1-2 sentence summary for each file.\n\n\
-                Return the result as a JSON object with the following schema:\n\
+            let mut prompt = match &custom_prompt {
+                Some(p) if !p.is_empty() => format!("{}\n\n", p),
+                _ => String::from(
+                    "You are an expert software architect. Analyze the provided codebase files and group them into semantic domains.\n\
+                    Also, provide a short 1-2 sentence summary for each file.\n\n"
+                )
+            };
+            prompt.push_str(
+                "Return the result as a JSON object with the following schema:\n\
                 {\n\
                   \"nodes\": [\n\
                     {\n\
@@ -242,7 +256,16 @@ pub async fn enrich_graph_with_ai(
                 prompt.push_str("\n```\n\n");
             }
 
-            if let Ok(response_text) = call_llm(&ai_provider, &api_key, &model, &local_base_url, &prompt).await {
+            if let Ok(response_text) = call_llm(
+                &ai_provider,
+                &api_key,
+                &model,
+                &local_base_url,
+                &prompt,
+                temperature,
+            )
+            .await
+            {
                 let json_str = extract_json(&response_text).trim();
                 if let Ok(ai_result) = serde_json::from_str::<AiResult>(json_str) {
                     let _ = window.emit("ai_nodes_enriched", &ai_result.nodes);
@@ -290,7 +313,8 @@ pub async fn execute_ai_refactor(
         "You are an expert refactoring assistant. We are renaming a file or symbol.\n\
         Target File: {}\n\
         New Name: {}\n",
-        safe_target.display(), new_name
+        safe_target.display(),
+        new_name
     );
 
     if let Some(sym) = &symbol_name {
@@ -322,11 +346,19 @@ pub async fn execute_ai_refactor(
         prompt.push_str("\n```\n\n");
     }
 
-    let response_text = call_llm(&ai_provider, &api_key, &model, &local_base_url, &prompt).await?;
-    
+    let response_text = call_llm(
+        &ai_provider,
+        &api_key,
+        &model,
+        &local_base_url,
+        &prompt,
+        None,
+    )
+    .await?;
+
     let json_str = extract_json(&response_text).trim();
-    let ai_result: AiRefactorResult = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let ai_result: AiRefactorResult =
+        serde_json::from_str(json_str).map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
     Ok(ai_result.updates)
 }
@@ -373,6 +405,7 @@ pub async fn ask_assistant(
     model: String,
     ai_provider: String,
     local_base_url: String,
+    temperature: Option<f32>,
 ) -> Result<String, String> {
     if ai_provider == "gemini" && api_key.is_empty() {
         return Err("API key is required".to_string());
@@ -391,7 +424,7 @@ pub async fn ask_assistant(
     if ai_provider == "local" {
         let url = format!("{}/chat/completions", local_base_url);
         let mut messages = Vec::new();
-        
+
         for msg in history {
             messages.push(OpenAiMessage {
                 role: msg.role,
@@ -411,6 +444,7 @@ pub async fn ask_assistant(
         let request_body = OpenAiRequest {
             model: model.to_string(),
             messages,
+            temperature,
         };
 
         let response = client
@@ -422,8 +456,8 @@ pub async fn ask_assistant(
             .map_err(|e| e.to_string())?;
 
         let response_text = response.text().await.map_err(|e| e.to_string())?;
-        let openai_response: OpenAiResponse =
-            serde_json::from_str(&response_text).map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
+        let openai_response: OpenAiResponse = serde_json::from_str(&response_text)
+            .map_err(|e| format!("Parse Error: {}\nResponse: {}", e, response_text))?;
 
         if let Some(choice) = openai_response.choices.first() {
             Ok(choice.message.content.clone())
@@ -435,7 +469,11 @@ pub async fn ask_assistant(
 
         for msg in history {
             contents.push(GeminiChatContent {
-                role: if msg.role == "assistant" { "model".to_string() } else { "user".to_string() },
+                role: if msg.role == "assistant" {
+                    "model".to_string()
+                } else {
+                    "user".to_string()
+                },
                 parts: vec![GeminiRequestPart { text: msg.text }],
             });
         }
@@ -458,6 +496,7 @@ pub async fn ask_assistant(
             contents,
             generation_config: GenerationConfig {
                 response_mime_type: "text/plain".to_string(),
+                temperature,
             },
         };
 
@@ -469,11 +508,19 @@ pub async fn ask_assistant(
             .await
             .map_err(|e| e.to_string())?;
 
-        let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response: {}", e))?;
 
         let gemini_response: GeminiResponse =
-            serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}\nResponse was: {}", e, response_text))?;
-        
+            serde_json::from_str(&response_text).map_err(|e| {
+                format!(
+                    "Failed to parse JSON: {}\nResponse was: {}",
+                    e, response_text
+                )
+            })?;
+
         let text = gemini_response
             .candidates
             .first()

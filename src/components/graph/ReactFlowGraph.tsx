@@ -28,6 +28,8 @@ const nodeTypes: NodeTypes = {
   previewNode: PreviewNode,
 };
 
+import { useSettings } from '../../hooks/useSettings';
+
 interface ReactFlowGraphProps {
   nodes: any[];
   edges: any[];
@@ -37,6 +39,7 @@ interface ReactFlowGraphProps {
   isLightMode: boolean;
   preferredIde: string;
   workspacePath: string;
+  settings: ReturnType<typeof useSettings>;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
@@ -52,6 +55,7 @@ function ReactFlowInner({
   isLightMode,
   preferredIde,
   workspacePath,
+  settings,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom, setCenter, getNodes } = useReactFlow();
 
@@ -181,8 +185,16 @@ function ReactFlowInner({
         }
       }
 
-      // Ensure workspacePath and coverage are passed down to all node data
-      node.data = { ...node.data, workspacePath, coverageData };
+      // Ensure workspacePath, coverage, scale, and custom commands are passed down to all node data
+      node.data = { 
+        ...node.data, 
+        workspacePath, 
+        coverageData,
+        defaultNodeScale: settings.defaultNodeScale,
+        preferredIde: settings.preferredIde,
+        customIdeCommand: settings.customIdeCommand,
+        showDeleteConfirmation: settings.showDeleteConfirmation
+      };
 
       let isSearchMatch = true;
       if (searchQuery && searchMode === 'highlight') {
@@ -312,6 +324,7 @@ function ReactFlowInner({
 
       return {
         ...edge,
+        type: settings.edgeType || 'bezier',
         animated: isAnimated,
         label,
         style: {
@@ -320,11 +333,12 @@ function ReactFlowInner({
           strokeWidth: isExternalEdge ? 1 : (isDirectlyConnected ? 3 : (isConnected ? 2 : 1.5)),
           stroke: strokeColor,
           strokeDasharray,
+          animationDuration: isAnimated ? `${1 / (settings.edgeAnimationSpeed || 1)}s` : undefined,
         },
         markerEnd,
       };
     });
-  }, [initialEdges, blastRadius, cycleResult, activeNodeId, isLightMode, propTrace, diffOverlay]);
+  }, [initialEdges, blastRadius, cycleResult, activeNodeId, isLightMode, propTrace, diffOverlay, settings.edgeType, settings.edgeAnimationSpeed]);
 
   const handleNodeClick = (_: React.MouseEvent, node: any) => {
     setSelectedNode(node);
@@ -332,8 +346,9 @@ function ReactFlowInner({
   };
 
   const handleNodeDoubleClick = (_: React.MouseEvent, node: any) => {
-    if (blastRadius && node.id) {
-       invoke("open_in_ide", { path: node.id, ide: preferredIde }).catch(console.error);
+    if (node.id) {
+       const ideCmd = settings.customIdeCommand || settings.preferredIde || preferredIde;
+       invoke("open_in_ide", { path: node.id, ide: ideCmd }).catch(console.error);
     }
   };
 
@@ -382,7 +397,7 @@ function ReactFlowInner({
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         colorMode={isLightMode ? "light" : "dark"}
-        fitView
+        fitView={settings.autoFitOnLoad}
         minZoom={0.05}
         maxZoom={4}
         zoomOnScroll={false}
@@ -393,7 +408,17 @@ function ReactFlowInner({
         proOptions={{ hideAttribution: true }}
         onlyRenderVisibleElements={true}
       >
-        <Background color={isLightMode ? "#cbd5e1" : "#475569"} gap={20} size={1.5} variant={BackgroundVariant.Dots} />
+        <Background 
+          color={isLightMode ? "#cbd5e1" : "#475569"} 
+          gap={20} 
+          size={1.5} 
+          variant={
+            settings.gridPattern === 'lines' ? BackgroundVariant.Lines 
+            : settings.gridPattern === 'none' ? undefined 
+            : BackgroundVariant.Dots
+          } 
+          style={settings.gridPattern === 'none' ? { display: 'none' } : { opacity: settings.gridOpacity }}
+        />
         <Controls />
         {showMiniMap && (
           <MiniMap

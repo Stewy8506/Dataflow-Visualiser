@@ -34,17 +34,17 @@ import { useShallow } from 'zustand/react/shallow';
 
 function App() {
   // ─── Settings ────────────────────────────────────────────────
+  const settings = useSettings();
   const {
-    apiKey, setApiKey,
-    selectedModel, setSelectedModel,
-    enableAi, setEnableAi,
+    apiKey,
+    selectedModel,
+    enableAi,
     isLightMode, setIsLightMode,
     preferredIde,
-    handleSetPreferredIde,
-    aiProvider, setAiProvider,
-    localBaseUrl, setLocalBaseUrl,
-    startupBehavior, setStartupBehavior,
-  } = useSettings();
+    aiProvider,
+    localBaseUrl,
+    startupBehavior,
+  } = settings;
   const didAttemptStartupRestore = useRef(false);
 
   // ─── Project Loader ──────────────────────────────────────────
@@ -59,7 +59,15 @@ function App() {
     handleSelectDirectory,
     handleOpenRecentProject,
     handleDeleteNode,
-  } = useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl });
+  } = useProjectLoader({ 
+    apiKey, 
+    enableAi, 
+    selectedModel, 
+    aiProvider, 
+    localBaseUrl,
+    aiTemperature: settings.aiTemperature,
+    customSummaryPrompt: settings.customSummaryPrompt
+  });
 
   // ─── UI State (Zustand) ──────────────────────────────────────
   // ─── UI State (Zustand) ──────────────────────────────────────
@@ -126,14 +134,42 @@ function App() {
   // ─── Keyboard Shortcut ───────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      const matchShortcut = (shortcutStr: string) => {
+        if (!shortcutStr) return false;
+        const parts = shortcutStr.toLowerCase().split('+');
+        const needsCtrl = parts.includes('ctrl');
+        const needsMeta = parts.includes('meta');
+        const needsAlt = parts.includes('alt');
+        const needsShift = parts.includes('shift');
+        
+        if (needsCtrl !== e.ctrlKey) return false;
+        if (needsMeta !== e.metaKey) return false;
+        if (needsAlt !== e.altKey) return false;
+        if (needsShift !== e.shiftKey) return false;
+        
+        const mainKey = parts.find(p => !['ctrl', 'meta', 'alt', 'shift'].includes(p));
+        let eventKey = e.key.toLowerCase();
+        if (eventKey === ' ') eventKey = 'space';
+        return eventKey === mainKey;
+      };
+
+      const bindings = settings.keybindings || {};
+      
+      if (matchShortcut(bindings.commandPalette)) {
         e.preventDefault();
         setShowCommandPalette(!useAppStore.getState().showCommandPalette);
+      } else if (matchShortcut(bindings.searchNodes)) {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder="Search..."]') as HTMLInputElement;
+        if (searchInput) searchInput.focus();
+      } else if (matchShortcut(bindings.toggleSettings)) {
+        e.preventDefault();
+        setShowSettings(!showSettings);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [settings.keybindings, showSettings, setShowSettings, setShowCommandPalette]);
 
   // ─── Tauri Window Size & Fullscreen Controller ────────────────
   useEffect(() => {
@@ -223,7 +259,7 @@ function App() {
   // ─── Git Churn Fetch ──────────────────────────────────────────
   useEffect(() => {
     if (showHeatmap && !churnData && selectedPath) {
-      invoke('get_git_churn', { workspace: selectedPath, limit: 100 })
+      invoke('get_git_churn', { workspace: selectedPath, limit: settings.gitHistoryLimit || 100 })
         .then((data: any) => {
           const absoluteChurn: Record<string, number> = {};
           const normalizedWorkspace = selectedPath.replace(/\\/g, '/');
@@ -237,7 +273,7 @@ function App() {
           console.error("Failed to fetch git churn:", err);
         });
     }
-  }, [showHeatmap, selectedPath, churnData]);
+  }, [showHeatmap, selectedPath, churnData, settings.gitHistoryLimit]);
 
   // ─── Test Coverage Fetch ─────────────────────────────────────────
   useEffect(() => {
@@ -347,16 +383,7 @@ function App() {
 
         {showSettings && (
           <SettingsModal
-            apiKey={apiKey} setApiKey={setApiKey}
-            selectedModel={selectedModel} setSelectedModel={setSelectedModel}
-            enableAi={enableAi} setEnableAi={setEnableAi}
-            preferredIde={preferredIde} setPreferredIde={handleSetPreferredIde}
-            aiProvider={aiProvider} setAiProvider={setAiProvider}
-            localBaseUrl={localBaseUrl} setLocalBaseUrl={setLocalBaseUrl}
-            isLightMode={isLightMode}
-            setIsLightMode={setIsLightMode}
-            startupBehavior={startupBehavior}
-            setStartupBehavior={setStartupBehavior}
+            settings={settings}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -425,6 +452,7 @@ function App() {
                 isLightMode={isLightMode}
                 preferredIde={preferredIde}
                 workspacePath={selectedPath!}
+                settings={settings}
               />
             ) : (
               <ThreeDGraph
@@ -457,19 +485,7 @@ function App() {
 
       {showSettings && selectedPath && (
         <SettingsModal
-          apiKey={apiKey} setApiKey={setApiKey}
-          selectedModel={selectedModel} setSelectedModel={setSelectedModel}
-          enableAi={enableAi} setEnableAi={setEnableAi}
-          preferredIde={preferredIde}
-          setPreferredIde={handleSetPreferredIde}
-          aiProvider={aiProvider}
-          setAiProvider={setAiProvider}
-          localBaseUrl={localBaseUrl}
-          setLocalBaseUrl={setLocalBaseUrl}
-          isLightMode={isLightMode}
-          setIsLightMode={setIsLightMode}
-          startupBehavior={startupBehavior}
-          setStartupBehavior={setStartupBehavior}
+          settings={settings}
           onClose={() => setShowSettings(false)}
         />
       )}

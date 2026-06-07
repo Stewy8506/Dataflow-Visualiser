@@ -11,9 +11,19 @@ interface UseProjectLoaderOptions {
   selectedModel: string;
   aiProvider: string;
   localBaseUrl: string;
+  aiTemperature?: number;
+  customSummaryPrompt?: string;
 }
 
-export function useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl }: UseProjectLoaderOptions) {
+export function useProjectLoader({ 
+  apiKey, 
+  enableAi, 
+  selectedModel, 
+  aiProvider, 
+  localBaseUrl,
+  aiTemperature,
+  customSummaryPrompt
+}: UseProjectLoaderOptions) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [rawGraphData, setRawGraphData] = useState<GraphData | null>(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -135,7 +145,15 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, 
         setLogs(prev => [...prev, `> Starting progressive AI enrichment with ${selectedModel} via ${aiProvider}...`]);
         setIsEnriching(true);
         try {
-          await invoke('enrich_graph_with_ai', { graphData: result, apiKey, model: selectedModel, aiProvider, localBaseUrl });
+          await invoke('enrich_graph_with_ai', { 
+            graphData: result, 
+            apiKey, 
+            model: selectedModel, 
+            aiProvider, 
+            localBaseUrl,
+            temperature: aiTemperature,
+            customPrompt: customSummaryPrompt
+          });
         } catch (aiErr) {
           console.error('AI Enrichment Error:', aiErr);
           setLogs(prev => [...prev, `> AI Error: ${String(aiErr)}`]);
@@ -153,7 +171,7 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, 
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, enableAi, selectedModel, aiProvider, localBaseUrl, recentProjects]);
+  }, [apiKey, enableAi, selectedModel, aiProvider, localBaseUrl, recentProjects, aiTemperature, customSummaryPrompt]);
 
   const handleSelectDirectory = useCallback(async () => {
     try {

@@ -9,7 +9,23 @@ const defaultSettings = {
   theme: 'dark',
   ai_provider: 'gemini',
   local_base_url: 'http://localhost:1234/v1',
-  startup_behavior: 'welcome'
+  startup_behavior: 'welcome',
+  accentColor: 'blue',
+  sansFont: 'Plus Jakarta Sans',
+  monoFont: 'JetBrains Mono',
+  gridPattern: 'dots',
+  gridOpacity: 0.14,
+  edgeType: 'bezier',
+  edgeAnimationSpeed: 1,
+  autoFitOnLoad: true,
+  defaultNodeScale: 'normal',
+  aiTemperature: 0.2,
+  customSummaryPrompt: '',
+  aiSidebarPlacement: 'right',
+  customIdeCommand: '',
+  gitHistoryLimit: 100,
+  showDeleteConfirmation: true,
+  keybindings: { commandPalette: 'ctrl+k', searchNodes: 'ctrl+f', toggleSettings: 'ctrl+,' }
 };
 
 export function useSettings() {
@@ -21,6 +37,31 @@ export function useSettings() {
   const [aiProvider, setAiProvider] = useState('gemini');
   const [localBaseUrl, setLocalBaseUrl] = useState('http://localhost:1234/v1');
   const [startupBehavior, setStartupBehavior] = useState<'welcome' | 'restore'>('welcome');
+  
+  const [accentColor, setAccentColor] = useState('blue');
+  const [sansFont, setSansFont] = useState('Plus Jakarta Sans');
+  const [monoFont, setMonoFont] = useState('JetBrains Mono');
+  const [gridPattern, setGridPattern] = useState<'dots' | 'lines' | 'none'>('dots');
+  const [gridOpacity, setGridOpacity] = useState(0.14);
+  
+  const [edgeType, setEdgeType] = useState<'bezier' | 'straight' | 'smoothstep'>('bezier');
+  const [edgeAnimationSpeed, setEdgeAnimationSpeed] = useState(1);
+  const [autoFitOnLoad, setAutoFitOnLoad] = useState(true);
+  const [defaultNodeScale, setDefaultNodeScale] = useState<'small' | 'normal' | 'large'>('normal');
+  
+  const [aiTemperature, setAiTemperature] = useState(0.2);
+  const [customSummaryPrompt, setCustomSummaryPrompt] = useState('');
+  const [aiSidebarPlacement, setAiSidebarPlacement] = useState<'left' | 'right'>('right');
+  
+  const [customIdeCommand, setCustomIdeCommand] = useState('');
+  const [gitHistoryLimit, setGitHistoryLimit] = useState(100);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(true);
+  const [keybindings, setKeybindings] = useState<Record<string, string>>({
+    commandPalette: 'ctrl+k',
+    searchNodes: 'ctrl+f',
+    toggleSettings: 'ctrl+,'
+  });
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load persisted settings from Tauri store
@@ -34,8 +75,24 @@ export function useSettings() {
         store.get<string>('theme'),
         store.get<string>('ai_provider'),
         store.get<string>('local_base_url'),
-        store.get<'welcome' | 'restore'>('startup_behavior')
-      ]).then(([ide, key, model, enable, theme, provider, baseUrl, startup]) => {
+        store.get<'welcome' | 'restore'>('startup_behavior'),
+        store.get<string>('accentColor'),
+        store.get<string>('sansFont'),
+        store.get<string>('monoFont'),
+        store.get<'dots' | 'lines' | 'none'>('gridPattern'),
+        store.get<number>('gridOpacity'),
+        store.get<'bezier' | 'straight' | 'smoothstep'>('edgeType'),
+        store.get<number>('edgeAnimationSpeed'),
+        store.get<boolean>('autoFitOnLoad'),
+        store.get<'small' | 'normal' | 'large'>('defaultNodeScale'),
+        store.get<number>('aiTemperature'),
+        store.get<string>('customSummaryPrompt'),
+        store.get<'left' | 'right'>('aiSidebarPlacement'),
+        store.get<string>('customIdeCommand'),
+        store.get<number>('gitHistoryLimit'),
+        store.get<boolean>('showDeleteConfirmation'),
+        store.get<Record<string, string>>('keybindings')
+      ]).then(([ide, key, model, enable, theme, provider, baseUrl, startup, accent, sans, mono, gridPat, gridOp, edge, speed, autoFit, scale, temp, prompt, sidebar, ideCmd, gitLim, confirmDel, keys]) => {
         if (ide !== undefined && ide !== null) setPreferredIde(ide);
         if (key !== undefined && key !== null) setApiKey(key);
         if (model !== undefined && model !== null) setSelectedModel(model);
@@ -44,6 +101,27 @@ export function useSettings() {
         if (provider !== undefined && provider !== null) setAiProvider(provider);
         if (baseUrl !== undefined && baseUrl !== null) setLocalBaseUrl(baseUrl);
         if (startup === 'welcome' || startup === 'restore') setStartupBehavior(startup);
+        
+        if (accent !== undefined && accent !== null) setAccentColor(accent);
+        if (sans !== undefined && sans !== null) setSansFont(sans);
+        if (mono !== undefined && mono !== null) setMonoFont(mono);
+        if (gridPat !== undefined && gridPat !== null) setGridPattern(gridPat);
+        if (gridOp !== undefined && gridOp !== null) setGridOpacity(gridOp);
+        
+        if (edge !== undefined && edge !== null) setEdgeType(edge);
+        if (speed !== undefined && speed !== null) setEdgeAnimationSpeed(speed);
+        if (autoFit !== undefined && autoFit !== null) setAutoFitOnLoad(autoFit);
+        if (scale !== undefined && scale !== null) setDefaultNodeScale(scale);
+        
+        if (temp !== undefined && temp !== null) setAiTemperature(temp);
+        if (prompt !== undefined && prompt !== null) setCustomSummaryPrompt(prompt);
+        if (sidebar !== undefined && sidebar !== null) setAiSidebarPlacement(sidebar);
+        
+        if (ideCmd !== undefined && ideCmd !== null) setCustomIdeCommand(ideCmd);
+        if (gitLim !== undefined && gitLim !== null) setGitHistoryLimit(gitLim);
+        if (confirmDel !== undefined && confirmDel !== null) setShowDeleteConfirmation(confirmDel);
+        if (keys !== undefined && keys !== null) setKeybindings(keys);
+        
         setIsLoaded(true);
       });
     });
@@ -66,6 +144,39 @@ export function useSettings() {
     }
   }, [isLightMode, isLoaded]);
 
+  // Sync accent color to DOM
+  useEffect(() => {
+    if (!isLoaded) return;
+    const root = document.documentElement;
+    const ACCENT_PRESETS: Record<string, { main: string; hover: string; light: string }> = {
+      blue: { main: '#3b82f6', hover: '#2563eb', light: 'rgba(59, 130, 246, 0.15)' },
+      emerald: { main: '#10b981', hover: '#059669', light: 'rgba(16, 185, 129, 0.15)' },
+      indigo: { main: '#6366f1', hover: '#4f46e5', light: 'rgba(99, 102, 241, 0.15)' },
+      purple: { main: '#a855f7', hover: '#9333ea', light: 'rgba(168, 85, 247, 0.15)' },
+      orange: { main: '#f97316', hover: '#ea580c', light: 'rgba(249, 115, 22, 0.15)' },
+      amber: { main: '#f59e0b', hover: '#d97706', light: 'rgba(245, 158, 11, 0.15)' },
+      rose: { main: '#f43f5e', hover: '#e11d48', light: 'rgba(244, 63, 94, 0.15)' }
+    };
+    const preset = ACCENT_PRESETS[accentColor] || ACCENT_PRESETS.blue;
+    root.style.setProperty('--theme-accent', preset.main);
+    root.style.setProperty('--theme-accent-hover', preset.hover);
+    root.style.setProperty('--theme-accent-light', preset.light);
+    saveSetting('accentColor', accentColor);
+  }, [accentColor, isLoaded]);
+
+  // Sync fonts to DOM
+  useEffect(() => {
+    if (!isLoaded) return;
+    document.documentElement.style.setProperty('--theme-sans-font', sansFont);
+    saveSetting('sansFont', sansFont);
+  }, [sansFont, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    document.documentElement.style.setProperty('--theme-mono-font', monoFont);
+    saveSetting('monoFont', monoFont);
+  }, [monoFont, isLoaded]);
+
   const handleSetApiKey = (val: string) => { setApiKey(val); saveSetting('gemini_api_key', val); };
   const handleSetSelectedModel = (val: string) => { setSelectedModel(val); saveSetting('gemini_model', val); };
   const handleSetEnableAi = (val: boolean) => { setEnableAi(val); saveSetting('enable_ai_summary', val); };
@@ -74,14 +185,56 @@ export function useSettings() {
   const handleSetLocalBaseUrl = (val: string) => { setLocalBaseUrl(val); saveSetting('local_base_url', val); };
   const handleSetStartupBehavior = (val: 'welcome' | 'restore') => { setStartupBehavior(val); saveSetting('startup_behavior', val); };
 
+  const handleSetAccentColor = (val: string) => { setAccentColor(val); saveSetting('accentColor', val); };
+  const handleSetSansFont = (val: string) => { setSansFont(val); saveSetting('sansFont', val); };
+  const handleSetMonoFont = (val: string) => { setMonoFont(val); saveSetting('monoFont', val); };
+  const handleSetGridPattern = (val: 'dots' | 'lines' | 'none') => { setGridPattern(val); saveSetting('gridPattern', val); };
+  const handleSetGridOpacity = (val: number) => { setGridOpacity(val); saveSetting('gridOpacity', val); };
+
+  const handleSetEdgeType = (val: 'bezier' | 'straight' | 'smoothstep') => { setEdgeType(val); saveSetting('edgeType', val); };
+  const handleSetEdgeAnimationSpeed = (val: number) => { setEdgeAnimationSpeed(val); saveSetting('edgeAnimationSpeed', val); };
+  const handleSetAutoFitOnLoad = (val: boolean) => { setAutoFitOnLoad(val); saveSetting('autoFitOnLoad', val); };
+  const handleSetDefaultNodeScale = (val: 'small' | 'normal' | 'large') => { setDefaultNodeScale(val); saveSetting('defaultNodeScale', val); };
+
+  const handleSetAiTemperature = (val: number) => { setAiTemperature(val); saveSetting('aiTemperature', val); };
+  const handleSetCustomSummaryPrompt = (val: string) => { setCustomSummaryPrompt(val); saveSetting('customSummaryPrompt', val); };
+  const handleSetAiSidebarPlacement = (val: 'left' | 'right') => { setAiSidebarPlacement(val); saveSetting('aiSidebarPlacement', val); };
+
+  const handleSetCustomIdeCommand = (val: string) => { setCustomIdeCommand(val); saveSetting('customIdeCommand', val); };
+  const handleSetGitHistoryLimit = (val: number) => { setGitHistoryLimit(val); saveSetting('gitHistoryLimit', val); };
+  const handleSetShowDeleteConfirmation = (val: boolean) => { setShowDeleteConfirmation(val); saveSetting('showDeleteConfirmation', val); };
+  const handleSetKeybindings = (val: Record<string, string>) => { setKeybindings(val); saveSetting('keybindings', val); };
+
   return {
     apiKey, setApiKey: handleSetApiKey,
     selectedModel, setSelectedModel: handleSetSelectedModel,
     enableAi, setEnableAi: handleSetEnableAi,
     isLightMode, setIsLightMode,
-    preferredIde, handleSetPreferredIde,
+    preferredIde, setPreferredIde: handleSetPreferredIde,
     aiProvider, setAiProvider: handleSetAiProvider,
     localBaseUrl, setLocalBaseUrl: handleSetLocalBaseUrl,
     startupBehavior, setStartupBehavior: handleSetStartupBehavior,
+    
+    accentColor, setAccentColor: handleSetAccentColor,
+    sansFont, setSansFont: handleSetSansFont,
+    monoFont, setMonoFont: handleSetMonoFont,
+    gridPattern, setGridPattern: handleSetGridPattern,
+    gridOpacity, setGridOpacity: handleSetGridOpacity,
+    
+    edgeType, setEdgeType: handleSetEdgeType,
+    edgeAnimationSpeed, setEdgeAnimationSpeed: handleSetEdgeAnimationSpeed,
+    autoFitOnLoad, setAutoFitOnLoad: handleSetAutoFitOnLoad,
+    defaultNodeScale, setDefaultNodeScale: handleSetDefaultNodeScale,
+    
+    aiTemperature, setAiTemperature: handleSetAiTemperature,
+    customSummaryPrompt, setCustomSummaryPrompt: handleSetCustomSummaryPrompt,
+    aiSidebarPlacement, setAiSidebarPlacement: handleSetAiSidebarPlacement,
+    
+    customIdeCommand, setCustomIdeCommand: handleSetCustomIdeCommand,
+    gitHistoryLimit, setGitHistoryLimit: handleSetGitHistoryLimit,
+    showDeleteConfirmation, setShowDeleteConfirmation: handleSetShowDeleteConfirmation,
+    keybindings, setKeybindings: handleSetKeybindings,
+    
+    isLoaded
   };
 }

@@ -1,5 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link, Beaker } from 'lucide-react';
-import type { GraphLayer } from '../../types';
+import { Settings, Box, Spline, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link, Beaker } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettings } from '../../hooks/useSettings';
 
@@ -9,15 +8,8 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolbarProps) {
-  const layerItems: { key: GraphLayer; icon: typeof Layout; label: string }[] = [
-    { key: 'ui', icon: Layout, label: 'UI Layer' },
-    { key: 'backend', icon: Server, label: 'Backend' },
-    { key: 'overall', icon: Layers, label: 'Overall' },
-  ];
-
   const { 
     viewMode, setViewMode,
-    activeLayer, setActiveLayer,
     showMiniMap, setShowMiniMap,
     showExternalDeps, setShowExternalDeps,
     showSnapshots, setShowSnapshots,
@@ -48,43 +40,14 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
             <span>2D Flow</span>
           </button>
           <button
-            onClick={() => setViewMode('3d')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${
-              viewMode === '3d'
-                ? 'bg-surface-raised text-text-main shadow-sm border border-border'
-                : 'text-text-dim hover:text-text-muted border border-transparent'
-            }`}
+            disabled
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-xs font-medium text-text-dim/40 cursor-not-allowed border border-transparent"
+            title="3D View (Coming Soon)"
           >
             <Box size={13} />
-            <span>3D View</span>
+            <span>3D View <span className="text-[10px] opacity-60">(Soon)</span></span>
           </button>
         </div>
-
-        {/* Divider */}
-        {viewMode === '2d' && <div className="w-px h-4 bg-border mx-1" />}
-
-        {/* Layer Switcher */}
-        {viewMode === '2d' && (
-          <div className="flex items-center bg-background rounded-md border border-border-subtle p-0.5">
-            {layerItems.map(({ key, icon: Icon, label }) => {
-              const isActive = activeLayer === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActiveLayer(key)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-[4px] text-xs font-medium transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-surface-raised text-text-main shadow-sm border border-border'
-                      : 'text-text-dim hover:text-text-muted border border-transparent'
-                  }`}
-                >
-                  <Icon size={13} />
-                  <span className="hidden sm:inline">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Right side: Tools and Actions */}

@@ -193,11 +193,29 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
     );
   }
 
+  const nodeScale = data.defaultNodeScale || 'normal';
+  const sizeClasses = 
+    nodeScale === 'small' ? 'min-w-[210px] max-w-[320px]' :
+    nodeScale === 'large' ? 'min-w-[310px] max-w-[480px]' :
+    'min-w-[260px] max-w-[420px]';
+  const paddingClass = 
+    nodeScale === 'small' ? 'p-3' :
+    nodeScale === 'large' ? 'p-5.5' :
+    'p-4';
+  const titleTextClass = 
+    nodeScale === 'small' ? 'text-xs' :
+    nodeScale === 'large' ? 'text-base' :
+    'text-sm';
+  const iconPaddingClass = 
+    nodeScale === 'small' ? 'p-1.5' :
+    nodeScale === 'large' ? 'p-3.5' :
+    'p-2.5';
+
   return (
     <div className="relative transition-all duration-200 group">
       {/* Card */}
       <div
-        className={`rounded-xl w-fit min-w-[260px] max-w-[420px] transition-all duration-200 border-l-4 ${selected
+        className={`rounded-xl w-fit ${sizeClasses} transition-all duration-200 border-l-4 ${selected
             ? 'shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 scale-[1.02]'
             : 'shadow-lg hover:shadow-xl'
           } ${isSearchMatch ? '' : 'opacity-50'} ${isDimmed ? 'opacity-30' : ''} ${diffStatus === 'added' ? 'ring-2 ring-emerald-500/50' : ''}`}
@@ -210,37 +228,13 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
           boxShadow: selected ? `0 0 24px ${accent.color}40, 0 4px 16px rgba(0,0,0,0.4)` : (blastShadow || `0 4px 16px rgba(0, 0, 0, 0.3)`),
         }}
       >
-
-
-        {/* Hover Tooltip Card */}
-        {!selected && <NodeHoverTooltip data={data} accent={accent} churnCount={churnCount} />}
-        {/* Handles */}
-        <Handle
-          type="target"
-          position={isHorizontal ? Position.Left : Position.Top}
-          id={isHorizontal ? "left" : "top"}
-          className="!w-2.5 !h-2.5 !rounded-full !border-2"
-          style={{
-            background: 'var(--color-text-muted)',
-            borderColor: 'var(--color-surface)',
-            ...(isHorizontal ? { left: -6 } : { top: -6 }),
-          }}
-        />
-        <Handle
-          type="source"
-          position={isHorizontal ? Position.Left : Position.Top}
-          id={isHorizontal ? "left-source" : "top-source"}
-          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
-          style={isHorizontal ? { left: -4 } : { top: -4 }}
-        />
-
         {/* Dead code overlay */}
         {data.isDeadCode && (
           <div className="absolute inset-0 rounded-xl bg-red-950/20 pointer-events-none z-0" />
         )}
 
         {/* Content */}
-        <div className="p-4 relative z-10">
+        <div className={`${paddingClass} relative z-10`}>
           <div className="absolute -top-1 -right-1 flex flex-col items-end gap-1 z-20">
             {coverageData && (
               <span className="px-2 py-0.5 border rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center bg-zinc-900" style={{ color: coverageColor, borderColor: coverageColor }}>
@@ -256,7 +250,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const confirmed = await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
+                    const confirmed = !data.showDeleteConfirmation || await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
                       title: 'Delete Dead Code',
                       kind: 'warning'
                     });
@@ -287,7 +281,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
           <div className="flex items-start gap-3">
             {/* File icon */}
             <div
-              className="p-2.5 rounded-lg shrink-0 mt-0.5 border shadow-inner"
+              className={`${iconPaddingClass} rounded-lg shrink-0 mt-0.5 border shadow-inner`}
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
               {data.type === 'TSX' || data.type === 'JSX' ? (
@@ -311,7 +305,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                     </span>
                   )}
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight max-w-[240px]">
+                    <span className={`font-bold text-text-main ${titleTextClass} truncate tracking-tight leading-tight max-w-[240px]`}>
                       {data.label}
                     </span>
                     {data.exports && data.exports.length > 0 && (
@@ -452,27 +446,48 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
             </div>
           )}
         </div>
-
-        {/* Source handles */}
-        <Handle
-          type="source"
-          position={isHorizontal ? Position.Right : Position.Bottom}
-          id={isHorizontal ? "right" : "bottom"}
-          className="!w-2.5 !h-2.5 !rounded-full !border-2"
-          style={{
-            background: 'var(--color-text-muted)',
-            borderColor: 'var(--color-surface)',
-            ...(isHorizontal ? { right: -6 } : { bottom: -6 }),
-          }}
-        />
-        <Handle
-          type="target"
-          position={isHorizontal ? Position.Right : Position.Bottom}
-          id={isHorizontal ? "right-target" : "bottom-target"}
-          className="!opacity-0 !w-1 !h-1 !pointer-events-none"
-          style={isHorizontal ? { right: -4 } : { bottom: -4 }}
-        />
       </div>
+
+      {/* Hover Tooltip Card */}
+      {!selected && <NodeHoverTooltip data={data} accent={accent} churnCount={churnCount} />}
+
+      {/* Handles */}
+      <Handle
+        type="target"
+        position={isHorizontal ? Position.Left : Position.Top}
+        id={isHorizontal ? "left" : "top"}
+        className="!w-2.5 !h-2.5 !rounded-full !border-2"
+        style={{
+          background: 'var(--color-text-muted)',
+          borderColor: 'var(--color-surface)',
+          ...(isHorizontal ? { left: -6 } : { top: -6 }),
+        }}
+      />
+      <Handle
+        type="source"
+        position={isHorizontal ? Position.Left : Position.Top}
+        id={isHorizontal ? "left-source" : "top-source"}
+        className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+        style={isHorizontal ? { left: -4 } : { top: -4 }}
+      />
+      <Handle
+        type="source"
+        position={isHorizontal ? Position.Right : Position.Bottom}
+        id={isHorizontal ? "right" : "bottom"}
+        className="!w-2.5 !h-2.5 !rounded-full !border-2"
+        style={{
+          background: 'var(--color-text-muted)',
+          borderColor: 'var(--color-surface)',
+          ...(isHorizontal ? { right: -6 } : { bottom: -6 }),
+        }}
+      />
+      <Handle
+        type="target"
+        position={isHorizontal ? Position.Right : Position.Bottom}
+        id={isHorizontal ? "right-target" : "bottom-target"}
+        className="!opacity-0 !w-1 !h-1 !pointer-events-none"
+        style={isHorizontal ? { right: -4 } : { bottom: -4 }}
+      />
     </div>
   );
   // Only re-render when fields that actually affect the visual output change.

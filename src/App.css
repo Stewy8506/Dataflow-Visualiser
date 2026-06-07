@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;500;600&family=Fira+Code:wght@300;400;500;600&family=Source+Code+Pro:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -23,9 +23,13 @@
   --color-glass: rgba(15, 15, 17, 0.92);
   --color-glass-light: rgba(255, 255, 255, 0.03);
 
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --color-accent-primary: var(--theme-accent, #2563eb);
+  --color-accent-primary-hover: var(--theme-accent-hover, #1d4ed8);
+  --color-accent-primary-light: var(--theme-accent-light, rgba(37, 99, 235, 0.15));
+
+  --font-sans: var(--theme-sans-font, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono: var(--theme-mono-font, 'JetBrains Mono'), ui-monospace, monospace;
 }
 
 .light {

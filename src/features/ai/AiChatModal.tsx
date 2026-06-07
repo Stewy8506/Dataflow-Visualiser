@@ -15,7 +15,7 @@ interface AiChatModalProps {
 
 export function AiChatModal({ workspacePath }: AiChatModalProps) {
   const { showAiChat, setShowAiChat, selectedNode } = useAppStore();
-  const { apiKey, selectedModel, aiProvider, localBaseUrl } = useSettings();
+  const { apiKey, selectedModel, aiProvider, localBaseUrl, aiTemperature, aiSidebarPlacement } = useSettings();
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -52,6 +52,7 @@ export function AiChatModal({ workspacePath }: AiChatModalProps) {
         model: selectedModel || 'gemini-1.5-flash',
         aiProvider,
         localBaseUrl,
+        temperature: aiTemperature,
       });
 
       setMessages(prev => [...prev, { role: 'assistant', text: responseText }]);
@@ -62,8 +63,10 @@ export function AiChatModal({ workspacePath }: AiChatModalProps) {
     }
   };
 
+  const placementClass = aiSidebarPlacement === 'left' ? 'left-4' : 'right-4';
+
   return (
-    <div className="absolute right-4 bottom-4 w-96 h-[500px] flex flex-col bg-surface-raised border border-border rounded-xl shadow-2xl z-[100] overflow-hidden nebula-slide-up">
+    <div className={`absolute ${placementClass} bottom-4 w-96 h-[500px] flex flex-col bg-surface-raised border border-border rounded-xl shadow-2xl z-[100] overflow-hidden nebula-slide-up`}>
       {/* Header */}
       <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-surface shrink-0">
         <div className="flex items-center gap-2">

@@ -3,14 +3,12 @@ import { useAppStore } from '../../store/appStore';
 import { useShallow } from 'zustand/react/shallow';
 
 export function SearchBar() {
-    const { searchQuery, setSearchQuery, searchMode, setSearchMode, showUiOnly, setShowUiOnly } = useAppStore(
+    const { searchQuery, setSearchQuery, searchMode, setSearchMode } = useAppStore(
     useShallow((s) => ({
       searchQuery: s.searchQuery,
       setSearchQuery: s.setSearchQuery,
       searchMode: s.searchMode,
       setSearchMode: s.setSearchMode,
-      showUiOnly: s.showUiOnly,
-      setShowUiOnly: s.setShowUiOnly,
     }))
   );
 
@@ -43,16 +41,12 @@ export function SearchBar() {
         </button>
         <div className="w-px h-4 bg-border mx-1" />
         <button
-          onClick={() => setShowUiOnly(!showUiOnly)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
-            showUiOnly
-              ? 'bg-fuchsia-500/20 text-fuchsia-400 shadow-sm border border-fuchsia-500/30'
-              : 'text-text-dim hover:text-text-main border border-transparent'
-          }`}
-          title="Show UI Components Only"
+          disabled
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-text-dim/40 cursor-not-allowed border border-transparent"
+          title="UI Mode (Coming Soon)"
         >
           <ScanEye size={13} />
-          <span>UI Mode</span>
+          <span>UI Mode <span className="text-[10px] opacity-60">(Soon)</span></span>
         </button>
       </div>
 
