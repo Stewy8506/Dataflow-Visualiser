@@ -11,8 +11,17 @@ export function getLayoutedElements(
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = 260;
   const nodeHeight = 120;
+
+  const getNodeDimensions = (node: Node) => {
+    const isPreview = node.type === 'previewNode';
+    if (isPreview) {
+      return { width: 480, height: 380 };
+    }
+    const label = ((node.data as any)?.label as string) || '';
+    const calculatedWidth = Math.max(260, Math.min(420, 220 + label.length * 8));
+    return { width: calculatedWidth, height: nodeHeight };
+  };
 
   dagreGraph.setGraph({ rankdir: direction, nodesep, ranksep, ranker: 'network-simplex' });
 
@@ -27,11 +36,8 @@ export function getLayoutedElements(
   const extEdges = edges.filter(e => !regularNodeIds.has(e.source) || !regularNodeIds.has(e.target));
 
   regularNodes.forEach((node) => {
-    const isPreview = node.type === 'previewNode';
-    dagreGraph.setNode(node.id, { 
-      width: isPreview ? 480 : nodeWidth, 
-      height: isPreview ? 380 : nodeHeight 
-    });
+    const { width, height } = getNodeDimensions(node);
+    dagreGraph.setNode(node.id, { width, height });
     inDegree.set(node.id, 0);
     outDegree.set(node.id, 0);
   });
@@ -91,8 +97,8 @@ export function getLayoutedElements(
       }
 
       // 2. Group by AI Semantic Group (if available), then by directory path
-      const groupA = a.data?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
-      const groupB = b.data?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
+      const groupA = (a.data as any)?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
+      const groupB = (b.data as any)?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
       if (groupA !== groupB) {
         return groupA.localeCompare(groupB);
       }
@@ -115,6 +121,15 @@ export function getLayoutedElements(
       return ratioB - ratioA; // Descending order: highest incoming ratio first (left)
     });
 
+    // Find the max node width and height in this rank
+    let maxNodeWidthInRank = 260;
+    let maxNodeHeightInRank = 120;
+    group.forEach(n => {
+      const { width, height } = getNodeDimensions(n);
+      if (width > maxNodeWidthInRank) maxNodeWidthInRank = width;
+      if (height > maxNodeHeightInRank) maxNodeHeightInRank = height;
+    });
+
     // Limit the maximum number of rows to balance vertical/horizontal spread
     const maxItemsPerLine = 10;
     const lines = Math.ceil(group.length / maxItemsPerLine);
@@ -133,8 +148,8 @@ export function getLayoutedElements(
         }
 
         // 2. Group by AI Semantic Group (if available), then by directory
-        const groupA = a.data?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
-        const groupB = b.data?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
+        const groupA = (a.data as any)?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
+        const groupB = (b.data as any)?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
         if (groupA !== groupB) {
           return groupA.localeCompare(groupB);
         }
@@ -145,20 +160,40 @@ export function getLayoutedElements(
 
       // 2. Calculate center alignment offset for short rows
       const itemsInThisLine = rowNodes.length;
-      const totalSpanForThisLine = isLR ? itemsInThisLine * (nodeHeight + nodesep) : itemsInThisLine * (nodeWidth + nodesep);
-      const maxSpan = isLR ? maxItemsPerLine * (nodeHeight + nodesep) : maxItemsPerLine * (nodeWidth + nodesep);
-      const centerOffset = (maxSpan - totalSpanForThisLine) / 2;
+      let totalWidthOfLine = 0;
+      let totalHeightOfLine = 0;
+      rowNodes.forEach(node => {
+        const { width, height } = getNodeDimensions(node);
+        totalWidthOfLine += width;
+        totalHeightOfLine += height;
+      });
 
-      rowNodes.forEach((node, itemIndex) => {
+      const totalSpanForThisLine = isLR 
+        ? totalHeightOfLine + (itemsInThisLine - 1) * nodesep
+        : totalWidthOfLine + (itemsInThisLine - 1) * nodesep;
+
+      const maxSpan = isLR 
+        ? maxItemsPerLine * (120 + nodesep) - nodesep
+        : maxItemsPerLine * 300 + (maxItemsPerLine - 1) * nodesep;
+
+      const centerOffset = Math.max(0, (maxSpan - totalSpanForThisLine) / 2);
+      let currentPosition = centerOffset;
+      let currentY = centerOffset;
+
+      rowNodes.forEach((node) => {
+        const { width, height } = getNodeDimensions(node);
+
         let finalX = 0;
         let finalY = 0;
 
         if (isLR) {
-          finalX = currentOffset + lineIndex * (nodeWidth + intraRankGap);
-          finalY = centerOffset + itemIndex * (nodeHeight + nodesep);
+          finalX = currentOffset + lineIndex * (maxNodeWidthInRank + intraRankGap);
+          finalY = currentY;
+          currentY += height + nodesep;
         } else {
-          finalX = centerOffset + itemIndex * (nodeWidth + nodesep);
-          finalY = currentOffset + lineIndex * (nodeHeight + intraRankGap);
+          finalX = currentPosition;
+          currentPosition += width + nodesep;
+          finalY = currentOffset + lineIndex * (maxNodeHeightInRank + intraRankGap);
         }
 
         // Remove temporary dagre properties
@@ -167,17 +202,17 @@ export function getLayoutedElements(
         finalNodes.push({
           ...cleanNode,
           position: { x: finalX, y: finalY },
-          width: nodeWidth,
-          height: nodeHeight,
+          width,
+          height,
         });
       });
     }
 
     // Advance the offset for the next rank
     if (isLR) {
-      currentOffset += lines * (nodeWidth + intraRankGap) - intraRankGap + ranksep;
+      currentOffset += lines * (maxNodeWidthInRank + intraRankGap) - intraRankGap + ranksep;
     } else {
-      currentOffset += lines * (nodeHeight + intraRankGap) - intraRankGap + ranksep;
+      currentOffset += lines * (maxNodeHeightInRank + intraRankGap) - intraRankGap + ranksep;
     }
   }
 

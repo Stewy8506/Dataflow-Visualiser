@@ -190,8 +190,11 @@ Configure your preferred development tool in the settings panel to quickly open 
 - **WebStorm** (`webstorm`)
 - **Neovim** (`nvim`)
 
-### Recent Projects Dashboard
-Never lose your place. The home screen features a chronological list of recent workspaces, displaying project names and parent folders for easy, single-click restoration of your layout.
+### Recent Projects Dashboard & VS Code Demo Mode
+Never lose your place. The home screen features a chronological list of recent workspaces, displaying project names and parent folders for easy, single-click restoration of your layout. Additionally, a built-in **VS Code Demo Repo Mode** loads a fully interactive, virtual workspace representation of `microsoft/vscode` instantly without downloading any external files or using disk space.
+
+### Native Tauri Window Management
+Automates the desktop workspace experience. When launching on the landing page, the window is dynamically sized to a clean `900x600` logical pixels, unmaximized, and centered. The moment a workspace is loaded, it transitions seamlessly to maximized mode while retaining native OS title bars, close/minimize/maximize buttons, and taskbar integration.
 
 ### Beautiful Dual-Theme Engine
 Crafted with a sleek, dark micro-IDE aesthetic by default. Features complete support for a crisp, high-contrast **Light Mode** that shifts all canvas components, headers, panels, and borders to light styling without sacrificing design premiumness.
@@ -306,6 +309,8 @@ npm run tauri build
 - [x] Configurable IDE editor launcher in settings (VS Code, Cursor, WebStorm, IntelliJ, Neovim)
 - [x] Light Mode and Dark Mode support
 - [x] Welcome dashboard with Recent Projects listing
+- [x] Interactive offline VS Code Demo Repo Mode
+- [x] Native Tauri window management (auto-resizing to 900x600 on landing, auto-maximizing on workspace load)
 - [x] Persistent node layout across sessions
 - [x] `git2` crate — file churn overlay (volatility heatmap on nodes)
 - [x] Advanced UI Graph Filtering (Hide Tests & Mocks)

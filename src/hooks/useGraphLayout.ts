@@ -156,8 +156,9 @@ export function useGraphLayout({
           subLabel = 'Script';
         }
 
-        const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|lib|app|middleware|sitemap|.*config.*|.*env.*)\./.test(n.label) || n.id.includes('src-tauri');
-        const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint;
+        const isNonCodeFile = /\.(md|json|toml|yaml|yml|css|scss|less|gyp|txt|lock)$/i.test(n.label);
+        const isEntryPoint = /^(page|layout|loading|template|error|route|main|index|App|lib|app|middleware|sitemap|test|workbench|cli|.*config.*|.*env.*)\./i.test(n.label) || n.id.includes('src-tauri');
+        const isDeadCode = (inDegrees.get(n.id) || 0) === 0 && !isEntryPoint && !isNonCodeFile;
 
         let layerIndex = 2;
         if (n.id.startsWith('ext:')) layerIndex = 4;

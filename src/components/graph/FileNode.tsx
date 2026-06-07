@@ -187,7 +187,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
     <div className="relative transition-all duration-200 group">
       {/* Card */}
       <div
-        className={`rounded-xl min-w-[260px] max-w-[320px] transition-all duration-200 border-l-4 ${selected
+        className={`rounded-xl w-fit min-w-[260px] max-w-[420px] transition-all duration-200 border-l-4 ${selected
             ? 'shadow-[0_0_30px_rgba(0,0,0,0.5)] z-10 scale-[1.02]'
             : 'shadow-lg hover:shadow-xl'
           } ${isSearchMatch ? '' : 'opacity-50'} ${isDimmed ? 'opacity-30' : ''} ${diffStatus === 'added' ? 'ring-2 ring-emerald-500/50' : ''}`}
@@ -288,7 +288,7 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
                     </span>
                   )}
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight max-w-[140px]">
+                    <span className="font-bold text-text-main text-sm truncate tracking-tight leading-tight max-w-[240px]">
                       {data.label}
                     </span>
                     {data.exports && data.exports.length > 0 && (

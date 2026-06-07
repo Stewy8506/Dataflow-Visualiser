@@ -101,6 +101,24 @@ export function useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, 
 
     await new Promise(resolve => setTimeout(resolve, 400));
 
+    if (path === 'https://github.com/microsoft/vscode') {
+      try {
+        const { vscodeGraphData } = await import('../mocks/vscodeDemo');
+        setEnrichmentMap(new Map());
+        setRawGraphData(vscodeGraphData);
+        setSelectedPath(path);
+        setLogs(prev => [
+          ...prev,
+          `> Loaded VS Code Demo Graph with ${vscodeGraphData.nodes.length} files successfully.`
+        ]);
+        setIsParsing(false);
+        await saveRecentProject(path);
+        return;
+      } catch (e) {
+        console.error('Demo repo loading failed:', e);
+      }
+    }
+
     try {
       const result: GraphData = await invoke('parse_codebase', { path });
       invoke('watch_codebase', { path }).catch(e => console.error('Watcher init error', e));

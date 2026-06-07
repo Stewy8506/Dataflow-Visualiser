@@ -1,6 +1,6 @@
 import { useState, useEffect, memo, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { SandpackProvider, SandpackPreview } from '@codesandbox/sandpack-react';
+import { SandpackProvider, SandpackPreview, useSandpack } from '@codesandbox/sandpack-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Code2, Loader2 } from 'lucide-react';
 
@@ -18,13 +18,15 @@ interface PreviewNodeProps {
 export const PreviewNode = memo(({ data, selected }: PreviewNodeProps) => {
   const [files, setFiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [dependencies, setDependencies] = useState<Record<string, string>>({
+  const dependencies = {
     "lucide-react": "latest",
     "framer-motion": "latest",
     "clsx": "latest",
     "tailwind-merge": "latest",
-  });
+    "zustand": "latest",
+  };
   const [error, setError] = useState<string | null>(null);
+  const [sandpackError, setSandpackError] = useState<string | null>(null);
 
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -41,158 +43,196 @@ export const PreviewNode = memo(({ data, selected }: PreviewNodeProps) => {
   useEffect(() => {
     if (!isVisible) return;
     let isMounted = true;
-    
+
     const handleRenderPreview = async () => {
       setLoading(true);
       setError(null);
 
-    try {
-      const workspacePath = data.workspacePath;
-      if (!workspacePath) throw new Error("Workspace path not found");
+      try {
+        const workspacePath = data.workspacePath;
+        if (!workspacePath) throw new Error("Workspace path not found");
 
-      const nodeId = data.path;
-      const packageJsonPath = workspacePath.replace(/\\/g, '/') + '/package.json';
-      
-      const globalCssPaths = [
-        workspacePath.replace(/\\/g, '/') + '/src/app/globals.css',
-        workspacePath.replace(/\\/g, '/') + '/src/globals.css',
-        workspacePath.replace(/\\/g, '/') + '/src/index.css',
-        workspacePath.replace(/\\/g, '/') + '/styles/globals.css',
-      ];
-      const allPaths = Array.from(new Set([nodeId, ...globalCssPaths]));
-      
-      const fileData: Record<string, string> = {};
-      const normalizedWorkspace = workspacePath.replace(/\\/g, '/');
-      const fetchQueue = new Set<string>();
-      const fetchedPaths = new Set<string>();
+        const nodeId = data.path;
 
-      const addFileToQueue = (filePath: string) => {
-         const p = filePath.replace(/\\/g, '/');
-         if (!fetchedPaths.has(p) && p.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
-           fetchQueue.add(p);
-         }
-      };
+        const globalCssPaths = [
+          workspacePath.replace(/\\/g, '/') + '/src/app/globals.css',
+          workspacePath.replace(/\\/g, '/') + '/src/globals.css',
+          workspacePath.replace(/\\/g, '/') + '/src/index.css',
+          workspacePath.replace(/\\/g, '/') + '/styles/globals.css',
+        ];
+        const allPaths = Array.from(new Set([nodeId, ...globalCssPaths]));
 
-      allPaths.forEach(p => addFileToQueue(p));
+        const fileData: Record<string, string> = {};
+        const normalizedWorkspace = workspacePath.replace(/\\/g, '/');
+        const fetchQueue = new Set<string>();
+        const fetchedPaths = new Set<string>();
 
-      const resolveImport = (importStr: string, currentPath: string) => {
-         if (importStr.startsWith('@/') || importStr.startsWith('~/')) {
-           return normalizedWorkspace + '/src/' + importStr.substring(2);
-         }
-         if (importStr.startsWith('.')) {
-           const parts = currentPath.split('/');
-           parts.pop();
-           const importParts = importStr.split('/');
-           for (const p of importParts) {
-             if (p === '.') continue;
-             if (p === '..') parts.pop();
-             else parts.push(p);
-           }
-           return parts.join('/');
-         }
-         return null;
-      };
+        const addFileToQueue = (filePath: string) => {
+          const p = filePath.replace(/\\/g, '/');
+          if (!fetchedPaths.has(p) && p.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
+            fetchQueue.add(p);
+          }
+        };
 
-      const tryRead = async (pathToCheck: string): Promise<{content: string, finalPath: string} | null> => {
-         try {
-           const content = await invoke<string>('read_file_content', { path: pathToCheck });
-           return { content, finalPath: pathToCheck };
-         } catch {
-           return null;
-         }
-      };
+        allPaths.forEach(p => addFileToQueue(p));
 
-      const fetchAll = async () => {
-         const maxIterations = 20;
-         let iterations = 0;
-         while (fetchQueue.size > 0 && iterations++ < maxIterations) {
-           const currentBatch = Array.from(fetchQueue);
-           fetchQueue.clear();
+        const resolveImport = (importStr: string, currentPath: string) => {
+          if (importStr.startsWith('@/') || importStr.startsWith('~/')) {
+            return normalizedWorkspace + '/src/' + importStr.substring(2);
+          }
+          if (importStr.startsWith('.')) {
+            const parts = currentPath.split('/');
+            parts.pop();
+            const importParts = importStr.split('/');
+            for (const p of importParts) {
+              if (p === '.') continue;
+              if (p === '..') parts.pop();
+              else parts.push(p);
+            }
+            return parts.join('/');
+          }
+          return null;
+        };
 
-           await Promise.all(currentBatch.map(async (p) => {
-             fetchedPaths.add(p);
-             if (p.startsWith('ext:')) return;
-             
-             let result = await tryRead(p);
-             if (!result && !p.match(/\.(ts|tsx|js|jsx|css|json|md)$/i)) {
-               result = await tryRead(p + '.ts') || await tryRead(p + '.tsx') || await tryRead(p + '.js') || await tryRead(p + '.jsx') || await tryRead(p + '/index.ts') || await tryRead(p + '/index.tsx');
-             }
+        const tryRead = async (pathToCheck: string): Promise<{ content: string, finalPath: string } | null> => {
+          if (workspacePath === 'https://github.com/microsoft/vscode') {
+            const { vscodeFileContents } = await import('../../mocks/vscodeDemo');
+            let rel = pathToCheck.slice(workspacePath.length);
+            if (!rel.startsWith('/')) rel = '/' + rel;
+            const matchingKey = Object.keys(vscodeFileContents).find(k => 
+              rel === k || rel + '.ts' === k || rel + '.tsx' === k || rel + '/index.ts' === k || rel + '/index.tsx' === k
+            );
+            if (matchingKey) {
+              return { content: vscodeFileContents[matchingKey], finalPath: workspacePath + matchingKey };
+            }
+            return null;
+          }
 
-             if (result) {
-               let relativePath = result.finalPath.slice(normalizedWorkspace.length);
-               if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
-               
-               let safeContent = result.content;
-               
-               // Strip unsupported next.js modules
-               if (safeContent.includes('next/font')) {
-                 safeContent = safeContent.replace(/import\s+.*?from\s+['"]next\/font\/.*?['"];?/g, '// [stripped next/font import]');
-               }
+          try {
+            const content = await invoke<string>('read_file_content', { path: pathToCheck });
+            return { content, finalPath: pathToCheck };
+          } catch {
+            return null;
+          }
+        };
 
-               // Rewrite @/ and ~/ to relative paths so CodeSandbox can resolve them
-               if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
-                  const depth = Math.max(0, relativePath.split('/').length - 2);
-                  const up = depth > 0 ? '../'.repeat(depth) : './';
-                  
-                  safeContent = safeContent.replace(/(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([@~]\/)(.*?)['"]/g, (match, prefix, rest) => {
-                     return match.replace(prefix, up + 'src/'); 
+        const fetchAll = async () => {
+          const maxIterations = 20;
+          let iterations = 0;
+          while (fetchQueue.size > 0 && iterations++ < maxIterations) {
+            const currentBatch = Array.from(fetchQueue);
+            fetchQueue.clear();
+
+            await Promise.all(currentBatch.map(async (p) => {
+              fetchedPaths.add(p);
+              if (p.startsWith('ext:')) return;
+
+              let result = await tryRead(p);
+              if (!result && !p.match(/\.(ts|tsx|js|jsx|css|json|md)$/i)) {
+                result = await tryRead(p + '.ts') || await tryRead(p + '.tsx') || await tryRead(p + '.js') || await tryRead(p + '.jsx') || await tryRead(p + '/index.ts') || await tryRead(p + '/index.tsx');
+              }
+
+              if (result) {
+                let relativePath = result.finalPath.slice(normalizedWorkspace.length);
+                if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
+
+                let safeContent = result.content;
+
+                // Strip unsupported next.js modules
+                if (safeContent.includes('next/font')) {
+                  safeContent = safeContent.replace(/import\s+.*?from\s+['"]next\/font\/.*?['"];?/g, '// [stripped next/font import]');
+                }
+
+                // Rewrite @/ and ~/ to absolute paths
+                if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
+                  safeContent = safeContent.replace(/(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([@~]\/)(.*?)['"]/g, (match, prefix) => {
+                    return match.replace(prefix, '/src/');
                   });
 
                   // Mock Next.js routing
-                  safeContent = safeContent.replace(/from\s+['"]next\/(link|navigation|image|script)['"]/g, (match, type) => {
-                     return `from '${up}mocks/next-${type}'`;
+                  safeContent = safeContent.replace(/from\s+['"]next\/(link|navigation|image|script)['"]/g, (_, type) => {
+                    return `from '/mocks/next-${type}'`;
                   });
-               }
+                }
 
-               fileData[relativePath] = safeContent;
-               
-               if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
+                fileData[relativePath] = safeContent;
+
+                if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
                   const importRegex = /(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"](.*?)['"]/g;
-                  let match;
-                  while ((match = importRegex.exec(result.content)) !== null) {
-                     const importStr = match[1];
-                     const resolved = resolveImport(importStr, result.finalPath);
-                     if (resolved && !fetchedPaths.has(resolved)) {
-                       addFileToQueue(resolved);
-                     }
+                  const matches = Array.from(result.content.matchAll(importRegex));
+                  for (const match of matches) {
+                    const importStr = match[1];
+                    const resolved = resolveImport(importStr, result.finalPath);
+                    if (resolved && !fetchedPaths.has(resolved)) {
+                      addFileToQueue(resolved);
+                    }
                   }
-               }
-             }
-           }));
-         }
-      };
+                }
+              }
+            }));
+          }
+        };
 
-      await fetchAll();
+        await fetchAll();
 
-      const normalizedSelected = nodeId.replace(/\\/g, '/');
-      let selectedRelative = normalizedSelected;
-      if (normalizedSelected.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
-        selectedRelative = normalizedSelected.slice(normalizedWorkspace.length);
-      }
-      if (!selectedRelative.startsWith('/')) {
-        selectedRelative = '/' + selectedRelative;
-      }
-
-      const mainContent = fileData[selectedRelative] || '';
-      const hasDefaultExport = mainContent.includes('export default');
-      
-      let componentName = 'Component';
-      if (!hasDefaultExport) {
-        const match = mainContent.match(/export (?:const|function|class) ([A-Z][a-zA-Z0-9_]*)/);
-        if (match && match[1]) {
-          componentName = match[1];
+        const normalizedSelected = nodeId.replace(/\\/g, '/');
+        let selectedRelative = normalizedSelected;
+        if (normalizedSelected.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
+          selectedRelative = normalizedSelected.slice(normalizedWorkspace.length);
         }
-      }
+        if (!selectedRelative.startsWith('/')) {
+          selectedRelative = '/' + selectedRelative;
+        }
 
-      const importPath = selectedRelative.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '');
-      const foundCssFile = Object.keys(fileData).find(p => p.endsWith('.css'));
-      
-      const entryFile = '/App.tsx';
-      
-      fileData[entryFile] = `
+        const mainContent = fileData[selectedRelative] || '';
+        const hasDefaultExport = mainContent.includes('export default');
+
+        let componentName = 'Component';
+        if (!hasDefaultExport) {
+          const match = mainContent.match(/export (?:const|function|class) ([A-Z][a-zA-Z0-9_]*)/);
+          if (match && match[1]) {
+            componentName = match[1];
+          }
+        }
+
+        const importPath = selectedRelative.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '');
+        const foundCssFile = Object.keys(fileData).find(p => p.endsWith('.css'));
+
+        const entryFile = '/src/App.tsx';
+        const isCodePreview = !selectedRelative.match(/\.(tsx|jsx|ts|js)$/i) || 
+                             (!mainContent.includes('export default') && !mainContent.match(/export (?:const|function|class) ([A-Z][a-zA-Z0-9_]*)/));
+
+        if (isCodePreview) {
+          fileData[entryFile] = `
 import React from 'react';
-${foundCssFile ? `import '.${foundCssFile}';` : ''}
-${hasDefaultExport ? `import Component from '.${importPath}';` : `import { ${componentName} as Component } from '.${importPath}';`}
+export default function App() {
+  return (
+    <div style={{ 
+      padding: '12px', 
+      backgroundColor: '#09090b', 
+      color: '#d4d4d8', 
+      fontFamily: 'monospace', 
+      fontSize: '11px',
+      lineHeight: '1.5',
+      height: 'calc(100% - 24px)',
+      overflow: 'auto',
+      border: '1px solid #27272a',
+      borderRadius: '6px'
+    }}>
+      <div style={{ color: '#60a5fa', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #27272a', paddingBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+        <span>📄 ${selectedRelative.split('/').pop()}</span>
+        <span style={{ color: '#71717a', fontSize: '9px' }}>${selectedRelative.split('.').pop()?.toUpperCase()} FILE</span>
+      </div>
+      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{\`${mainContent.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`}</pre>
+    </div>
+  );
+}
+          `;
+        } else {
+          fileData[entryFile] = `
+import React from 'react';
+${foundCssFile ? `import '${foundCssFile}';` : ''}
+${hasDefaultExport ? `import Component from '${importPath}';` : `import { ${componentName} as Component } from '${importPath}';`}
 
 export default function App() {
   return (
@@ -202,65 +242,66 @@ export default function App() {
   );
 }
       `;
+        }
 
-      fileData['/mocks/next-navigation.ts'] = `
+        fileData['/mocks/next-navigation.ts'] = `
 export const useRouter = () => ({ push: () => {}, replace: () => {}, prefetch: () => {}, back: () => {} });
 export const usePathname = () => '/';
 export const useSearchParams = () => new URLSearchParams();
 export const notFound = () => {};
       `;
-      fileData['/mocks/next-link.tsx'] = `
+        fileData['/mocks/next-link.tsx'] = `
 import React from 'react';
 export default function Link({ children, href, ...props }: any) {
   return <a href={href} {...props}>{children}</a>;
 }
       `;
-      fileData['/mocks/next-image.tsx'] = `
+        fileData['/mocks/next-image.tsx'] = `
 import React from 'react';
 export default function Image({ src, alt, ...props }: any) {
   return <img src={src} alt={alt} {...props} />;
 }
       `;
-      fileData['/mocks/next-script.tsx'] = `
+        fileData['/mocks/next-script.tsx'] = `
 import React from 'react';
 export default function Script({ children, ...props }: any) {
   return <script {...props}>{children}</script>;
 }
       `;
 
-      if (isMounted) {
-        setFiles(fileData);
-        setLoading(false);
+        if (isMounted) {
+          setFiles(fileData);
+          setLoading(false);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setError(err.toString());
+          setLoading(false);
+        }
       }
-    } catch (err: any) {
-      if (isMounted) {
-        setError(err.toString());
-        setLoading(false);
-      }
-    }
-  };
+    };
 
     handleRenderPreview();
-    
+
     return () => { isMounted = false; };
   }, [data.workspacePath, data.path, isVisible]);
 
   return (
-    <div 
+    <div
       ref={nodeRef}
       className={`relative transition-all duration-300 ease-out border rounded-2xl overflow-hidden
         ${selected ? 'border-indigo-400 ring-2 ring-indigo-400/30 shadow-[0_0_30px_rgba(99,102,241,0.3)]' : 'border-slate-700/50 hover:border-slate-600 shadow-xl'}
       `}
       style={{
-        width: 400,
-        height: 300,
+        width: 480,
+        height: 380,
         zIndex: selected ? 100 : 1,
         background: 'rgba(15, 23, 42, 0.75)',
         backdropFilter: 'blur(16px)',
       }}
     >
       <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-indigo-500 !border-2 !border-slate-900" />
-      
+
       {/* Node Header */}
       <div className="flex items-center justify-between px-3 py-2.5 bg-slate-900/40 border-b border-slate-700/50">
         <div className="flex items-center gap-2.5 overflow-hidden">
@@ -290,13 +331,13 @@ export default function Script({ children, ...props }: any) {
           </div>
         ) : (
           <div className="w-full h-full pointer-events-auto bg-slate-900" onWheelCapture={(e) => e.stopPropagation()}>
-            <SandpackProvider 
+            <SandpackProvider
               template="react-ts"
               theme="dark"
               files={files}
               customSetup={{ dependencies }}
               options={{
-                activeFile: '/App.tsx',
+                activeFile: '/src/App.tsx',
                 externalResources: ["https://cdn.tailwindcss.com"],
                 classes: {
                   "sp-wrapper": "h-full w-full",
@@ -306,12 +347,22 @@ export default function Script({ children, ...props }: any) {
                 }
               }}
             >
-              <SandpackPreview 
-                showNavigator={false} 
-                showOpenInCodeSandbox={false}
-                showRefreshButton={false}
-                className="h-full w-full border-none" 
-              />
+              <SandpackErrorListener onError={setSandpackError} />
+              {sandpackError ? (
+                <div className="absolute inset-0 p-4 overflow-auto bg-slate-950 text-rose-400 text-xs font-mono z-50">
+                  <div className="font-bold mb-2 text-rose-300">Sandpack Error:</div>
+                  <pre className="whitespace-pre-wrap">{sandpackError}</pre>
+                  <div className="font-bold mt-4 mb-2 text-zinc-300">VFS File Keys:</div>
+                  <pre className="text-zinc-400">{Object.keys(files).join('\n')}</pre>
+                </div>
+              ) : (
+                <SandpackPreview
+                  showNavigator={false}
+                  showOpenInCodeSandbox={false}
+                  showRefreshButton={false}
+                  className="h-full w-full border-none"
+                />
+              )}
             </SandpackProvider>
           </div>
         )}
@@ -321,5 +372,17 @@ export default function Script({ children, ...props }: any) {
     </div>
   );
 });
+
+const SandpackErrorListener = ({ onError }: { onError: (err: string | null) => void }) => {
+  const { sandpack } = useSandpack();
+  useEffect(() => {
+    if (sandpack.error) {
+      onError(sandpack.error.message || JSON.stringify(sandpack.error));
+    } else {
+      onError(null);
+    }
+  }, [sandpack.error, onError]);
+  return null;
+};
 
 PreviewNode.displayName = 'PreviewNode';

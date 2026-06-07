@@ -51,7 +51,12 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
           "tailwind-merge": "latest",
         };
         try {
-          const pkgContent = await invoke<string>('read_file_content', { path: packageJsonPath });
+          let pkgContent = "";
+          if (workspacePath === 'https://github.com/microsoft/vscode') {
+            pkgContent = '{"dependencies": {"react": "latest", "react-dom": "latest"}}';
+          } else {
+            pkgContent = await invoke<string>('read_file_content', { path: packageJsonPath });
+          }
           const pkg = JSON.parse(pkgContent);
           const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
           for (const [name, version] of Object.entries(allDeps)) {
@@ -97,6 +102,19 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
         };
 
         const tryRead = async (pathToCheck: string): Promise<{content: string, finalPath: string} | null> => {
+           if (workspacePath === 'https://github.com/microsoft/vscode') {
+             const { vscodeFileContents } = await import('../../mocks/vscodeDemo');
+             let rel = pathToCheck.slice(workspacePath.length);
+             if (!rel.startsWith('/')) rel = '/' + rel;
+             const matchingKey = Object.keys(vscodeFileContents).find(k => 
+               rel === k || rel + '.ts' === k || rel + '.tsx' === k || rel + '/index.ts' === k || rel + '/index.tsx' === k
+             );
+             if (matchingKey) {
+               return { content: vscodeFileContents[matchingKey], finalPath: workspacePath + matchingKey };
+             }
+             return null;
+           }
+
            try {
              const content = await invoke<string>('read_file_content', { path: pathToCheck });
              return { content, finalPath: pathToCheck };
@@ -125,12 +143,24 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
                  allLoadedPaths.push(result.finalPath);
                  let relativePath = result.finalPath.slice(normalizedWorkspace.length);
                  if (!relativePath.startsWith('/')) relativePath = '/' + relativePath;
-                 
-                 let safeContent = result.content;
-                 if (safeContent.includes('next/font')) {
-                   safeContent = safeContent.replace(/import\s+.*?from\s+['"]next\/font\/.*?['"];?/g, '// [stripped next/font import]');
-                 }
-                 fileData[relativePath] = safeContent;
+                                  let safeContent = result.content;
+                  if (safeContent.includes('next/font')) {
+                    safeContent = safeContent.replace(/import\s+.*?from\s+['"]next\/font\/.*?['"];?/g, '// [stripped next/font import]');
+                  }
+
+                  // Rewrite @/ and ~/ to absolute paths
+                  if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
+                    safeContent = safeContent.replace(/(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([@~]\/)(.*?)['"]/g, (match, prefix) => {
+                      return match.replace(prefix, '/src/');
+                    });
+
+                    // Mock Next.js routing
+                    safeContent = safeContent.replace(/from\s+['"]next\/(link|navigation|image|script)['"]/g, (_, type) => {
+                      return `from '/mocks/next-${type}'`;
+                    });
+                  }
+
+                  fileData[relativePath] = safeContent;
                  
                  if (relativePath.match(/\.(ts|tsx|js|jsx)$/i)) {
                     const importRegex = /(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"](.*?)['"]/g;
@@ -187,12 +217,41 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
         const importPath = selectedRelative.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '');
         const foundCssFile = Object.keys(fileData).find(p => p.endsWith('.css'));
         
-        const entryFile = '/App.tsx';
-        
-        fileData[entryFile] = `
+        const entryFile = '/src/App.tsx';
+        const isCodePreview = !selectedRelative.match(/\.(tsx|jsx|ts|js)$/i) || 
+                             (!mainContent.includes('export default') && !mainContent.match(/export (?:const|function|class) ([A-Z][a-zA-Z0-9_]*)/));
+
+        if (isCodePreview) {
+          fileData[entryFile] = `
 import React from 'react';
-${foundCssFile ? `import '.${foundCssFile}';` : ''}
-${hasDefaultExport ? `import Component from '.${importPath}';` : `import { ${componentName} as Component } from '.${importPath}';`}
+export default function App() {
+  return (
+    <div style={{ 
+      padding: '12px', 
+      backgroundColor: '#09090b', 
+      color: '#d4d4d8', 
+      fontFamily: 'monospace', 
+      fontSize: '11px',
+      lineHeight: '1.5',
+      height: 'calc(100% - 24px)',
+      overflow: 'auto',
+      border: '1px solid #27272a',
+      borderRadius: '6px'
+    }}>
+      <div style={{ color: '#60a5fa', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid #27272a', paddingBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+        <span>📄 ${selectedRelative.split('/').pop()}</span>
+        <span style={{ color: '#71717a', fontSize: '9px' }}>${selectedRelative.split('.').pop()?.toUpperCase()} FILE</span>
+      </div>
+      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{\`${mainContent.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`}</pre>
+    </div>
+  );
+}
+          `;
+        } else {
+          fileData[entryFile] = `
+import React from 'react';
+${foundCssFile ? `import '${foundCssFile}';` : ''}
+${hasDefaultExport ? `import Component from '${importPath}';` : `import { ${componentName} as Component } from '${importPath}';`}
 
 export default function App() {
   return (
@@ -202,6 +261,7 @@ export default function App() {
   );
 }
         `;
+        }
 
         // Mock Next.js routing and components to prevent WebContainer crashes
         fileData['/mocks/next-navigation.ts'] = `
@@ -293,7 +353,7 @@ export default function Image({ src, alt, ...props }: any) {
           showTabs: true,
           closableTabs: true,
           editorHeight: '100%',
-          activeFile: '/App.tsx',
+          activeFile: '/src/App.tsx',
           externalResources: ["https://cdn.tailwindcss.com"],
           classes: {
             "sp-wrapper": "h-full w-full",

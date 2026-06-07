@@ -2,26 +2,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #18181b;
-  --color-primary-light: #27272a;
-  --color-primary-dark: #09090b;
-  --color-secondary: #27272a;
-  --color-secondary-dark: #18181b;
+  --color-primary: #1e1e22;
+  --color-primary-light: #2a2a2f;
+  --color-primary-dark: #0f0f11;
+  --color-secondary: #2a2a2f;
+  --color-secondary-dark: #1e1e22;
   --color-accent-cyan: #ffffff;
   --color-accent-rose: #ffffff;
   --color-accent-amber: #ffffff;
-  --color-background: #09090b;
-  --color-surface: #09090b;
-  --color-surface-raised: #18181b;
-  --color-surface-overlay: #27272a;
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-subtle: rgba(255, 255, 255, 0.03);
-  --color-border-accent: rgba(255, 255, 255, 0.1);
+  --color-background: #0f0f11;
+  --color-surface: #141416;
+  --color-surface-raised: #1e1e22;
+  --color-surface-overlay: #2a2a2f;
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-accent: rgba(255, 255, 255, 0.14);
   --color-text-main: #f4f4f5;
   --color-text-muted: #a1a1aa;
-  --color-text-dim: #52525b;
-  --color-glass: rgba(9, 9, 11, 0.9);
-  --color-glass-light: rgba(255, 255, 255, 0.02);
+  --color-text-dim: #6b6b76;
+  --color-glass: rgba(15, 15, 17, 0.92);
+  --color-glass-light: rgba(255, 255, 255, 0.03);
 
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
@@ -50,8 +50,12 @@ html {
   scroll-behavior: smooth;
 }
 
-body {
+body, button, input, select, textarea {
   font-family: var(--font-sans);
+}
+
+code, pre, kbd, samp, .font-mono {
+  font-family: var(--font-mono) !important;
 }
 
 .react-flow,

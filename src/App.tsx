@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { FolderOpen, Sparkles, Clock, FolderGit2 } from 'lucide-react';
+import { FolderOpen, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import './App.css';
 
@@ -136,13 +136,13 @@ function App() {
         const appWindow = getCurrentWindow();
 
         if (!selectedPath) {
-          // Landing page: disable fullscreen, resize to 900x600, and center
-          await appWindow.setFullscreen(false);
+          // Landing page: unmaximize, resize to 900x600, and center
+          await appWindow.unmaximize();
           await appWindow.setSize(new LogicalSize(900, 600));
           await appWindow.center();
         } else {
-          // Repo opened: enable fullscreen
-          await appWindow.setFullscreen(true);
+          // Repo opened: maximize (retaining OS title bar/buttons)
+          await appWindow.maximize();
         }
       } catch (e) {
         console.warn('Tauri window API not available or failed:', e);
@@ -254,7 +254,7 @@ function App() {
                   Settings
                 </button>
                 <button
-                  onClick={() => alert('Demo Repo feature coming in v1.1!')}
+                  onClick={() => handleOpenRecentProject('https://github.com/microsoft/vscode')}
                   className="px-5 py-3.5 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-450 bg-transparent hover:bg-zinc-900 border border-zinc-800/60 transition-all duration-200 cursor-pointer"
                 >
                   Demo Repo
