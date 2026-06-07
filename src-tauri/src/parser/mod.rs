@@ -68,6 +68,22 @@ pub async fn parse_codebase(
                 }
             }
         }
+    } else {
+        let go_mod_path = path_ref.join("go.mod");
+        if go_mod_path.exists() {
+            if let Ok(content) = fs::read_to_string(&go_mod_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("module ") {
+                        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            package_name = Some(parts[1].trim().to_string());
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     let mut ext_deps: std::collections::HashMap<String, String> = std::collections::HashMap::new();
@@ -158,6 +174,52 @@ pub async fn parse_codebase(
                         if parts.len() >= 2 {
                             let ver = parts[1].trim().replace("\"", "");
                             ext_deps.insert(current_pkg.clone(), ver);
+                        }
+                    }
+                }
+            }
+        }
+
+        let go_mod_path = path_ref.join("go.mod");
+        let go_sum_path = path_ref.join("go.sum");
+
+        if go_mod_path.exists() {
+            if let Ok(content) = fs::read_to_string(&go_mod_path) {
+                let mut in_require = false;
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("require (") {
+                        in_require = true;
+                    } else if trimmed.starts_with("require ") {
+                        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                        if parts.len() >= 3 {
+                            ext_deps.insert(parts[1].to_string(), parts[2].to_string());
+                        }
+                    } else if trimmed == ")" {
+                        in_require = false;
+                    } else if in_require && !trimmed.is_empty() && !trimmed.starts_with("//") {
+                        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            ext_deps.insert(parts[0].to_string(), parts[1].to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        if go_sum_path.exists() {
+            if let Ok(content) = fs::read_to_string(&go_sum_path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        let pkg = parts[0].to_string();
+                        let ver = parts[1].split('/').next().unwrap_or(parts[1]).to_string();
+                        if ext_deps.contains_key(&pkg) {
+                            ext_deps.insert(pkg, ver);
                         }
                     }
                 }
@@ -484,6 +546,9 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
                                 | "cc"
                                 | "cxx"
                                 | "hxx"
+                                | "go"
+                                | "java"
+                                | "cs"
                         ) {
                             continue;
                         }

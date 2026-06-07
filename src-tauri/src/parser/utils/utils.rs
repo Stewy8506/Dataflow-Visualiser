@@ -121,7 +121,7 @@ pub fn resolve_import_path(
         candidates.push(workspace_root.join("src-tauri").join(&clean_import));
     }
 
-    const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart", "c", "h", "cpp", "hpp", "cc", "cxx", "hxx"];
+    const ALL_EXTENSIONS: &[&str] = &["ts", "tsx", "js", "jsx", "py", "rs", "dart", "c", "h", "cpp", "hpp", "cc", "cxx", "hxx", "go", "java", "cs"];
 
     for base in &candidates {
         if let Some(idx) = check_node_existence(base, node_index) {

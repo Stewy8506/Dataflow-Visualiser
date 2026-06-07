@@ -1,4 +1,4 @@
-import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link } from 'lucide-react';
+import { Settings, Box, Spline, Layers, Server, Layout, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link, Beaker } from 'lucide-react';
 import type { GraphLayer } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { useSettings } from '../../hooks/useSettings';
@@ -22,6 +22,7 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
     showExternalDeps, setShowExternalDeps,
     showSnapshots, setShowSnapshots,
     showHeatmap, setShowHeatmap,
+    showTestCoverage, setShowTestCoverage,
     showAiChat, setShowAiChat,
     showSemanticEdges, setShowSemanticEdges,
     setShowSettings
@@ -141,6 +142,20 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
             title="Toggle Git Churn Heatmap"
           >
             <Flame size={14} />
+          </button>
+        )}
+
+        {viewMode === '2d' && (
+          <button
+            onClick={() => setShowTestCoverage(!showTestCoverage)}
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+              showTestCoverage 
+                ? 'bg-green-500/20 text-green-400' 
+                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
+            }`}
+            title="Toggle Test Coverage"
+          >
+            <Beaker size={14} />
           </button>
         )}
 

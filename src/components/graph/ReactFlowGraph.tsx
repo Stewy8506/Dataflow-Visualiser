@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -53,7 +53,7 @@ function ReactFlowInner({
   preferredIde,
   workspacePath,
 }: ReactFlowGraphProps) {
-  const { zoomTo, getZoom } = useReactFlow();
+  const { zoomTo, getZoom, setCenter, getNodes } = useReactFlow();
 
   const {
     searchQuery,
@@ -63,6 +63,10 @@ function ReactFlowInner({
     diffOverlay,
     churnData,
     showHeatmap,
+    showTestCoverage,
+    testCoverageData,
+    selectedNode,
+    setSelectedNode,
   } = useAppStore(useShallow((s) => ({
     searchQuery: s.searchQuery,
     searchMode: s.searchMode,
@@ -71,12 +75,29 @@ function ReactFlowInner({
     diffOverlay: s.diffOverlay,
     churnData: s.churnData,
     showHeatmap: s.showHeatmap,
+    showTestCoverage: s.showTestCoverage,
+    testCoverageData: s.testCoverageData,
+    selectedNode: s.selectedNode,
+    setSelectedNode: s.setSelectedNode,
   })));
 
   const effectiveChurnData = showHeatmap ? churnData : null;
+  const activeNodeId = selectedNode?.id || null;
 
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const activeNodeId = selectedNodeId;
+  // ── Sync and center selected node from store ─────────────────
+  useEffect(() => {
+    if (selectedNode?.id) {
+      const flowNodes = getNodes();
+      const node = flowNodes.find(n => n.id === selectedNode.id);
+      if (node && node.position) {
+        setCenter(
+          node.position.x + (node.measured?.width ?? 150) / 2,
+          node.position.y + (node.measured?.height ?? 80) / 2,
+          { zoom: 1.2, duration: 800 }
+        );
+      }
+    }
+  }, [selectedNode?.id, setCenter, getNodes]);
 
   // ── Smooth zoom ────────────────────────────────────────────────
   const targetZoomRef = useRef<number | null>(null);
@@ -117,6 +138,24 @@ function ReactFlowInner({
       let isConnected = true;
       let tier = -1;
       let diffStatus: 'added' | 'removed' | null = null;
+      
+      let coverageData = null;
+      if (showTestCoverage && testCoverageData) {
+        // Find coverage data by path. The map keys might have different path separators or base paths.
+        // Try a strict match first, then a suffix match.
+        const normalizedNodeId = node.id.replace(/\\/g, '/');
+        if (testCoverageData[normalizedNodeId]) {
+          coverageData = testCoverageData[normalizedNodeId];
+        } else {
+           const matchKey = Object.keys(testCoverageData).find(k => {
+              const kNorm = k.replace(/\\/g, '/');
+              return kNorm.endsWith(normalizedNodeId) || normalizedNodeId.endsWith(kNorm);
+           });
+           if (matchKey) {
+             coverageData = testCoverageData[matchKey];
+           }
+        }
+      }
 
       if (diffOverlay) {
         if (diffOverlay.added_nodes.includes(node.id)) {
@@ -142,8 +181,8 @@ function ReactFlowInner({
         }
       }
 
-      // Ensure workspacePath is passed down to all node data
-      node.data = { ...node.data, workspacePath };
+      // Ensure workspacePath and coverage are passed down to all node data
+      node.data = { ...node.data, workspacePath, coverageData };
 
       let isSearchMatch = true;
       if (searchQuery && searchMode === 'highlight') {
@@ -156,7 +195,7 @@ function ReactFlowInner({
                          summary.toLowerCase().includes(query);
       }
 
-      const isSelected = selectedNodeId === node.id;
+      const isSelected = activeNodeId === node.id;
       const isInCycle = cycleResult.nodesInCycles.has(node.id);
 
       let churnCount = 0;
@@ -185,7 +224,7 @@ function ReactFlowInner({
         }
       };
     });
-  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData]);
+  }, [initialNodes, blastRadius, activeNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -288,7 +327,7 @@ function ReactFlowInner({
   }, [initialEdges, blastRadius, cycleResult, activeNodeId, isLightMode, propTrace, diffOverlay]);
 
   const handleNodeClick = (_: React.MouseEvent, node: any) => {
-    setSelectedNodeId(node.id);
+    setSelectedNode(node);
     onNodeSelect(node);
   };
 
@@ -299,7 +338,7 @@ function ReactFlowInner({
   };
 
   const handlePaneClick = () => {
-    setSelectedNodeId(null);
+    setSelectedNode(null);
     onNodeSelect(null);
   };
 

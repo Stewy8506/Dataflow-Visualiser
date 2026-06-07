@@ -72,7 +72,8 @@ pub fn run() {
             parser::utils::props::trace_prop,
             snapshots::save_snapshot,
             snapshots::list_snapshots,
-            snapshots::diff_snapshots
+            snapshots::diff_snapshots,
+            parser::utils::test_coverage::compute_test_coverage
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

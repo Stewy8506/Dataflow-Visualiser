@@ -49,6 +49,7 @@ tree-sitter-java = "0.23.5"
 tree-sitter-c-sharp = "0.23.5"
 tree-sitter-go = "0.25.0"
 tauri-plugin-updater = "2.10.1"
+tree-sitter-cmake = "0.7.1"
 
 [profile.release]
 lto = true

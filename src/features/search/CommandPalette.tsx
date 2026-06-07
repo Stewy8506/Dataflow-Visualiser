@@ -25,6 +25,8 @@ interface CommandPaletteProps {
   isLightMode: boolean;
   viewMode: '2d' | '3d';
   showMiniMap: boolean;
+  nodes: any[];
+  onSelectNode: (node: any) => void;
 }
 
 export function CommandPalette({
@@ -39,6 +41,8 @@ export function CommandPalette({
   isLightMode,
   viewMode,
   showMiniMap,
+  nodes,
+  onSelectNode,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -111,14 +115,33 @@ export function CommandPalette({
     },
   ], [isLightMode, showMiniMap, viewMode, onChangeDirectory, onClose, onOpenSettings, onToggleTheme, onSetViewMode, onToggleMiniMap, onSetLayer]);
 
+  const fileNodes = useMemo(() => nodes.filter(n => n.data && !n.data.isExternal), [nodes]);
+
+  const fileActions: CommandAction[] = useMemo(() => {
+    return fileNodes.map(node => ({
+      id: `file-${node.id}`,
+      label: `Jump to ${node.data?.label || node.id}`,
+      description: node.id,
+      icon: <Spline size={16} className="text-emerald-400" />,
+      action: () => {
+        onSelectNode(node);
+        onClose();
+      }
+    }));
+  }, [fileNodes, onSelectNode, onClose]);
+
+  const allActions = useMemo(() => {
+    return [...actions, ...fileActions];
+  }, [actions, fileActions]);
+
   const filtered = useMemo(() => {
     if (!query.trim()) return actions;
     const q = query.toLowerCase();
-    return actions.filter(a =>
+    return allActions.filter(a =>
       a.label.toLowerCase().includes(q) ||
       (a.description && a.description.toLowerCase().includes(q))
     );
-  }, [query, actions]);
+  }, [query, actions, allActions]);
 
   useEffect(() => {
     setSelectedIndex(0);

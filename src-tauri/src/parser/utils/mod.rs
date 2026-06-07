@@ -3,4 +3,5 @@ pub mod osv;
 pub mod props;
 pub mod tree_sitter_utils;
 pub mod unused_exports;
+pub mod test_coverage;
 pub mod utils;

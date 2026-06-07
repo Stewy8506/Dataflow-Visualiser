@@ -20,6 +20,7 @@ const badgeLegend = [
   { label: 'Cx: High', color: 'text-red-400', desc: 'High complexity' },
   { label: 'Cx: Medium', color: 'text-amber-400', desc: 'Medium complexity' },
   { label: 'Cx: Low', color: 'text-emerald-400', desc: 'Low complexity' },
+  { emoji: '🧪', label: 'Test Coverage', desc: 'Code coverage %' },
 ];
 
 export function GraphLegend({ onExportPng }: { onExportPng?: () => void }) {

@@ -247,6 +247,16 @@ pub fn extract_imports_with_parser(
                 }
             }
         }
+    } else if ext == "go" {
+        // Extract Go HTTP endpoints
+        let http_handler_re = regex::Regex::new(
+            r#"(?:http\.HandleFunc|\.(?:GET|POST|PUT|DELETE|PATCH|Handle|HandleFunc))\s*\(\s*"([^"]+)""#
+        ).unwrap();
+        for cap in http_handler_re.captures_iter(source_text) {
+            if let Some(route) = cap.get(1) {
+                api_endpoints.push(route.as_str().to_string());
+            }
+        }
     }
 
     if let Some(tree) = parser.parse(source_text, None) {
@@ -284,8 +294,47 @@ pub fn extract_imports_with_parser(
                 target_node = Some(node);
             } else if ext == "cs" && kind == "using_directive" {
                 target_node = Some(node);
-            } else if ext == "go" && kind == "import_spec" {
-                target_node = Some(node);
+            } else if ext == "go" && kind == "import_declaration" {
+                let mut child_cursor = node.walk();
+                if child_cursor.goto_first_child() {
+                    loop {
+                        let child = child_cursor.node();
+                        if child.kind() == "import_spec" {
+                            let mut path_node = None;
+                            let mut spec_cursor = child.walk();
+                            if spec_cursor.goto_first_child() {
+                                loop {
+                                    let spec_child = spec_cursor.node();
+                                    match spec_child.kind() {
+                                        "interpreted_string_literal" | "raw_string_literal" => {
+                                            path_node = Some(spec_child);
+                                        }
+                                        _ => {}
+                                    }
+                                    if !spec_cursor.goto_next_sibling() { break; }
+                                }
+                            }
+                            if let Some(pn) = path_node {
+                                if let Ok(path_text) = pn.utf8_text(source_text.as_bytes()) {
+                                    let clean = path_text.trim_matches('"').trim_matches('`');
+                                    imports.push((clean.to_string(), false));
+                                }
+                            }
+                        }
+                        if !child_cursor.goto_next_sibling() { break; }
+                    }
+                }
+                if cursor.goto_next_sibling() { continue; }
+                let mut retracing = true;
+                while retracing {
+                    if !cursor.goto_parent() {
+                        retracing = false;
+                        reached_root = true;
+                    } else if cursor.goto_next_sibling() {
+                        retracing = false;
+                    }
+                }
+                continue;
             }
 
             if let Some(n) = target_node {

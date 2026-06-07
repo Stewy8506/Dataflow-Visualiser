@@ -252,14 +252,24 @@ pub fn build_graph(
         let cmake_dir_str = cmake_dir.to_string_lossy().replace('\\', "/");
         if let Some(main_node) = nodes.iter().find(|n| n.id.starts_with(&cmake_dir_str)) {
             let main_id = main_node.id.clone();
-            for dep in deps {
-                if let Some(dep_node) = nodes.iter().find(|n| n.id.contains(dep)) {
+            for (dep_name, is_private) in deps {
+                let dep_str = dep_name.to_lowercase();
+                if let Some(dep_node) = nodes.iter().find(|n| {
+                    let path = std::path::Path::new(&n.id);
+                    if let Some(parent) = path.parent() {
+                        if let Some(parent_name) = parent.file_name() {
+                            return parent_name.to_string_lossy().to_lowercase() == dep_str &&
+                                   (n.id.ends_with(".c") || n.id.ends_with(".cpp") || n.id.ends_with(".h") || n.id.ends_with(".hpp"));
+                        }
+                    }
+                    false
+                }) {
                     edges.push(ParsedEdge {
                         source: main_id.clone(),
                         target: dep_node.id.clone(),
-                        via: Some(format!("CMake Requires {}", dep)),
+                        via: Some(format!("CMake Requires {}", dep_name)),
                         is_data_source: false,
-                        edge_type: "cmake".to_string(),
+                        edge_type: if *is_private { "cmake_private".to_string() } else { "cmake".to_string() },
                     });
                 }
             }

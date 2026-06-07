@@ -65,12 +65,22 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   const isBlastConnected = data.blastConnected;
   const tier = data.blastTier;
   const churnCount = data.churnCount || 0;
+  const coverageData = data.coverageData;
 
   let blastBorder = 'var(--color-border)';
   let blastShadow: string | undefined = undefined;
   let blastBorderWidth = '1px';
+  let coverageColor = '';
 
-  if (isBlastMode && isBlastConnected && tier > 0) {
+  if (coverageData) {
+    if (coverageData.score >= 0.8) coverageColor = '#10b981'; // green
+    else if (coverageData.score >= 0.5) coverageColor = '#f59e0b'; // yellow
+    else coverageColor = '#ef4444'; // red
+    
+    blastBorder = coverageColor;
+    blastBorderWidth = '2px';
+    blastShadow = `0 0 10px ${coverageColor}40`;
+  } else if (isBlastMode && isBlastConnected && tier > 0) {
     blastBorderWidth = '2px';
     if (tier === 1) {
       blastBorder = '#ef4444';
@@ -231,35 +241,48 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
 
         {/* Content */}
         <div className="p-4 relative z-10">
-          {/* Dead code badge */}
-          {data.isDeadCode && (
-            <div className="absolute -top-1 -right-1 flex items-center gap-1 z-20">
-              <span className="px-2 py-0.5 bg-red-950/90 text-red-400 border border-red-800/60 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center">
-                <span className="mr-1">💀</span> Dead Code
+          <div className="absolute -top-1 -right-1 flex flex-col items-end gap-1 z-20">
+            {coverageData && (
+              <span className="px-2 py-0.5 border rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center bg-zinc-900" style={{ color: coverageColor, borderColor: coverageColor }}>
+                <span className="mr-1">🧪</span> {Math.round(coverageData.score * 100)}% COV
               </span>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const confirmed = await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
-                    title: 'Delete Dead Code',
-                    kind: 'warning'
-                  });
-                  if (confirmed) {
-                    try {
-                      await invoke('delete_file', { path: data.path });
-                      if (data.onDelete) data.onDelete();
-                    } catch (err) {
-                      console.error("Failed to delete", err);
+            )}
+            {/* Dead code badge */}
+            {data.isDeadCode && (
+              <div className="flex items-center gap-1">
+                <span className="px-2 py-0.5 bg-red-950/90 text-red-400 border border-red-800/60 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center">
+                  <span className="mr-1">💀</span> Dead Code
+                </span>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const confirmed = await confirm(`Are you sure you want to permanently delete ${data.label} from your hard drive?`, {
+                      title: 'Delete Dead Code',
+                      kind: 'warning'
+                    });
+                    if (confirmed) {
+                      try {
+                        await invoke('delete_file', { path: data.path });
+                        if (data.onDelete) data.onDelete();
+                      } catch (err) {
+                        console.error('Failed to delete file:', err);
+                      }
                     }
-                  }
-                }}
-                className="p-1 bg-[#1a1a24] hover:bg-red-900/80 text-red-400 hover:text-red-300 rounded-md border border-red-900/50 hover:border-red-700 transition-all duration-200 cursor-pointer"
-                title="Delete File"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          )}
+                  }}
+                  className="bg-red-900/40 text-red-400 hover:bg-red-500 hover:text-white p-1 rounded transition-colors border border-red-800/60 hover:border-red-500"
+                  title="Delete file from disk"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            )}
+            {/* Vulnerabilities Badge */}
+            {data.vulnerabilities && data.vulnerabilities.length > 0 && (
+              <span className="px-2 py-0.5 bg-red-950/90 text-red-400 border border-red-800/60 rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center" title={data.vulnerabilities.join('\n')}>
+                🛡️ {data.vulnerabilities.length} CVEs
+              </span>
+            )}
+          </div>
 
           <div className="flex items-start gap-3">
             {/* File icon */}
@@ -465,5 +488,9 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   prev.data.label === next.data.label &&
   prev.data.summary === next.data.summary &&
   prev.data.healthScore?.label === next.data.healthScore?.label &&
-  prev.data.vulnerabilities?.length === next.data.vulnerabilities?.length
+  prev.data.vulnerabilities?.length === next.data.vulnerabilities?.length &&
+  prev.data.isSearchMatch === next.data.isSearchMatch &&
+  prev.data.isDimmed === next.data.isDimmed &&
+  prev.data.diffStatus === next.data.diffStatus &&
+  prev.data.coverageData?.score === next.data.coverageData?.score
 );

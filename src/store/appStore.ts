@@ -13,6 +13,8 @@ interface AppState {
   showSnapshots: boolean;
   showHeatmap: boolean;
   showTests: boolean;
+  showTestCoverage: boolean;
+  testCoverageData: Record<string, { covered: boolean; score: number; coverage_type: string; test_files: string[] }> | null;
   showSemanticEdges: boolean;
   churnData: Record<string, number> | null;
   refactorTarget: string | null;
@@ -38,6 +40,8 @@ interface AppState {
   setShowSnapshots: (show: boolean) => void;
   setShowHeatmap: (show: boolean) => void;
   setShowTests: (show: boolean) => void;
+  setShowTestCoverage: (show: boolean) => void;
+  setTestCoverageData: (data: Record<string, { covered: boolean; score: number; coverage_type: string; test_files: string[] }> | null) => void;
   setShowSemanticEdges: (show: boolean) => void;
   setChurnData: (data: Record<string, number> | null) => void;
   setRefactorTarget: (target: string | null) => void;
@@ -65,6 +69,8 @@ export const useAppStore = create<AppState>((set) => ({
   showSnapshots: false,
   showHeatmap: false,
   showTests: true,
+  showTestCoverage: false,
+  testCoverageData: null,
   showSemanticEdges: true,
   churnData: null,
   refactorTarget: null,
@@ -90,6 +96,8 @@ export const useAppStore = create<AppState>((set) => ({
   setShowSnapshots: (show) => set({ showSnapshots: show }),
   setShowHeatmap: (show) => set({ showHeatmap: show }),
   setShowTests: (show) => set({ showTests: show }),
+  setShowTestCoverage: (show) => set({ showTestCoverage: show }),
+  setTestCoverageData: (data) => set({ testCoverageData: data }),
   setShowSemanticEdges: (show) => set({ showSemanticEdges: show }),
   setChurnData: (data) => set({ churnData: data }),
   setRefactorTarget: (target) => set({ refactorTarget: target }),

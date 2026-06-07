@@ -77,6 +77,9 @@ function App() {
     showHeatmap,
     churnData,
     setChurnData,
+    showTestCoverage,
+    testCoverageData,
+    setTestCoverageData,
     refactorTarget,
     setRefactorTarget,
     selectedNode,
@@ -99,6 +102,9 @@ function App() {
     showHeatmap: s.showHeatmap,
     churnData: s.churnData,
     setChurnData: s.setChurnData,
+    showTestCoverage: s.showTestCoverage,
+    testCoverageData: s.testCoverageData,
+    setTestCoverageData: s.setTestCoverageData,
     refactorTarget: s.refactorTarget,
     setRefactorTarget: s.setRefactorTarget,
     selectedNode: s.selectedNode,
@@ -180,6 +186,9 @@ function App() {
         case 'TOGGLE_HEATMAP':
           useAppStore.getState().setShowHeatmap(!useAppStore.getState().showHeatmap);
           break;
+        case 'TOGGLE_TEST_COVERAGE':
+          useAppStore.getState().setShowTestCoverage(!useAppStore.getState().showTestCoverage);
+          break;
         case 'TOGGLE_SNAPSHOTS':
           useAppStore.getState().setShowSnapshots(!useAppStore.getState().showSnapshots);
           break;
@@ -213,6 +222,19 @@ function App() {
         });
     }
   }, [showHeatmap, selectedPath, churnData]);
+
+  // ─── Test Coverage Fetch ─────────────────────────────────────────
+  useEffect(() => {
+    if (showTestCoverage && !testCoverageData && selectedPath) {
+      invoke('compute_test_coverage', { workspace: selectedPath })
+        .then((data: any) => {
+          setTestCoverageData(data);
+        })
+        .catch(err => {
+          console.error("Failed to fetch test coverage:", err);
+        });
+    }
+  }, [showTestCoverage, selectedPath, testCoverageData]);
 
   // ─── Welcome Screen ──────────────────────────────────────────
   if (!selectedPath && !isParsing) {
@@ -451,7 +473,7 @@ function App() {
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         onChangeDirectory={handleSelectDirectory}
-        onToggleTheme={() => setIsLightMode(prev => !prev)}
+        onToggleTheme={() => setIsLightMode(!isLightMode)}
         onOpenSettings={() => { setShowCommandPalette(false); setShowSettings(true); }}
         onSetViewMode={setViewMode}
         onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
@@ -459,6 +481,8 @@ function App() {
         isLightMode={isLightMode}
         viewMode={viewMode}
         showMiniMap={showMiniMap}
+        nodes={enrichedFlowNodes}
+        onSelectNode={setSelectedNode}
       />
 
       <InteractiveTour />

@@ -222,6 +222,12 @@ Dataflow Visualiser features a genuinely deep AI integration, utilizing it for *
 - **Multi-Shell Selection** — Switch dynamically between `PowerShell`, Command Prompt (`cmd.exe`), `Bash`, or `Zsh` depending on operating system availability.
 - **Integrated Workflow** — Run commands, start development servers, or run lint/test scripts in the same window as your dependency graph.
 
+### 🧪 Test Coverage Overlay
+Natively analyze and visualize test coverage metrics directly on your dependency graph to see exactly which files are covered and identify critical testing gaps:
+- **Actual Coverage Parsing** — Natively parses standard format coverage reports such as `lcov.info` (Jest, Vitest, Istanbul) and Go's `coverage.out`.
+- **Heuristic Static Fallback** — If no active coverage reports are found, the engine performs static code analysis to locate test files (e.g., `*.test.*`, `*_test.go`, `__tests__/` directory structures) and map their imports to source files to infer heuristic test coverage.
+- **Interactive Visual Overlay** — Glows file node borders with vibrant visual indicators (Green for >80% coverage, Yellow for >50%, and Red for poorly covered code) and overlays clear `🧪 XX% COV` badges directly on the graph elements.
+
 ---
 
 ## Supported Frameworks
@@ -236,10 +242,8 @@ Dataflow Visualiser is designed to be language and framework agnostic, but inclu
 - **Java**: `Spring Boot` deep parsing, extracting `@Autowired`, `@Inject`, and `@Bean` dependency injection wiring edges.
 - **C#**: `.NET DI` deep parsing, extracting `AddTransient/AddScoped/AddSingleton` interface bindings and automatically mapping injected interfaces directly to concrete implementation classes.
 - **Dart/Flutter**: Widget tree extraction for `StatelessWidget`/`StatefulWidget` build method rendering hierarchies.
-
-### 🚧 Half-Working (Basic Parsing)
-- **Embedded & IoT**: `ESP-IDF` (C/C++ `#include` resolution bypassing complex CMake configurations).
-- **Go**: (basic import extraction via tree-sitter bindings).
+- **Go**: Full AST parsing via `tree-sitter-go` with `go.mod`/`go.sum` external dependency mapping, grouped imports, and semantic endpoints resolution.
+- **Embedded & IoT (CMake & ESP-IDF)**: Strict AST parsing via `tree-sitter-cmake`, tracking variable declarations, subdirectory inclusion (`add_subdirectory`), and public/private dependency scoping (`REQUIRES` vs `PRIV_REQUIRES`).
 
 ---
 
@@ -326,6 +330,9 @@ npm run tauri build
 - [x] UI Mode graph filtering to instantly isolate UI components
 - [x] Live interactive Sandpack component previews with automatic local dependency bundling
 - [x] Zustand store optimizations (`useShallow`) for lag-free canvas interactions
+- [x] Test Coverage visual overlay (lcov, go cover, and heuristic fallback)
+- [x] Tauri Store settings persistence (replacing localStorage)
+- [x] Fuzzy search Jump-to-File inside the Command Palette (`Ctrl+K`)
 
 ---
 
