@@ -30,8 +30,8 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
   const { layoutDirection, setLayoutDirection, nodesep, setNodesep, ranksep, setRanksep } = useAppStore();
 
   useEffect(() => {
-    if (settings.apiKey) loadModels();
-  }, [settings.apiKey]);
+    loadModels();
+  }, [settings.aiProvider, settings.apiKey]);
 
   // Key event capturing logic for shortcuts
   useEffect(() => {
@@ -68,11 +68,15 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
   }, [recordingAction, settings]);
 
   const loadModels = async () => {
-    if (settings.aiProvider === 'gemini' && !settings.apiKey) return;
+    const provider = settings.aiProvider;
+    const apiKey = settings.apiKey;
+    
+    if (provider !== 'local' && !apiKey) return;
+    
     setIsLoadingModels(true);
     try {
-      if (settings.aiProvider === 'gemini') {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${settings.apiKey}`);
+      if (provider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         const data = await res.json();
         if (data.models) {
           const generateContentModels: GeminiModel[] = data.models.filter((m: GeminiModel) =>
@@ -83,15 +87,49 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
             if (generateContentModels.length > 0) settings.setSelectedModel(generateContentModels[0].name);
           }
         }
+      } else if (provider === 'anthropic') {
+        const models = [
+          { name: 'claude-3-5-sonnet-latest', displayName: 'Claude 3.5 Sonnet', supportedGenerationMethods: [] },
+          { name: 'claude-3-5-haiku-latest', displayName: 'Claude 3.5 Haiku', supportedGenerationMethods: [] },
+          { name: 'claude-3-opus-latest', displayName: 'Claude 3 Opus', supportedGenerationMethods: [] }
+        ];
+        setAvailableModels(models);
+        if (!settings.selectedModel || !models.find(m => m.name === settings.selectedModel)) {
+          settings.setSelectedModel(models[0].name);
+        }
+      } else if (provider === 'cohere') {
+        const models = [
+          { name: 'command-r-plus', displayName: 'Command R+', supportedGenerationMethods: [] },
+          { name: 'command-r', displayName: 'Command R', supportedGenerationMethods: [] },
+          { name: 'command-light', displayName: 'Command Light', supportedGenerationMethods: [] }
+        ];
+        setAvailableModels(models);
+        if (!settings.selectedModel || !models.find(m => m.name === settings.selectedModel)) {
+          settings.setSelectedModel(models[0].name);
+        }
       } else {
-        // OpenAI compatible /v1/models endpoint
-        const res = await fetch(`${settings.localBaseUrl}/models`);
+        // OpenAI compatible endpoint (/models)
+        let baseUrl = '';
+        switch (provider) {
+          case 'openai': baseUrl = 'https://api.openai.com/v1'; break;
+          case 'groq': baseUrl = 'https://api.groq.com/openai/v1'; break;
+          case 'deepseek': baseUrl = 'https://api.deepseek.com/v1'; break;
+          case 'openrouter': baseUrl = 'https://openrouter.ai/api/v1'; break;
+          case 'local': baseUrl = settings.localBaseUrl; break;
+        }
+        
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (provider !== 'local' && apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+        
+        const res = await fetch(`${baseUrl}/models`, { headers });
         const data = await res.json();
         if (data.data) {
           const models: GeminiModel[] = data.data.map((m: any) => ({
             name: m.id,
             displayName: m.id,
-            supportedGenerationMethods: ['generateContent']
+            supportedGenerationMethods: []
           }));
           setAvailableModels(models);
           if (!settings.selectedModel || !models.find(m => m.name === settings.selectedModel)) {
@@ -108,15 +146,34 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
 
   const handleTestConnection = async () => {
     setTestStatus('testing');
+    const provider = settings.aiProvider;
+    const apiKey = settings.apiKey;
+    
     try {
-      if (settings.aiProvider === 'gemini') {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${settings.apiKey}`);
+      if (provider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
         const data = await res.json();
         setTestStatus(data.models?.length > 0 ? 'success' : 'error');
+      } else if (provider === 'anthropic' || provider === 'cohere') {
+        setTestStatus(apiKey.length > 0 ? 'success' : 'error');
       } else {
-        const res = await fetch(`${settings.localBaseUrl}/models`);
+        let baseUrl = '';
+        switch (provider) {
+          case 'openai': baseUrl = 'https://api.openai.com/v1'; break;
+          case 'groq': baseUrl = 'https://api.groq.com/openai/v1'; break;
+          case 'deepseek': baseUrl = 'https://api.deepseek.com/v1'; break;
+          case 'openrouter': baseUrl = 'https://openrouter.ai/api/v1'; break;
+          case 'local': baseUrl = settings.localBaseUrl; break;
+        }
+        
+        const headers: Record<string, string> = {};
+        if (provider !== 'local' && apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+        
+        const res = await fetch(`${baseUrl}/models`, { headers });
         const data = await res.json();
-        setTestStatus(data.data?.length > 0 ? 'success' : 'error');
+        setTestStatus(data.data?.length > 0 || data.object === 'list' ? 'success' : 'error');
       }
     } catch {
       setTestStatus('error');
@@ -422,6 +479,12 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                       className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary appearance-none cursor-pointer"
                     >
                       <option value="gemini">Google Gemini (Cloud)</option>
+                      <option value="openai">OpenAI (Official)</option>
+                      <option value="anthropic">Anthropic Claude</option>
+                      <option value="groq">Groq (Ultra-fast)</option>
+                      <option value="deepseek">DeepSeek Coder</option>
+                      <option value="openrouter">OpenRouter</option>
+                      <option value="cohere">Cohere Command</option>
                       <option value="local">Local Model (OpenAI Compatible API)</option>
                     </select>
                   </div>
@@ -439,14 +502,14 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                   </div>
                 </div>
 
-                {settings.aiProvider === 'gemini' ? (
+                {settings.aiProvider === 'gemini' && (
                   <div className="space-y-2">
                     <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Google AI API Key</label>
                     <div className="relative">
                       <input
                         type={showApiKey ? 'text' : 'password'}
-                        value={settings.apiKey}
-                        onChange={e => settings.setApiKey(e.target.value)}
+                        value={settings.geminiApiKey}
+                        onChange={e => settings.setGeminiApiKey(e.target.value)}
                         placeholder="AIzaSy..."
                         className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
                       />
@@ -458,7 +521,135 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                       </button>
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {settings.aiProvider === 'openai' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">OpenAI API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.openaiApiKey}
+                        onChange={e => settings.setOpenaiApiKey(e.target.value)}
+                        placeholder="sk-proj-..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'anthropic' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Anthropic API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.anthropicApiKey}
+                        onChange={e => settings.setAnthropicApiKey(e.target.value)}
+                        placeholder="sk-ant-..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'groq' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Groq API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.groqApiKey}
+                        onChange={e => settings.setGroqApiKey(e.target.value)}
+                        placeholder="gsk_..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'deepseek' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">DeepSeek API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.deepseekApiKey}
+                        onChange={e => settings.setDeepseekApiKey(e.target.value)}
+                        placeholder="ds-..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'openrouter' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">OpenRouter API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.openrouterApiKey}
+                        onChange={e => settings.setOpenrouterApiKey(e.target.value)}
+                        placeholder="sk-or-..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'cohere' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Cohere API Key</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.cohereApiKey}
+                        onChange={e => settings.setCohereApiKey(e.target.value)}
+                        placeholder="Enter Cohere API Key..."
+                        className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary pr-10 font-mono placeholder:text-text-dim/40"
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main transition-colors cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {settings.aiProvider === 'local' && (
                   <div className="space-y-2">
                     <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase block">Local API Base URL</label>
                     <input
@@ -478,7 +669,7 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                       <label className="text-[11px] font-semibold text-text-dim tracking-wider uppercase">AI Model</label>
                       <button
                         onClick={loadModels}
-                        disabled={isLoadingModels || (settings.aiProvider === 'gemini' && !settings.apiKey) || (settings.aiProvider === 'local' && !settings.localBaseUrl)}
+                        disabled={isLoadingModels || (settings.aiProvider !== 'local' && !settings.apiKey) || (settings.aiProvider === 'local' && !settings.localBaseUrl)}
                         className="p-1 text-text-dim hover:text-blue-400 disabled:opacity-30 transition-colors cursor-pointer"
                       >
                         <RefreshCw size={13} className={isLoadingModels ? 'animate-spin' : ''} />
@@ -487,7 +678,7 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                     <select
                       value={settings.selectedModel}
                       onChange={e => settings.setSelectedModel(e.target.value)}
-                      disabled={isLoadingModels || (settings.aiProvider === 'gemini' && !settings.apiKey) || (settings.aiProvider === 'local' && !settings.localBaseUrl)}
+                      disabled={isLoadingModels || (settings.aiProvider !== 'local' && !settings.apiKey) || (settings.aiProvider === 'local' && !settings.localBaseUrl)}
                       className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-sm text-text-main outline-none focus:border-accent-primary disabled:opacity-40 appearance-none cursor-pointer"
                     >
                       {isLoadingModels ? (
@@ -535,11 +726,11 @@ export function SettingsModal({ settings, onClose }: SettingsModalProps) {
                     className="w-full bg-surface-raised border border-border rounded-lg px-4 py-2.5 text-xs text-text-main font-mono outline-none focus:border-accent-primary placeholder:text-text-dim/40 resize-y"
                   />
                   <p className="text-[10px] text-text-dim">
-                    Leave blank to use standard structural descriptions.
+                     Leave blank to use standard structural descriptions.
                   </p>
                 </div>
 
-                {((settings.aiProvider === 'gemini' && settings.apiKey) || (settings.aiProvider === 'local' && settings.localBaseUrl)) && (
+                {((settings.aiProvider === 'local' && settings.localBaseUrl) || (settings.aiProvider !== 'local' && settings.apiKey)) && (
                   <button
                     onClick={handleTestConnection}
                     disabled={testStatus === 'testing'}

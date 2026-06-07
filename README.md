@@ -210,8 +210,16 @@ Dataflow Visualiser features a genuinely deep AI integration, utilizing it for *
 2. **Executable Refactoring** — Preview structural changes and have the AI directly rewrite the affected files, saving them to your local disk and instantly applying the necessary codebase updates.
 3. **Interactive File-Scoped Q&A** — A floating AI Chat Assistant is docked over your canvas. Click "Ask AI" on any node to instantly inject that specific file as context, allowing you to interrogate the exact implementation details of a single component without losing your place in the graph.
 
-- **Dynamic Model Discovery & Testing** — input your Gemini API Key to dynamically fetch available generative models directly from Google's endpoint (including `gemini-1.5-flash`) and quickly verify your credentials with built-in connectivity tests.
-- **Local AI Provider Support** — Total privacy mode. Point the engine to any local, OpenAI-compatible API endpoint (like **LMStudio**, **Ollama**, or **vLLM**) to run domain mapping, executable refactoring, and code Q&A entirely on your own hardware without sending code to the cloud.
+- **Expanded AI Provider Support** — Total flexibility. Integrate with the following providers:
+  - **Google Gemini (Cloud)**: Connect to native Google endpoints using models like `gemini-1.5-flash` or `gemini-2.5-pro`.
+  - **OpenAI (Official)**: Leverage models like `gpt-4o` or `gpt-4o-mini`.
+  - **Anthropic Claude**: Power your graphs with `claude-3-5-sonnet-latest` or `claude-3-5-haiku-latest`.
+  - **Groq**: Utilize ultra-fast model inference with Groq's OpenAI-compatible API.
+  - **DeepSeek Coder**: High-quality code analysis with DeepSeek APIs.
+  - **OpenRouter**: Access hundreds of open-source and proprietary models via OpenRouter API.
+  - **Cohere Command**: High-fidelity semantic understanding with Cohere APIs.
+  - **Local Model Support**: Total privacy mode. Point the engine to any local, OpenAI-compatible API endpoint (like **LMStudio**, **Ollama**, or **vLLM**) to run Q&A, refactoring, and domain mapping entirely on your own hardware without sending code to the cloud.
+- **Dynamic Model Discovery & Testing** — Interactively fetch and configure available models per provider, with built-in connection test utilities.
 
 ### Native OS Security & Capabilities
 - **Workspace-Bounded Native Operations** — Rust backend file reads, deletes, snapshot writes, and AI refactor writes validate paths against the selected workspace before touching disk.

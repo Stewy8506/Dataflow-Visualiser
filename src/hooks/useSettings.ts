@@ -5,6 +5,18 @@ const defaultSettings = {
   preferredIde: 'code', 
   gemini_api_key: '', 
   gemini_model: 'models/gemini-1.5-flash',
+  openai_api_key: '',
+  openai_model: 'gpt-4o-mini',
+  anthropic_api_key: '',
+  anthropic_model: 'claude-3-5-sonnet-latest',
+  groq_api_key: '',
+  groq_model: 'llama-3.3-70b-versatile',
+  deepseek_api_key: '',
+  deepseek_model: 'deepseek-coder',
+  openrouter_api_key: '',
+  openrouter_model: 'meta-llama/llama-3.3-70b-instruct',
+  cohere_api_key: '',
+  cohere_model: 'command-r-plus',
   enable_ai_summary: true,
   theme: 'dark',
   ai_provider: 'gemini',
@@ -31,6 +43,20 @@ const defaultSettings = {
 export function useSettings() {
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('models/gemini-1.5-flash');
+  
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [anthropicModel, setAnthropicModel] = useState('claude-3-5-sonnet-latest');
+  const [groqApiKey, setGroqApiKey] = useState('');
+  const [groqModel, setGroqModel] = useState('llama-3.3-70b-versatile');
+  const [deepseekApiKey, setDeepseekApiKey] = useState('');
+  const [deepseekModel, setDeepseekModel] = useState('deepseek-coder');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [openrouterModel, setOpenrouterModel] = useState('meta-llama/llama-3.3-70b-instruct');
+  const [cohereApiKey, setCohereApiKey] = useState('');
+  const [cohereModel, setCohereModel] = useState('command-r-plus');
+
   const [enableAi, setEnableAi] = useState(true);
   const [isLightMode, setIsLightMode] = useState(false);
   const [preferredIde, setPreferredIde] = useState('code');
@@ -71,6 +97,18 @@ export function useSettings() {
         store.get<string>('preferredIde'),
         store.get<string>('gemini_api_key'),
         store.get<string>('gemini_model'),
+        store.get<string>('openai_api_key'),
+        store.get<string>('openai_model'),
+        store.get<string>('anthropic_api_key'),
+        store.get<string>('anthropic_model'),
+        store.get<string>('groq_api_key'),
+        store.get<string>('groq_model'),
+        store.get<string>('deepseek_api_key'),
+        store.get<string>('deepseek_model'),
+        store.get<string>('openrouter_api_key'),
+        store.get<string>('openrouter_model'),
+        store.get<string>('cohere_api_key'),
+        store.get<string>('cohere_model'),
         store.get<boolean>('enable_ai_summary'),
         store.get<string>('theme'),
         store.get<string>('ai_provider'),
@@ -92,10 +130,26 @@ export function useSettings() {
         store.get<number>('gitHistoryLimit'),
         store.get<boolean>('showDeleteConfirmation'),
         store.get<Record<string, string>>('keybindings')
-      ]).then(([ide, key, model, enable, theme, provider, baseUrl, startup, accent, sans, mono, gridPat, gridOp, edge, speed, autoFit, scale, temp, prompt, sidebar, ideCmd, gitLim, confirmDel, keys]) => {
+      ]).then(([
+        ide, gKey, gModel, oKey, oModel, aKey, aModel, grKey, grModel, dsKey, dsModel, orKey, orModel, coKey, coModel,
+        enable, theme, provider, baseUrl, startup, accent, sans, mono, gridPat, gridOp, edge, speed, autoFit, scale, temp, prompt, sidebar, ideCmd, gitLim, confirmDel, keys
+      ]) => {
         if (ide !== undefined && ide !== null) setPreferredIde(ide);
-        if (key !== undefined && key !== null) setApiKey(key);
-        if (model !== undefined && model !== null) setSelectedModel(model);
+        if (gKey !== undefined && gKey !== null) setApiKey(gKey);
+        if (gModel !== undefined && gModel !== null) setSelectedModel(gModel);
+        if (oKey !== undefined && oKey !== null) setOpenaiApiKey(oKey);
+        if (oModel !== undefined && oModel !== null) setOpenaiModel(oModel);
+        if (aKey !== undefined && aKey !== null) setAnthropicApiKey(aKey);
+        if (aModel !== undefined && aModel !== null) setAnthropicModel(aModel);
+        if (grKey !== undefined && grKey !== null) setGroqApiKey(grKey);
+        if (grModel !== undefined && grModel !== null) setGroqModel(grModel);
+        if (dsKey !== undefined && dsKey !== null) setDeepseekApiKey(dsKey);
+        if (dsModel !== undefined && dsModel !== null) setDeepseekModel(dsModel);
+        if (orKey !== undefined && orKey !== null) setOpenrouterApiKey(orKey);
+        if (orModel !== undefined && orModel !== null) setOpenrouterModel(orModel);
+        if (coKey !== undefined && coKey !== null) setCohereApiKey(coKey);
+        if (coModel !== undefined && coModel !== null) setCohereModel(coModel);
+        
         if (enable !== undefined && enable !== null) setEnableAi(enable);
         if (theme !== undefined && theme !== null) setIsLightMode(theme === 'light');
         if (provider !== undefined && provider !== null) setAiProvider(provider);
@@ -179,6 +233,20 @@ export function useSettings() {
 
   const handleSetApiKey = (val: string) => { setApiKey(val); saveSetting('gemini_api_key', val); };
   const handleSetSelectedModel = (val: string) => { setSelectedModel(val); saveSetting('gemini_model', val); };
+  
+  const handleSetOpenaiApiKey = (val: string) => { setOpenaiApiKey(val); saveSetting('openai_api_key', val); };
+  const handleSetOpenaiModel = (val: string) => { setOpenaiModel(val); saveSetting('openai_model', val); };
+  const handleSetAnthropicApiKey = (val: string) => { setAnthropicApiKey(val); saveSetting('anthropic_api_key', val); };
+  const handleSetAnthropicModel = (val: string) => { setAnthropicModel(val); saveSetting('anthropic_model', val); };
+  const handleSetGroqApiKey = (val: string) => { setGroqApiKey(val); saveSetting('groq_api_key', val); };
+  const handleSetGroqModel = (val: string) => { setGroqModel(val); saveSetting('groq_model', val); };
+  const handleSetDeepseekApiKey = (val: string) => { setDeepseekApiKey(val); saveSetting('deepseek_api_key', val); };
+  const handleSetDeepseekModel = (val: string) => { setDeepseekModel(val); saveSetting('deepseek_model', val); };
+  const handleSetOpenrouterApiKey = (val: string) => { setOpenrouterApiKey(val); saveSetting('openrouter_api_key', val); };
+  const handleSetOpenrouterModel = (val: string) => { setOpenrouterModel(val); saveSetting('openrouter_model', val); };
+  const handleSetCohereApiKey = (val: string) => { setCohereApiKey(val); saveSetting('cohere_api_key', val); };
+  const handleSetCohereModel = (val: string) => { setCohereModel(val); saveSetting('cohere_model', val); };
+
   const handleSetEnableAi = (val: boolean) => { setEnableAi(val); saveSetting('enable_ai_summary', val); };
   const handleSetPreferredIde = (val: string) => { setPreferredIde(val); saveSetting('preferredIde', val); };
   const handleSetAiProvider = (val: string) => { setAiProvider(val); saveSetting('ai_provider', val); };
@@ -205,9 +273,66 @@ export function useSettings() {
   const handleSetShowDeleteConfirmation = (val: boolean) => { setShowDeleteConfirmation(val); saveSetting('showDeleteConfirmation', val); };
   const handleSetKeybindings = (val: Record<string, string>) => { setKeybindings(val); saveSetting('keybindings', val); };
 
+  // Resolve active key & model dynamically for simplified consumption
+  const dynamicApiKey = (() => {
+    switch (aiProvider) {
+      case 'gemini': return apiKey;
+      case 'openai': return openaiApiKey;
+      case 'anthropic': return anthropicApiKey;
+      case 'groq': return groqApiKey;
+      case 'deepseek': return deepseekApiKey;
+      case 'openrouter': return openrouterApiKey;
+      case 'cohere': return cohereApiKey;
+      default: return '';
+    }
+  })();
+
+  const dynamicModel = (() => {
+    switch (aiProvider) {
+      case 'gemini': return selectedModel;
+      case 'openai': return openaiModel;
+      case 'anthropic': return anthropicModel;
+      case 'groq': return groqModel;
+      case 'deepseek': return deepseekModel;
+      case 'openrouter': return openrouterModel;
+      case 'cohere': return cohereModel;
+      case 'local': return selectedModel; // uses selectedModel or first fetched
+      default: return selectedModel;
+    }
+  })();
+
+  const handleSetDynamicModel = (val: string) => {
+    switch (aiProvider) {
+      case 'gemini': handleSetSelectedModel(val); break;
+      case 'openai': handleSetOpenaiModel(val); break;
+      case 'anthropic': handleSetAnthropicModel(val); break;
+      case 'groq': handleSetGroqModel(val); break;
+      case 'deepseek': handleSetDeepseekModel(val); break;
+      case 'openrouter': handleSetOpenrouterModel(val); break;
+      case 'cohere': handleSetCohereModel(val); break;
+      case 'local': handleSetSelectedModel(val); break;
+    }
+  };
+
   return {
-    apiKey, setApiKey: handleSetApiKey,
-    selectedModel, setSelectedModel: handleSetSelectedModel,
+    apiKey: dynamicApiKey, setApiKey: handleSetApiKey, // back-compat
+    selectedModel: dynamicModel, setSelectedModel: handleSetDynamicModel, // back-compat
+    
+    geminiApiKey: apiKey, setGeminiApiKey: handleSetApiKey,
+    geminiModel: selectedModel, setGeminiModel: handleSetSelectedModel,
+    openaiApiKey, setOpenaiApiKey: handleSetOpenaiApiKey,
+    openaiModel, setOpenaiModel: handleSetOpenaiModel,
+    anthropicApiKey, setAnthropicApiKey: handleSetAnthropicApiKey,
+    anthropicModel, setAnthropicModel: handleSetAnthropicModel,
+    groqApiKey, setGroqApiKey: handleSetGroqApiKey,
+    groqModel, setGroqModel: handleSetGroqModel,
+    deepseekApiKey, setDeepseekApiKey: handleSetDeepseekApiKey,
+    deepseekModel, setDeepseekModel: handleSetDeepseekModel,
+    openrouterApiKey, setOpenrouterApiKey: handleSetOpenrouterApiKey,
+    openrouterModel, setOpenrouterModel: handleSetOpenrouterModel,
+    cohereApiKey, setCohereApiKey: handleSetCohereApiKey,
+    cohereModel, setCohereModel: handleSetCohereModel,
+
     enableAi, setEnableAi: handleSetEnableAi,
     isLightMode, setIsLightMode,
     preferredIde, setPreferredIde: handleSetPreferredIde,
