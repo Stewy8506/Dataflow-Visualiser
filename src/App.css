@@ -1,48 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #3f3f46;
-  --color-primary-light: #52525b;
-  --color-primary-dark: #27272a;
-  --color-secondary: #059669;
-  --color-secondary-dark: #047857;
-  --color-accent-cyan: #0891b2;
-  --color-accent-rose: #e11d48;
-  --color-accent-amber: #d97706;
+  --color-primary: #18181b;
+  --color-primary-light: #27272a;
+  --color-primary-dark: #09090b;
+  --color-secondary: #27272a;
+  --color-secondary-dark: #18181b;
+  --color-accent-cyan: #ffffff;
+  --color-accent-rose: #ffffff;
+  --color-accent-amber: #ffffff;
   --color-background: #09090b;
-  --color-surface: #18181b;
-  --color-surface-raised: #27272a;
-  --color-surface-overlay: #3f3f46;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-border-accent: rgba(255, 255, 255, 0.15);
+  --color-surface: #09090b;
+  --color-surface-raised: #18181b;
+  --color-surface-overlay: #27272a;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.03);
+  --color-border-accent: rgba(255, 255, 255, 0.1);
   --color-text-main: #f4f4f5;
   --color-text-muted: #a1a1aa;
-  --color-text-dim: #71717a;
-  --color-glass: rgba(24, 24, 27, 0.85);
-  --color-glass-light: rgba(255, 255, 255, 0.03);
+  --color-text-dim: #52525b;
+  --color-glass: rgba(9, 9, 11, 0.9);
+  --color-glass-light: rgba(255, 255, 255, 0.02);
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
-  --font-serif: 'Newsreader', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 .light {
-  --color-primary: #52525b;
-  --color-primary-light: #71717a;
-  --color-primary-dark: #3f3f46;
+  --color-primary: #f4f4f5;
+  --color-primary-light: #ffffff;
+  --color-primary-dark: #e4e4e7;
   --color-background: #ffffff;
   --color-surface: #f4f4f5;
   --color-surface-raised: #ffffff;
   --color-surface-overlay: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.1);
-  --color-border-subtle: rgba(0, 0, 0, 0.05);
-  --color-border-accent: rgba(0, 0, 0, 0.2);
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-subtle: rgba(0, 0, 0, 0.03);
+  --color-border-accent: rgba(0, 0, 0, 0.15);
   --color-text-main: #09090b;
   --color-text-muted: #52525b;
   --color-text-dim: #71717a;
-  --color-glass: rgba(255, 255, 255, 0.9);
-  --color-glass-light: rgba(0, 0, 0, 0.03);
+  --color-glass: rgba(255, 255, 255, 0.95);
+  --color-glass-light: rgba(0, 0, 0, 0.01);
 }
 
 html {
@@ -153,21 +154,25 @@ body {
   }
   
   .gradient-text {
-    background: linear-gradient(90deg, var(--color-text-main) 0%, #ff6b00 50%, var(--color-text-main) 100%);
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: gradient-sweep 6s ease-in-out infinite;
+    color: var(--color-text-main);
+    -webkit-text-fill-color: initial;
+    background: none;
+    animation: none;
   }
 
   .btn-primary {
-    animation: glow-pulse 3s ease-in-out infinite;
-    box-shadow: 0 0 0 0 rgba(255, 107, 0, 0);
+    background: var(--color-text-main);
+    color: var(--color-background);
+    border: 1px solid var(--color-text-main);
+    box-shadow: none !important;
+    animation: none !important;
+    transition: all 0.2s ease;
   }
 
   .btn-primary:hover {
-    box-shadow: 0 0 24px 4px rgba(255, 107, 0, 0.25);
+    background: transparent;
+    color: var(--color-text-main);
+    box-shadow: none !important;
   }
 
   .glass-panel {

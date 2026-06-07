@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { ExternalLink, FileEdit, ArrowUpRight, ArrowDownLeft, Sparkles } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
-import { LivePreview } from './LivePreview';
 
 interface InspectorPanelProps {
   selectedNode: any | null;
@@ -88,13 +87,6 @@ export function InspectorPanel({ selectedNode, preferredIde, workspacePath, edge
           <div className="text-xs text-text-dim italic">Click a node in the graph to inspect.</div>
         )}
       </div>
-
-      {/* Right: inline output log strip or Live Preview */}
-      {selectedNode?.data?.tags?.includes('ui-component') ? (
-        <LivePreview selectedNode={selectedNode} workspacePath={workspacePath} edges={edges} />
-      ) : (
-        <InlineLogStrip />
-      )}
     </>
   );
 }
@@ -237,16 +229,3 @@ function DependencySummary({ selectedNode, edges }: { selectedNode: any; edges: 
   );
 }
 
-// ─── Inline Log Strip ─────────────────────────────────────────────────────────
-
-function InlineLogStrip() {
-  // Intentionally left as a placeholder — logs are rendered in the console tab
-  return (
-    <div className="flex-1 p-4 bg-background font-mono text-[11px] overflow-y-auto border-l border-border">
-      <div className="flex items-center gap-2 text-text-dim">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        <span>Select a node to inspect its details.</span>
-      </div>
-    </div>
-  );
-}

@@ -13,6 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileNode } from './FileNode';
+import { PreviewNode } from './PreviewNode';
 import { LayoutController } from './LayoutController';
 import { GraphLegend } from './GraphLegend';
 import { calculateBlastRadius } from '../../utils/blastRadius';
@@ -24,6 +25,7 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 
 const nodeTypes: NodeTypes = {
   fileNode: FileNode,
+  previewNode: PreviewNode,
 };
 
 interface ReactFlowGraphProps {
@@ -34,6 +36,7 @@ interface ReactFlowGraphProps {
   onNodeSelect: (node: any) => void;
   isLightMode: boolean;
   preferredIde: string;
+  workspacePath: string;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
@@ -48,6 +51,7 @@ function ReactFlowInner({
   onNodeSelect,
   isLightMode,
   preferredIde,
+  workspacePath,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom } = useReactFlow();
 
@@ -137,6 +141,9 @@ function ReactFlowInner({
           isConnected = false;
         }
       }
+
+      // Ensure workspacePath is passed down to all node data
+      node.data = { ...node.data, workspacePath };
 
       let isSearchMatch = true;
       if (searchQuery && searchMode === 'highlight') {

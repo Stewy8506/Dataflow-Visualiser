@@ -165,9 +165,12 @@ export function useGraphLayout({
         else if (/^(page|main|index|app)\./i.test(n.label)) layerIndex = 0;
         else if (['tsx', 'jsx', 'vue', 'svelte', 'dart'].includes(n.group)) layerIndex = 1;
 
+        const isUiComponent = ['tsx', 'jsx', 'vue', 'svelte', 'dart'].includes(n.group);
+        const nodeType = (showUiOnly && isUiComponent) ? 'previewNode' : 'fileNode';
+
         return {
           id: n.id,
-          type: 'fileNode',
+          type: nodeType,
           position: { x: 0, y: 0 },
           data: {
             label: n.label,

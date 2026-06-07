@@ -27,7 +27,11 @@ export function getLayoutedElements(
   const extEdges = edges.filter(e => !regularNodeIds.has(e.source) || !regularNodeIds.has(e.target));
 
   regularNodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    const isPreview = node.type === 'previewNode';
+    dagreGraph.setNode(node.id, { 
+      width: isPreview ? 480 : nodeWidth, 
+      height: isPreview ? 380 : nodeHeight 
+    });
     inDegree.set(node.id, 0);
     outDegree.set(node.id, 0);
   });

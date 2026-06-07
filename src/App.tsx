@@ -127,6 +127,30 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // ─── Tauri Window Size & Fullscreen Controller ────────────────
+  useEffect(() => {
+    const handleWindowResize = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { LogicalSize } = await import('@tauri-apps/api/dpi');
+        const appWindow = getCurrentWindow();
+
+        if (!selectedPath) {
+          // Landing page: disable fullscreen, resize to 900x600, and center
+          await appWindow.setFullscreen(false);
+          await appWindow.setSize(new LogicalSize(900, 600));
+          await appWindow.center();
+        } else {
+          // Repo opened: enable fullscreen
+          await appWindow.setFullscreen(true);
+        }
+      } catch (e) {
+        console.warn('Tauri window API not available or failed:', e);
+      }
+    };
+    handleWindowResize();
+  }, [selectedPath]);
+
   // ─── Global Menu Actions ─────────────────────────────────────
   useEffect(() => {
     const handleAppAction = (e: Event) => {
@@ -195,10 +219,6 @@ function App() {
     return (
       <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden bg-dot-grid">
         <div className="noise-overlay" />
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl animate-welcome-glow-1" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-fuchsia-600/5 rounded-full blur-3xl animate-welcome-glow-2" />
-        </div>
 
         <div className="flex-1 flex flex-col md:flex-row overflow-y-auto z-10">
           {/* Left Hero Section */}
@@ -209,33 +229,35 @@ function App() {
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="max-w-xl nebula-slide-up"
             >
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-8">
-                <Sparkles className="text-white" size={28} />
+              <div className="mb-6 text-zinc-500 font-mono text-[11px] tracking-widest uppercase">
+                / codebase mapper
               </div>
-              <h1 className="text-5xl font-sans font-bold text-text-main mb-4 tracking-tight gradient-text">CodeMapper</h1>
-              <p className="text-text-muted mb-10 text-lg leading-relaxed font-sans">
-                Visualize your codebase architecture in stunning 2D and 3D graphs. Discover dependencies, analyze complexity, and refactor with AI-powered insights.
+              <h1 className="text-6xl font-serif italic font-normal text-white mb-4 tracking-tight">
+                CodeMapper
+              </h1>
+              <p className="text-zinc-400 mb-8 text-base leading-relaxed font-sans font-light max-w-sm">
+                Visualize codebase architecture, mapping file dependencies and components in a clean, spatial view.
               </p>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleSelectDirectory}
-                  className="btn-primary flex items-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl transition-all duration-200 font-semibold cursor-pointer"
+                  className="btn-primary flex items-center justify-center gap-2.5 bg-white hover:bg-zinc-200 text-zinc-950 px-6 py-3.5 rounded-lg transition-all duration-200 text-sm font-medium cursor-pointer border border-white"
                 >
-                  <FolderOpen size={20} />
-                  <span>Open Project Folder</span>
+                  <FolderOpen size={16} />
+                  <span>Open Folder</span>
                 </button>
                 <button
                   onClick={() => setShowSettings(true)}
-                  className="px-6 py-4 rounded-xl font-semibold text-text-main bg-surface hover:bg-surface-raised border border-border transition-all duration-200 cursor-pointer"
+                  className="px-5 py-3.5 rounded-lg text-sm font-medium text-zinc-300 bg-transparent hover:bg-zinc-900 border border-zinc-800 transition-all duration-200 cursor-pointer"
                 >
                   Settings
                 </button>
                 <button
                   onClick={() => alert('Demo Repo feature coming in v1.1!')}
-                  className="px-6 py-4 rounded-xl font-semibold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 transition-all duration-200 cursor-pointer"
+                  className="px-5 py-3.5 rounded-lg text-sm font-medium text-zinc-500 hover:text-zinc-450 bg-transparent hover:bg-zinc-900 border border-zinc-800/60 transition-all duration-200 cursor-pointer"
                 >
-                  Try Sample Repo
+                  Demo Repo
                 </button>
               </div>
             </motion.div>
@@ -246,17 +268,17 @@ function App() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-            className="w-full md:w-[400px] lg:w-[500px] border-t md:border-t-0 md:border-l border-border bg-surface/30 backdrop-blur-md flex flex-col px-8 py-12"
+            className="w-full md:w-[350px] lg:w-[400px] border-t md:border-t-0 md:border-l border-zinc-900 bg-zinc-950/40 backdrop-blur-md flex flex-col px-8 py-12"
           >
-            <div className="flex items-center gap-3 mb-8">
-              <Clock size={16} className="text-blue-400" />
-              <h2 className="text-lg font-semibold text-text-main tracking-tight">Recent Projects</h2>
+            <div className="flex items-center gap-2 mb-6">
+              <Clock size={14} className="text-zinc-500" />
+              <h2 className="text-xs font-mono uppercase tracking-wider text-zinc-400">Recent Projects</h2>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-1">
               {recentProjects.length === 0 ? (
-                <div className="text-sm text-text-muted italic bg-surface/50 rounded-xl p-6 border border-border-subtle text-center">
-                  No recent projects found. Open a folder to get started.
+                <div className="text-xs font-mono text-zinc-600 bg-zinc-900/10 rounded-lg p-6 border border-zinc-900 text-center">
+                  No recent projects. Open a folder to begin.
                 </div>
               ) : (
                 recentProjects.map((projectPath, i) => {
@@ -268,14 +290,14 @@ function App() {
                     <button
                       key={i}
                       onClick={() => handleOpenRecentProject(projectPath)}
-                      className="w-full flex items-start gap-4 p-4 rounded-xl glass-panel hover:bg-surface-raised transition-all duration-200 cursor-pointer group text-left border border-border hover:border-blue-500/30 hover:shadow-md"
+                      className="w-full flex items-center justify-between py-3.5 border-b border-zinc-900/60 hover:border-zinc-700 transition-all duration-200 cursor-pointer group text-left"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-surface border border-border flex items-center justify-center shrink-0 group-hover:bg-blue-500/10 group-hover:border-blue-500/30 transition-colors mt-0.5">
-                        <FolderGit2 size={18} className="text-text-dim group-hover:text-blue-400 transition-colors" />
+                      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                        <span className="text-[14px] font-medium text-zinc-200 group-hover:text-white transition-colors truncate">{projectName}</span>
+                        {parentPath && <span className="text-[10px] text-zinc-600 font-mono truncate" title={parentPath}>{parentPath}</span>}
                       </div>
-                      <div className="flex flex-col min-w-0 flex-1 gap-1">
-                        <span className="text-[15px] font-semibold text-text-main truncate">{projectName}</span>
-                        {parentPath && <span className="text-xs text-text-dim font-mono truncate" title={parentPath}>{parentPath}</span>}
+                      <div className="text-zinc-700 group-hover:text-zinc-300 transition-colors ml-2 font-mono text-xs">
+                        &rarr;
                       </div>
                     </button>
                   );
@@ -299,6 +321,7 @@ function App() {
       </div>
     );
   }
+
 
   // ─── Loading Screen ──────────────────────────────────────────
   if (isParsing && !selectedPath) {
@@ -359,6 +382,7 @@ function App() {
                 onNodeSelect={setSelectedNode}
                 isLightMode={isLightMode}
                 preferredIde={preferredIde}
+                workspacePath={selectedPath!}
               />
             ) : (
               <ThreeDGraph
