@@ -167,13 +167,13 @@ export function useSettings() {
   // Sync fonts to DOM
   useEffect(() => {
     if (!isLoaded) return;
-    document.documentElement.style.setProperty('--theme-sans-font', sansFont);
+    document.documentElement.style.setProperty('--theme-sans-font', `"${sansFont}"`);
     saveSetting('sansFont', sansFont);
   }, [sansFont, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    document.documentElement.style.setProperty('--theme-mono-font', monoFont);
+    document.documentElement.style.setProperty('--theme-mono-font', `"${monoFont}"`);
     saveSetting('monoFont', monoFont);
   }, [monoFont, isLoaded]);
 

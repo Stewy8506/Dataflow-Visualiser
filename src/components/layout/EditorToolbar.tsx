@@ -1,4 +1,5 @@
-import { Settings, Box, Spline, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link, Beaker } from 'lucide-react';
+import { useState } from 'react';
+import { Box, Spline, Map, Package, History, Flame, Sun, Moon, Maximize2, Minimize2, Sparkles, Link, Beaker, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { useSettings } from '../../hooks/useSettings';
 
@@ -8,6 +9,7 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolbarProps) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { 
     viewMode, setViewMode,
     showMiniMap, setShowMiniMap,
@@ -16,8 +18,7 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
     showHeatmap, setShowHeatmap,
     showTestCoverage, setShowTestCoverage,
     showAiChat, setShowAiChat,
-    showSemanticEdges, setShowSemanticEdges,
-    setShowSettings
+    showSemanticEdges, setShowSemanticEdges
   } = useAppStore();
 
   const { isLightMode, setIsLightMode } = useSettings();
@@ -51,90 +52,124 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
       </div>
 
       {/* Right side: Tools and Actions */}
-      <div className="flex items-center gap-1">
-        {viewMode === '2d' && setShowMiniMap && (
+      <div className="flex items-center gap-1.5">
+        {/* View Options Dropdown */}
+        <div className="relative">
           <button
-            onClick={() => setShowMiniMap(!showMiniMap)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showMiniMap 
-                ? 'bg-blue-500/20 text-blue-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-all duration-200 cursor-pointer ${
+              isDropdownOpen
+                ? 'bg-surface-raised border-accent-primary text-text-main shadow-sm'
+                : 'bg-background hover:bg-surface border-border text-text-muted hover:text-text-main'
             }`}
-            title="Toggle Mini Map"
+            title="View Options & Overlays"
           >
-            <Map size={14} />
+            <SlidersHorizontal size={12} />
+            <span>View Options</span>
+            <ChevronDown size={10} className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
-        )}
 
-        {viewMode === '2d' && setShowExternalDeps && (
-          <button
-            onClick={() => setShowExternalDeps(!showExternalDeps)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showExternalDeps 
-                ? 'bg-fuchsia-500/20 text-fuchsia-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
-            }`}
-            title="Toggle External Dependencies"
-          >
-            <Package size={14} />
-          </button>
-        )}
+          {isDropdownOpen && (
+            <>
+              {/* Click-away backdrop */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsDropdownOpen(false)} 
+              />
+              
+              {/* Dropdown Card */}
+              <div className="absolute right-0 mt-1.5 w-60 rounded-xl bg-surface border border-border shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl p-3 z-50 space-y-1 nebula-slide-up">
+                <span className="text-[9px] font-semibold text-text-dim uppercase tracking-wider block px-2 mb-1.5">
+                  Visual Overlays
+                </span>
+                
+                {/* 1. Minimap Toggle */}
+                {viewMode === '2d' && setShowMiniMap && (
+                  <button
+                    onClick={() => { setShowMiniMap(!showMiniMap); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <Map size={13} />
+                      <span>Mini Map</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showMiniMap ? 'active' : ''}`} />
+                  </button>
+                )}
 
-        {viewMode === '2d' && (
-          <button
-            onClick={() => setShowSemanticEdges(!showSemanticEdges)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showSemanticEdges 
-                ? 'bg-indigo-500/20 text-indigo-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
-            }`}
-            title="Toggle Semantic/Custom Edges"
-          >
-            <Link size={14} />
-          </button>
-        )}
+                {/* 2. External Dependencies Toggle */}
+                {viewMode === '2d' && setShowExternalDeps && (
+                  <button
+                    onClick={() => { setShowExternalDeps(!showExternalDeps); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <Package size={13} />
+                      <span>External Packages</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showExternalDeps ? 'active' : ''}`} />
+                  </button>
+                )}
 
-        {viewMode === '2d' && setShowHeatmap && (
-          <button
-            onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showHeatmap 
-                ? 'bg-orange-500/20 text-orange-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
-            }`}
-            title="Toggle Git Churn Heatmap"
-          >
-            <Flame size={14} />
-          </button>
-        )}
+                {/* 3. Semantic Relationships Toggle */}
+                {viewMode === '2d' && (
+                  <button
+                    onClick={() => { setShowSemanticEdges(!showSemanticEdges); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <Link size={13} />
+                      <span>Semantic Edges</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showSemanticEdges ? 'active' : ''}`} />
+                  </button>
+                )}
 
-        {viewMode === '2d' && (
-          <button
-            onClick={() => setShowTestCoverage(!showTestCoverage)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showTestCoverage 
-                ? 'bg-green-500/20 text-green-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
-            }`}
-            title="Toggle Test Coverage"
-          >
-            <Beaker size={14} />
-          </button>
-        )}
+                {/* 4. Git Churn Heatmap Toggle */}
+                {viewMode === '2d' && setShowHeatmap && (
+                  <button
+                    onClick={() => { setShowHeatmap(!showHeatmap); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <Flame size={13} />
+                      <span>Git Churn Heatmap</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showHeatmap ? 'active' : ''}`} />
+                  </button>
+                )}
 
-        {setShowSnapshots && (
-          <button
-            onClick={() => setShowSnapshots(!showSnapshots)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
-              showSnapshots 
-                ? 'bg-emerald-500/20 text-emerald-400' 
-                : 'text-text-dim hover:text-text-main hover:bg-surface-raised'
-            }`}
-            title="Snapshots & Diffing"
-          >
-            <History size={14} />
-          </button>
-        )}
+                {/* 5. Test Coverage Toggle */}
+                {viewMode === '2d' && (
+                  <button
+                    onClick={() => { setShowTestCoverage(!showTestCoverage); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <Beaker size={13} />
+                      <span>Test Coverage Overlay</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showTestCoverage ? 'active' : ''}`} />
+                  </button>
+                )}
+
+                {/* 6. Version Snapshots Toggle */}
+                {setShowSnapshots && (
+                  <button
+                    onClick={() => { setShowSnapshots(!showSnapshots); }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs hover:bg-surface-raised transition-colors text-left text-text-main cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 text-text-muted">
+                      <History size={13} />
+                      <span>Version Snapshots</span>
+                    </div>
+                    <div className={`nebula-switch-small ${showSnapshots ? 'active' : ''}`} />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         <button
           onClick={() => setShowAiChat(!showAiChat)}
@@ -168,13 +203,6 @@ export function EditorToolbar({ isFullscreen, onToggleFullscreen }: EditorToolba
           </button>
         )}
 
-        <button
-          onClick={() => setShowSettings(true)}
-          className="w-7 h-7 flex items-center justify-center rounded-md text-text-dim hover:text-text-main hover:bg-surface-raised transition-colors cursor-pointer ml-1"
-          title="Settings"
-        >
-          <Settings size={14} />
-        </button>
       </div>
     </div>
   );

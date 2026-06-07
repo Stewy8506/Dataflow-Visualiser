@@ -41,6 +41,7 @@ import { useAppStore } from '../../store/appStore';
 export function Sidebar() {
   const activeTab = useAppStore(s => s.activeTab);
   const setActiveTab = useAppStore(s => s.setActiveTab);
+  const setShowSettings = useAppStore(s => s.setShowSettings);
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {
@@ -81,7 +82,11 @@ export function Sidebar() {
           onClick={() => setActiveTab('explorer')}
         />
         <NavItem icon={<GitBranch size={18} />} label="Branches" disabled />
-        <NavItem icon={<Settings size={18} />} label="Settings" disabled />
+        <NavItem 
+          icon={<Settings size={18} />} 
+          label="Settings" 
+          onClick={() => setShowSettings(true)} 
+        />
       </div>
 
       <div className="flex flex-col items-center space-y-2 pt-4 border-t border-border">
