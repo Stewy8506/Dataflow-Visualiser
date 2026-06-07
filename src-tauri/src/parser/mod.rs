@@ -407,6 +407,8 @@ pub async fn parse_codebase(
                 express_routes,
             };
 
+            node.tags = tags;
+
             (node, file_data)
         })
         .collect();

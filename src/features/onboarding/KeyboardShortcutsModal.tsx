@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Command, Search, Layers, Box, Maximize, Play, Settings } from 'lucide-react';
+import { X, Command, Search, Layers, Maximize, Play, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function KeyboardShortcutsModal() {

@@ -150,7 +150,8 @@ Dataflow-Visualiser/
 - **AI Codebase Assistant:** Interactive Gemini-powered floating chat to ask questions about specific files or the entire repository.
 - **Dynamic File Filtering:** Exclude specific directories, extensions, or tests/mocks dynamically.
 - **Platform & Mobile Directory Filtering:** Automatically detects Flutter or React Native setups and filters out platform-specific native directories (like `android`, `ios`, `windows`, `macos`, `linux`, `web`) to focus on core code.
-- **Performance Optimized:** Uses native Rust parsing (Tree-Sitter + Rayon), Web Workers for layout, and Zustand for frontend state.
+- **UI Component Filtering & Live Preview:** Instantly filter the graph to isolate the UI Layer and spin up a Sandpack-powered interactive sandbox of any React component right inside the Inspector panel, with automatic local dependency bundling, path alias resolution, and Tailwind CSS injection.
+- **Performance Optimized:** Uses native Rust parsing (Tree-Sitter + Rayon), Web Workers for layout, and highly optimized Zustand stores (`useShallow`) for lag-free frontend state and rendering.
 
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
@@ -317,6 +318,9 @@ npm run tauri build
 - [x] Inline Monaco Diff Editor for AI Refactoring Previews
 - [x] Automated Multi-Platform CI/CD Pipelines (macOS, Windows, Ubuntu) via GitHub Actions
 - [x] Built-in Tauri v2 Auto-Updater Support
+- [x] UI Mode graph filtering to instantly isolate UI components
+- [x] Live interactive Sandpack component previews with automatic local dependency bundling
+- [x] Zustand store optimizations (`useShallow`) for lag-free canvas interactions
 
 ---
 

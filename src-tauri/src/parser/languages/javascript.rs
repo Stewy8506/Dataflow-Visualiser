@@ -70,6 +70,21 @@ pub fn extract_javascript_imports(
         }
     }
 
+    let mut is_ui_component = false;
+    if let Some(ext) = file_path.extension().and_then(|s| s.to_str()) {
+        if ext == "tsx" || ext == "jsx" {
+            is_ui_component = true;
+        }
+    }
+    
+    // Quick JSX check via Regex if not already marked
+    if !is_ui_component {
+        let jsx_re = Regex::new(r"(?m)<\s*[A-Z][a-zA-Z0-9]*\b.*?>|<\s*[a-z]+(\s+[a-zA-Z-]+(=|\s*>|/>))").unwrap();
+        if jsx_re.is_match(source_text) {
+            is_ui_component = true;
+        }
+    }
+
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(file_path).unwrap_or_default();
     let ret = Parser::new(&allocator, source_text, source_type).parse();
@@ -117,6 +132,10 @@ pub fn extract_javascript_imports(
                             }
                         }
 
+                        if source == "react" || source == "react-dom" {
+                            is_ui_component = true;
+                        }
+
                         imports.push((source, is_data_source));
                     }
                     ModuleDeclaration::ExportAllDeclaration(_) => {
@@ -144,6 +163,10 @@ pub fn extract_javascript_imports(
         if all_exports_imports && has_exports {
             is_barrel_file = true;
         }
+    }
+
+    if is_ui_component {
+        tags.push("ui-component".to_string());
     }
 
     // Use regex to catch all exports reliably without exhaustive AST matching

@@ -86,11 +86,11 @@ export function getLayoutedElements(
         return isBackendA ? 1 : -1; // Put backend on the right (or bottom)
       }
 
-      // 2. Group by directory path to keep related files together
-      const dirA = a.id.substring(0, a.id.lastIndexOf('/')) || '';
-      const dirB = b.id.substring(0, b.id.lastIndexOf('/')) || '';
-      if (dirA !== dirB) {
-        return dirA.localeCompare(dirB);
+      // 2. Group by AI Semantic Group (if available), then by directory path
+      const groupA = a.data?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
+      const groupB = b.data?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
+      if (groupA !== groupB) {
+        return groupA.localeCompare(groupB);
       }
 
       // 3. Fallback to degree ratio
@@ -128,11 +128,11 @@ export function getLayoutedElements(
           return isBackendA ? 1 : -1;
         }
 
-        // 2. Group by directory path
-        const dirA = a.id.substring(0, a.id.lastIndexOf('/')) || '';
-        const dirB = b.id.substring(0, b.id.lastIndexOf('/')) || '';
-        if (dirA !== dirB) {
-          return dirA.localeCompare(dirB);
+        // 2. Group by AI Semantic Group (if available), then by directory
+        const groupA = a.data?.semantic_group || a.id.substring(0, a.id.lastIndexOf('/')) || '';
+        const groupB = b.data?.semantic_group || b.id.substring(0, b.id.lastIndexOf('/')) || '';
+        if (groupA !== groupB) {
+          return groupA.localeCompare(groupB);
         }
 
         // 3. Crossing minimization

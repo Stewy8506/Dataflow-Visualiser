@@ -35,31 +35,31 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
   const [newName, setNewName] = useState('');
   const [symbolName, setSymbolName] = useState(initialSymbol || '');
   const [impact, setImpact] = useState<RefactorImpact | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [isRefactoring, setIsRefactoring] = useState(false);
-  const [refactorComplete, setRefactorComplete] = useState(false);
+  const [refactoringStep, setRefactoringStep] = useState<'idle' | 'planning' | 'coding' | 'reviewing' | 'complete'>('idle');
+  const [aiUpdates, setAiUpdates] = useState<any[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { apiKey, selectedModel, aiProvider, localBaseUrl } = useSettings();
 
   const targetFilename = targetPath.split(/[/\\]/).pop() || '';
 
   const runPreview = async () => {
-    setIsLoading(true);
+    setRefactoringStep('planning');
     setError(null);
+    setAiUpdates(null);
     try {
       const result: RefactorImpact = await invoke('preview_refactor', {
         workspacePath,
         targetPath,
-        newName: newName || 'NewName', // Fallback for preview
+        newName: newName || 'NewName',
         symbolName: symbolName ? symbolName : null,
       });
       setImpact(result);
+      setRefactoringStep('idle');
     } catch (err) {
       setError(String(err));
-    } finally {
-      setIsLoading(false);
+      setRefactoringStep('idle');
     }
   };
 
@@ -77,19 +77,19 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
     });
   };
 
-  const handleExecuteRefactor = async () => {
+  const handleGenerateRefactor = async () => {
     if (!impact || impact.affected_files.length === 0) return;
     if (!apiKey) {
-      setError("API Key is required to execute AI refactoring. Please set it in Settings.");
+      setError("API Key is required to execute AI refactoring.");
       return;
     }
     
-    setIsRefactoring(true);
+    setRefactoringStep('coding');
     setError(null);
     try {
       const affectedFilePaths = impact.affected_files.map(f => f.path);
       
-      await invoke('execute_ai_refactor', {
+      const updates: any[] = await invoke('execute_ai_refactor', {
         workspacePath,
         targetPath,
         newName: newName || 'NewName',
@@ -101,11 +101,22 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
         localBaseUrl,
       });
       
-      setRefactorComplete(true);
+      setAiUpdates(updates);
+      setRefactoringStep('reviewing');
     } catch (err) {
       setError(String(err));
-    } finally {
-      setIsRefactoring(false);
+      setRefactoringStep('idle');
+    }
+  };
+
+  const handleApplyRefactor = async () => {
+    if (!aiUpdates) return;
+    setRefactoringStep('complete'); // Assuming it's fast
+    try {
+      await invoke('apply_ai_refactor', { updates: aiUpdates });
+    } catch (err) {
+      setError(String(err));
+      setRefactoringStep('reviewing');
     }
   };
 
@@ -164,20 +175,25 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
 
             <button
               onClick={runPreview}
-              disabled={isLoading}
+              disabled={refactoringStep !== 'idle'}
               className="mt-2 w-full flex items-center justify-center gap-2 bg-surface-raised hover:bg-surface-raised/80 border border-border py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
             >
               <Search size={14} />
-              {isLoading ? "Analyzing..." : "Refresh Preview"}
+              {refactoringStep === 'planning' ? "Planning..." : "Refresh Plan"}
             </button>
           </div>
 
           {/* Right Area - Results */}
           <div className="flex-1 overflow-y-auto bg-background p-5">
-            {isLoading ? (
+            {refactoringStep === 'planning' ? (
               <div className="h-full flex flex-col items-center justify-center text-text-dim gap-3">
                 <div className="w-8 h-8 border-2 border-surface-raised border-t-blue-500 rounded-full animate-spin" />
-                <span className="text-sm font-medium">Computing blast radius...</span>
+                <span className="text-sm font-medium">Planner Agent computing blast radius...</span>
+              </div>
+            ) : refactoringStep === 'coding' ? (
+              <div className="h-full flex flex-col items-center justify-center text-text-dim gap-3">
+                <div className="w-8 h-8 border-2 border-surface-raised border-t-emerald-500 rounded-full animate-spin" />
+                <span className="text-sm font-medium">Coder Agent drafting changes...</span>
               </div>
             ) : error ? (
               <div className="h-full flex items-center justify-center">
@@ -186,11 +202,11 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                   <span className="text-sm font-medium">{error}</span>
                 </div>
               </div>
-            ) : refactorComplete ? (
+            ) : refactoringStep === 'complete' ? (
               <div className="h-full flex flex-col items-center justify-center text-emerald-400 gap-4">
                 <CheckCircle2 size={48} className="animate-pulse" />
                 <h3 className="text-xl font-bold">Refactor Applied Successfully!</h3>
-                <p className="text-sm text-text-dim max-w-sm text-center">The dependent files have been updated by AI. Please review the changes in your IDE or source control.</p>
+                <p className="text-sm text-text-dim max-w-sm text-center">The Reviewer Agent validated the syntax, and changes have been written to disk. Please review in your IDE.</p>
                 <button
                   onClick={onClose}
                   className="mt-4 px-6 py-2 bg-surface-raised border border-border hover:bg-surface text-text-main rounded-lg transition-colors"
@@ -246,7 +262,10 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                           {expandedFiles.has(file.path) && (
                             <div className="border-t border-border-subtle bg-background/50 p-3 space-y-4">
                               {file.matches.map((match: any, j: number) => {
-                                const modContext = symbolName ? match.context.replace(new RegExp(symbolName, 'g'), newName || 'NewName') : match.context;
+                                const aiUpdate = aiUpdates?.find(u => u.path === file.path);
+                                const original = aiUpdate ? match.context : match.context; // Could be full file
+                                const modified = aiUpdate ? aiUpdate.new_content : (symbolName ? match.context.replace(new RegExp(symbolName, 'g'), newName || 'NewName') : match.context);
+                                
                                 const lang = file.path.endsWith('.rs') ? 'rust' : file.path.endsWith('.tsx') || file.path.endsWith('.ts') ? 'typescript' : 'javascript';
                                 return (
                                   <div key={j} className="flex items-start gap-3 text-xs">
@@ -255,8 +274,8 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
                                       <DiffEditor
                                         height="120px"
                                         language={lang}
-                                        original={match.context}
-                                        modified={modContext}
+                                        original={original}
+                                        modified={modified}
                                         theme="vs-dark"
                                         options={{
                                           readOnly: true,
@@ -293,18 +312,28 @@ export function RefactorPreview({ workspacePath, targetPath, initialSymbol, onCl
           >
             Cancel
           </button>
-          <button
-            onClick={handleExecuteRefactor}
-            disabled={!impact || impact.total_files === 0 || isRefactoring || refactorComplete}
-            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
-          >
-            {isRefactoring ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Sparkles size={16} />
-            )}
-            {isRefactoring ? "Refactoring..." : "Execute AI Refactor"}
-          </button>
+          {refactoringStep === 'reviewing' ? (
+             <button
+              onClick={handleApplyRefactor}
+              className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
+            >
+              <CheckCircle2 size={16} />
+              Approve & Apply
+            </button>
+          ) : (
+            <button
+              onClick={handleGenerateRefactor}
+              disabled={!impact || impact.total_files === 0 || refactoringStep !== 'idle'}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
+            >
+              {refactoringStep === 'coding' ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              {refactoringStep === 'coding' ? "Generating Code..." : "Draft AI Refactor"}
+            </button>
+          )}
         </div>
 
       </div>

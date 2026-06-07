@@ -25,6 +25,7 @@ interface AppState {
   searchMode: SearchMode;
   customFilters: string;
   showAiChat: boolean;
+  showUiOnly: boolean;
 
   setViewMode: (mode: ViewMode) => void;
   setActiveLayer: (layer: GraphLayer) => void;
@@ -49,6 +50,7 @@ interface AppState {
   setSearchMode: (mode: SearchMode) => void;
   setCustomFilters: (filters: string) => void;
   setShowAiChat: (show: boolean) => void;
+  setShowUiOnly: (show: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -75,6 +77,7 @@ export const useAppStore = create<AppState>((set) => ({
   searchMode: 'highlight',
   customFilters: '',
   showAiChat: false,
+  showUiOnly: false,
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setActiveLayer: (layer) => set({ activeLayer: layer }),
@@ -99,4 +102,5 @@ export const useAppStore = create<AppState>((set) => ({
   setSearchMode: (mode) => set({ searchMode: mode }),
   setCustomFilters: (filters) => set({ customFilters: filters }),
   setShowAiChat: (show) => set({ showAiChat: show }),
+  setShowUiOnly: (show) => set({ showUiOnly: show }),
 }));

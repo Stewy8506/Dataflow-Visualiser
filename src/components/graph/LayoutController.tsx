@@ -1,24 +1,21 @@
 import { useState } from 'react';
 import { Sliders, ChevronLeft, LayoutList, ArrowRightLeft, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
+import { useShallow } from 'zustand/react/shallow';
 
-interface LayoutControllerProps {
-  nodesep: number;
-  setNodesep: (val: number) => void;
-  ranksep: number;
-  setRanksep: (val: number) => void;
-  direction: 'LR' | 'TB';
-  setDirection: (dir: 'LR' | 'TB') => void;
-}
-
-export function LayoutController({
-  nodesep,
-  setNodesep,
-  ranksep,
-  setRanksep,
-  direction,
-  setDirection,
-}: LayoutControllerProps) {
+export function LayoutController() {
   const [isOpen, setIsOpen] = useState(false);
+
+  const { nodesep, setNodesep, ranksep, setRanksep, direction, setDirection } = useAppStore(
+    useShallow((s) => ({
+      nodesep: s.nodesep,
+      setNodesep: s.setNodesep,
+      ranksep: s.ranksep,
+      setRanksep: s.setRanksep,
+      direction: s.layoutDirection,
+      setDirection: s.setLayoutDirection,
+    }))
+  );
 
   const handleReset = () => {
     setNodesep(70);

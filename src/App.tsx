@@ -29,6 +29,7 @@ import { useSettings } from './hooks/useSettings';
 import { useProjectLoader } from './hooks/useProjectLoader';
 import { useGraphLayout } from './hooks/useGraphLayout';
 import { useAppStore } from './store/appStore';
+import { useShallow } from 'zustand/react/shallow';
 
 
 function App() {
@@ -59,39 +60,52 @@ function App() {
   } = useProjectLoader({ apiKey, enableAi, selectedModel, aiProvider, localBaseUrl });
 
   // ─── UI State (Zustand) ──────────────────────────────────────
-  const activeTab = useAppStore(s => s.activeTab);
-  const viewMode = useAppStore(s => s.viewMode);
-  const setViewMode = useAppStore(s => s.setViewMode);
-  const setActiveLayer = useAppStore(s => s.setActiveLayer);
-  const showSettings = useAppStore(s => s.showSettings);
-  const setShowSettings = useAppStore(s => s.setShowSettings);
-  const showCommandPalette = useAppStore(s => s.showCommandPalette);
-  const setShowCommandPalette = useAppStore(s => s.setShowCommandPalette);
-  const showMiniMap = useAppStore(s => s.showMiniMap);
-  const setShowMiniMap = useAppStore(s => s.setShowMiniMap);
-  const showSnapshots = useAppStore(s => s.showSnapshots);
-  const setShowSnapshots = useAppStore(s => s.setShowSnapshots);
-  const showHeatmap = useAppStore(s => s.showHeatmap);
-  const churnData = useAppStore(s => s.churnData);
-  const setChurnData = useAppStore(s => s.setChurnData);
-  const refactorTarget = useAppStore(s => s.refactorTarget);
-  const setRefactorTarget = useAppStore(s => s.setRefactorTarget);
-  const selectedNode = useAppStore(s => s.selectedNode);
-  const setSelectedNode = useAppStore(s => s.setSelectedNode);
-  const propTrace = useAppStore(s => s.propTrace);
-  const setPropTrace = useAppStore(s => s.setPropTrace);
-  const diffOverlay = useAppStore(s => s.diffOverlay);
-  const setDiffOverlay = useAppStore(s => s.setDiffOverlay);
-  const searchQuery = useAppStore(s => s.searchQuery);
-  const setSearchQuery = useAppStore(s => s.setSearchQuery);
-  const searchMode = useAppStore(s => s.searchMode);
-  const setSearchMode = useAppStore(s => s.setSearchMode);
-  const nodesep = useAppStore(s => s.nodesep);
-  const setNodesep = useAppStore(s => s.setNodesep);
-  const ranksep = useAppStore(s => s.ranksep);
-  const setRanksep = useAppStore(s => s.setRanksep);
-  const layoutDirection = useAppStore(s => s.layoutDirection);
-  const setLayoutDirection = useAppStore(s => s.setLayoutDirection);
+  // ─── UI State (Zustand) ──────────────────────────────────────
+  const {
+    activeTab,
+    viewMode,
+    setViewMode,
+    setActiveLayer,
+    showSettings,
+    setShowSettings,
+    showCommandPalette,
+    setShowCommandPalette,
+    showMiniMap,
+    setShowMiniMap,
+    showSnapshots,
+    setShowSnapshots,
+    showHeatmap,
+    churnData,
+    setChurnData,
+    refactorTarget,
+    setRefactorTarget,
+    selectedNode,
+    setSelectedNode,
+    setPropTrace,
+    setDiffOverlay,
+  } = useAppStore(useShallow(s => ({
+    activeTab: s.activeTab,
+    viewMode: s.viewMode,
+    setViewMode: s.setViewMode,
+    setActiveLayer: s.setActiveLayer,
+    showSettings: s.showSettings,
+    setShowSettings: s.setShowSettings,
+    showCommandPalette: s.showCommandPalette,
+    setShowCommandPalette: s.setShowCommandPalette,
+    showMiniMap: s.showMiniMap,
+    setShowMiniMap: s.setShowMiniMap,
+    showSnapshots: s.showSnapshots,
+    setShowSnapshots: s.setShowSnapshots,
+    showHeatmap: s.showHeatmap,
+    churnData: s.churnData,
+    setChurnData: s.setChurnData,
+    refactorTarget: s.refactorTarget,
+    setRefactorTarget: s.setRefactorTarget,
+    selectedNode: s.selectedNode,
+    setSelectedNode: s.setSelectedNode,
+    setPropTrace: s.setPropTrace,
+    setDiffOverlay: s.setDiffOverlay,
+  })));
 
   // ─── Graph Layout ────────────────────────────────────────────
   const { flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange } = useGraphLayout({
@@ -333,12 +347,7 @@ function App() {
 
           <div className="flex-1 relative overflow-hidden bg-background">
             {viewMode === '2d' && activeTab === 'network' && (
-              <SearchBar
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                searchMode={searchMode}
-                setSearchMode={setSearchMode}
-              />
+              <SearchBar />
             )}
 
             {viewMode === '2d' ? (
@@ -348,20 +357,8 @@ function App() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeSelect={setSelectedNode}
-                nodesep={nodesep}
-                setNodesep={setNodesep}
-                ranksep={ranksep}
-                setRanksep={setRanksep}
-                direction={layoutDirection}
-                setDirection={setLayoutDirection}
                 isLightMode={isLightMode}
                 preferredIde={preferredIde}
-                searchQuery={searchQuery}
-                searchMode={searchMode}
-                showMiniMap={showMiniMap}
-                propTrace={propTrace}
-                diffOverlay={diffOverlay}
-                churnData={showHeatmap ? churnData : null}
               />
             ) : (
               <ThreeDGraph

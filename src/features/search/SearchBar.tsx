@@ -1,13 +1,19 @@
 import { Search, X, Filter, ScanEye } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
+import { useShallow } from 'zustand/react/shallow';
 
-interface SearchBarProps {
-  searchQuery: string;
-  setSearchQuery: (val: string) => void;
-  searchMode: 'highlight' | 'collapse';
-  setSearchMode: (val: 'highlight' | 'collapse') => void;
-}
+export function SearchBar() {
+    const { searchQuery, setSearchQuery, searchMode, setSearchMode, showUiOnly, setShowUiOnly } = useAppStore(
+    useShallow((s) => ({
+      searchQuery: s.searchQuery,
+      setSearchQuery: s.setSearchQuery,
+      searchMode: s.searchMode,
+      setSearchMode: s.setSearchMode,
+      showUiOnly: s.showUiOnly,
+      setShowUiOnly: s.setShowUiOnly,
+    }))
+  );
 
-export function SearchBar({ searchQuery, setSearchQuery, searchMode, setSearchMode }: SearchBarProps) {
   return (
     <div className="absolute top-4 right-4 z-20 flex items-center gap-2 animate-slide-up">
       <div className="flex items-center glass-panel p-1 rounded-lg">
@@ -34,6 +40,19 @@ export function SearchBar({ searchQuery, setSearchQuery, searchMode, setSearchMo
         >
           <Filter size={13} />
           <span>Filter</span>
+        </button>
+        <div className="w-px h-4 bg-border mx-1" />
+        <button
+          onClick={() => setShowUiOnly(!showUiOnly)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer ${
+            showUiOnly
+              ? 'bg-fuchsia-500/20 text-fuchsia-400 shadow-sm border border-fuchsia-500/30'
+              : 'text-text-dim hover:text-text-main border border-transparent'
+          }`}
+          title="Show UI Components Only"
+        >
+          <ScanEye size={13} />
+          <span>UI Mode</span>
         </button>
       </div>
 

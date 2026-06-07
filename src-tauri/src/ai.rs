@@ -310,14 +310,17 @@ pub async fn execute_ai_refactor(
     let ai_result: AiRefactorResult = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
-    // Apply the updates to the file system
-    for update in &ai_result.updates {
+    Ok(ai_result.updates)
+}
+
+#[tauri::command]
+pub async fn apply_ai_refactor(updates: Vec<RefactorFileUpdate>) -> Result<(), String> {
+    for update in updates {
         if let Err(e) = fs::write(&update.path, &update.new_content) {
             return Err(format!("Failed to write file {}: {}", update.path, e));
         }
     }
-
-    Ok(ai_result.updates)
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]

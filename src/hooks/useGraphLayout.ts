@@ -30,7 +30,8 @@ export function useGraphLayout({
     showExternalDeps,
     showTests,
     showSemanticEdges,
-    customFilters
+    customFilters,
+    showUiOnly
   } = useAppStore();
 
   const [flowNodes, setFlowNodes] = useState<any[]>([]);
@@ -104,6 +105,8 @@ export function useGraphLayout({
         }
 
         const isBackend = normalizedPath.includes('/api/') || n.label.startsWith('route.') || normalizedPath.includes('/server/') || normalizedPath.includes('/backend/') || normalizedPath.includes('src-tauri');
+        if (showUiOnly && !(n as any).tags?.includes('ui-component')) return false;
+        
         if (activeLayer === 'ui') return !isBackend && !n.id.startsWith('ext:');
         if (activeLayer === 'backend') return isBackend && !n.id.startsWith('ext:');
         return true;
@@ -297,7 +300,7 @@ export function useGraphLayout({
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, showSemanticEdges, customFilters, onDeleteNode, savedPositions]);
+  }, [rawGraphData, activeLayer, layoutDirection, nodesep, ranksep, searchQuery, searchMode, enrichmentMap, showExternalDeps, showTests, showSemanticEdges, customFilters, showUiOnly, onDeleteNode, savedPositions]);
 
   // Merge AI enrichment into nodes without triggering dagre relayout
   const enrichedFlowNodes = useMemo(() => {

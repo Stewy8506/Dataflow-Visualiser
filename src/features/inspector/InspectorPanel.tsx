@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { ExternalLink, FileEdit, ArrowUpRight, ArrowDownLeft, Sparkles } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
+import { LivePreview } from './LivePreview';
 
 interface InspectorPanelProps {
   selectedNode: any | null;
@@ -88,8 +89,12 @@ export function InspectorPanel({ selectedNode, preferredIde, workspacePath, edge
         )}
       </div>
 
-      {/* Right: inline output log strip */}
-      <InlineLogStrip />
+      {/* Right: inline output log strip or Live Preview */}
+      {selectedNode?.data?.tags?.includes('ui-component') ? (
+        <LivePreview selectedNode={selectedNode} workspacePath={workspacePath} edges={edges} />
+      ) : (
+        <InlineLogStrip />
+      )}
     </>
   );
 }

@@ -32,45 +32,44 @@ interface ReactFlowGraphProps {
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onNodeSelect: (node: any) => void;
-  nodesep: number;
-  setNodesep: (val: number) => void;
-  ranksep: number;
-  setRanksep: (val: number) => void;
-  direction: 'LR' | 'TB';
-  setDirection: (dir: 'LR' | 'TB') => void;
   isLightMode: boolean;
   preferredIde: string;
-  searchQuery?: string;
-  searchMode?: 'highlight' | 'collapse';
-  showMiniMap?: boolean;
-  propTrace?: any;
-  diffOverlay?: any;
-  churnData?: Record<string, number> | null;
 }
 
 // ─── Inner component: needs ReactFlowProvider above it ────────
+import { useAppStore } from '../../store/appStore';
+import { useShallow } from 'zustand/react/shallow';
+
 function ReactFlowInner({
   nodes: initialNodes,
   edges: initialEdges,
   onNodesChange,
   onEdgesChange,
   onNodeSelect,
-  nodesep,
-  setNodesep,
-  ranksep,
-  setRanksep,
-  direction,
-  setDirection,
   isLightMode,
   preferredIde,
-  searchQuery = '',
-  searchMode = 'highlight',
-  showMiniMap = false,
-  propTrace = null,
-  diffOverlay = null,
-  churnData = null,
 }: ReactFlowGraphProps) {
   const { zoomTo, getZoom } = useReactFlow();
+
+  const {
+    searchQuery,
+    searchMode,
+    showMiniMap,
+    propTrace,
+    diffOverlay,
+    churnData,
+    showHeatmap,
+  } = useAppStore(useShallow((s) => ({
+    searchQuery: s.searchQuery,
+    searchMode: s.searchMode,
+    showMiniMap: s.showMiniMap,
+    propTrace: s.propTrace,
+    diffOverlay: s.diffOverlay,
+    churnData: s.churnData,
+    showHeatmap: s.showHeatmap,
+  })));
+
+  const effectiveChurnData = showHeatmap ? churnData : null;
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const activeNodeId = selectedNodeId;
@@ -154,9 +153,9 @@ function ReactFlowInner({
       const isInCycle = cycleResult.nodesInCycles.has(node.id);
 
       let churnCount = 0;
-      if (churnData) {
+      if (effectiveChurnData) {
          const nodePath = node.data?.path?.replace(/\\/g, '/');
-         churnCount = churnData[nodePath] || 0;
+         churnCount = effectiveChurnData[nodePath] || 0;
       }
 
       return {
@@ -179,7 +178,7 @@ function ReactFlowInner({
         }
       };
     });
-  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay, churnData]);
+  }, [initialNodes, blastRadius, selectedNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {
@@ -365,14 +364,7 @@ function ReactFlowInner({
           />
         )}
       </ReactFlow>
-      <LayoutController
-        nodesep={nodesep}
-        setNodesep={setNodesep}
-        ranksep={ranksep}
-        setRanksep={setRanksep}
-        direction={direction}
-        setDirection={setDirection}
-      />
+      <LayoutController />
       <GraphLegend onExportPng={handleExportPng} />
     </div>
   );
