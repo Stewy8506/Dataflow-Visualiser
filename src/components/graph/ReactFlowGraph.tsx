@@ -73,6 +73,7 @@ function ReactFlowInner({
     testCoverageData,
     selectedNode,
     setSelectedNode,
+    gitStatuses,
   } = useAppStore(useShallow((s) => ({
     searchQuery: s.searchQuery,
     searchMode: s.searchMode,
@@ -85,6 +86,7 @@ function ReactFlowInner({
     testCoverageData: s.testCoverageData,
     selectedNode: s.selectedNode,
     setSelectedNode: s.setSelectedNode,
+    gitStatuses: s.gitStatuses,
   })));
 
   const effectiveChurnData = showHeatmap ? churnData : null;
@@ -237,11 +239,22 @@ function ReactFlowInner({
         }
       }
 
+      let gitStatus = null;
+      const normalizedNodeId = node.id.replace(/\\/g, '/').toLowerCase();
+      const matchedStatus = gitStatuses.find(status => {
+        const normStatusPath = status.path.replace(/\\/g, '/').toLowerCase();
+        return normalizedNodeId.endsWith('/' + normStatusPath) || normalizedNodeId === normStatusPath;
+      });
+      if (matchedStatus) {
+        gitStatus = matchedStatus.status;
+      }
+
       // Ensure workspacePath, coverage, scale, and custom commands are passed down to all node data
       node.data = { 
         ...node.data, 
         workspacePath, 
         coverageData,
+        gitStatus,
         defaultNodeScale: settings.defaultNodeScale,
         preferredIde: settings.preferredIde,
         customIdeCommand: settings.customIdeCommand,
@@ -307,7 +320,7 @@ function ReactFlowInner({
         }
       };
     });
-  }, [initialNodes, blastRadius, activeNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData, cycleResult, initialEdges]);
+  }, [initialNodes, blastRadius, activeNodeId, searchQuery, searchMode, propTrace, diffOverlay, effectiveChurnData, cycleResult, initialEdges, gitStatuses]);
 
   // ── Styled edges (memoized) ────────────────────────────────────
   const styledEdges = useMemo(() => {

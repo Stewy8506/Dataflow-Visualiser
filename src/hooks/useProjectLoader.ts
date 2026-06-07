@@ -141,7 +141,8 @@ export function useProjectLoader({
 
       await saveRecentProject(path);
 
-      if ((aiProvider === 'gemini' && apiKey && enableAi) || (aiProvider === 'local' && localBaseUrl && enableAi)) {
+      const hasKeyOrIsLocal = aiProvider === 'local' || !!apiKey;
+      if (enableAi && hasKeyOrIsLocal) {
         setLogs(prev => [...prev, `> Starting progressive AI enrichment with ${selectedModel} via ${aiProvider}...`]);
         setIsEnriching(true);
         try {

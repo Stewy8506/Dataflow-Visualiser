@@ -301,3 +301,14 @@ pub async fn get_git_churn(workspace: String, limit: usize) -> Result<HashMap<St
     
     Ok(churn_map)
 }
+
+#[tauri::command]
+pub async fn get_git_branch(workspace: String) -> Result<String, String> {
+    let repo = Repository::discover(&workspace).map_err(|e| e.to_string())?;
+    let head = repo.head().map_err(|e| e.to_string())?;
+    let branch = head
+        .shorthand()
+        .ok_or_else(|| "Detached HEAD".to_string())?
+        .to_string();
+    Ok(branch)
+}

@@ -68,6 +68,7 @@ pub fn run() {
             git::get_commit_diff,
             git::get_git_churn,
             git::git_sync,
+            git::get_git_branch,
             pty::spawn_pty,
             pty::write_pty,
             pty::resize_pty,

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FolderOpen, Clock, Network } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { detectCycles } from './utils/cycleDetection';
 import './App.css';
 
 // Components
@@ -48,6 +49,8 @@ function App() {
     startupBehavior,
   } = settings;
   const didAttemptStartupRestore = useRef(false);
+
+  const [gitBranch, setGitBranch] = useState<string | null>(null);
 
   // ─── Project Loader ──────────────────────────────────────────
   const {
@@ -102,6 +105,7 @@ function App() {
     setShowDocs,
     showSupport,
     setShowSupport,
+    setGitStatuses,
   } = useAppStore(useShallow(s => ({
     activeTab: s.activeTab,
     viewMode: s.viewMode,
@@ -131,7 +135,36 @@ function App() {
     setShowDocs: s.setShowDocs,
     showSupport: s.showSupport,
     setShowSupport: s.setShowSupport,
+    setGitStatuses: s.setGitStatuses,
   })));
+
+  // ─── Git Status & Branch Fetching ───────────────────────────
+  useEffect(() => {
+    if (!selectedPath || selectedPath === 'https://github.com/microsoft/vscode') {
+      setGitBranch(null);
+      setGitStatuses([]);
+      return;
+    }
+
+    const fetchGitData = async () => {
+      try {
+        const [branch, status] = await Promise.all([
+          invoke<string>('get_git_branch', { workspace: selectedPath }),
+          invoke<any[]>('get_git_status', { path: selectedPath })
+        ]);
+        setGitBranch(branch);
+        setGitStatuses(status);
+      } catch (e) {
+        console.warn('Failed to fetch Git information:', e);
+      }
+    };
+
+    fetchGitData();
+    const interval = setInterval(fetchGitData, 5000);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [selectedPath, setGitStatuses]);
 
   // ─── Graph Layout ────────────────────────────────────────────
   const { flowEdges, enrichedFlowNodes, onNodesChange, onEdgesChange } = useGraphLayout({
@@ -537,6 +570,8 @@ function App() {
         isParsing={isParsing}
         isEnriching={isEnriching}
         preferredIde={preferredIde}
+        gitBranch={gitBranch}
+        warningsCount={rawGraphData ? detectCycles(rawGraphData.edges).cycles.length : 0}
       />
 
       {showSettings && selectedPath && (

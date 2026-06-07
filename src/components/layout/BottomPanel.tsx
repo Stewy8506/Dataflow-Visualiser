@@ -181,7 +181,7 @@ export function BottomPanel({
 
         {activeTab === 'terminal' && (
           <div className="flex-1 w-full h-full overflow-hidden bg-[#0a0a0a]">
-            <Terminal key={shell} shell={shell} workspacePath={workspacePath} />
+            <Terminal key={`${shell}-${workspacePath}`} shell={shell} workspacePath={workspacePath} />
           </div>
         )}
 

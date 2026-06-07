@@ -228,10 +228,14 @@ Dataflow Visualiser features a genuinely deep AI integration, utilizing it for *
 - **Full History Timeline** — View commit history directly in a bottom panel.
 - **Diff Viewer Modal** — Click any commit to view a dedicated modal showing exact, line-by-line diffs per changed file.
 - **Staging & Commits** — Stage, unstage, and commit files without leaving the application.
+- **File Explorer Status Highlights** — Highlights files inside the sidebar directory tree using visual status colors (amber for modified, green for added/untracked, red/strike-through for deleted) and trailing symbol badges (`M`, `A`, `U`, `D`).
+- **Graph Node Git Badges** — Node layouts in the dependency graph dynamically display colored capsule overlays (`MODIFIED`, `ADDED`, `UNTRACKED`, `DELETED`) to map code modifications visually over the dependency architecture.
+- **Centralized Store Polling** — Periodically synchronizes status changes in the background, keeping all panels updated reactively.
 
 ### Integrated PTY Terminal
 - **Built-in Interactive Terminal** — Powered by `portable-pty` for real-time shell execution directly inside the resizable bottom panel.
 - **Multi-Shell Selection** — Switch dynamically between `PowerShell`, Command Prompt (`cmd.exe`), `Bash`, or `Zsh` depending on operating system availability.
+- **Automatic Workspace Sync** — Re-instantiates the active terminal shell in the target root directory automatically whenever the workspace repository changes.
 - **Integrated Workflow** — Run commands, start development servers, or run lint/test scripts in the same window as your dependency graph.
 
 ### 🧪 Test Coverage Overlay

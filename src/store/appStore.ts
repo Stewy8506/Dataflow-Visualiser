@@ -30,6 +30,7 @@ interface AppState {
   showUiOnly: boolean;
   showDocs: boolean;
   showSupport: boolean;
+  gitStatuses: Array<{ path: string; status: string; staged: boolean }>;
 
   setViewMode: (mode: ViewMode) => void;
   setActiveLayer: (layer: GraphLayer) => void;
@@ -59,6 +60,7 @@ interface AppState {
   setShowUiOnly: (show: boolean) => void;
   setShowDocs: (show: boolean) => void;
   setShowSupport: (show: boolean) => void;
+  setGitStatuses: (statuses: Array<{ path: string; status: string; staged: boolean }>) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -90,6 +92,7 @@ export const useAppStore = create<AppState>((set) => ({
   showUiOnly: false,
   showDocs: false,
   showSupport: false,
+  gitStatuses: [],
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setActiveLayer: (layer) => set({ activeLayer: layer }),
@@ -119,4 +122,5 @@ export const useAppStore = create<AppState>((set) => ({
   setShowUiOnly: (show) => set({ showUiOnly: show }),
   setShowDocs: (show) => set({ showDocs: show }),
   setShowSupport: (show) => set({ showSupport: show }),
+  setGitStatuses: (statuses) => set({ gitStatuses: statuses }),
 }));

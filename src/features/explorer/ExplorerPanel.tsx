@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, FileCode, FileType, Layout, Cpu, FolderOpen } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
 
 interface ExplorerPanelProps {
   nodes: { id: string; data: { label: string; group: string; isBackend: boolean; isDeadCode: boolean } }[];
@@ -86,25 +87,60 @@ function TreeItem({
   selectedNodeId: string | null;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
+  const gitStatuses = useAppStore(s => s.gitStatuses);
+
+  const gitStatus = useMemo(() => {
+    if (!node.isFile || !node.fullPath) return null;
+    const normPath = node.fullPath.replace(/\\/g, '/').toLowerCase();
+    return gitStatuses.find(status => {
+      const normStatusPath = status.path.replace(/\\/g, '/').toLowerCase();
+      return normPath.endsWith('/' + normStatusPath) || normPath === normStatusPath;
+    });
+  }, [node.isFile, node.fullPath, gitStatuses]);
 
   if (node.isFile) {
     const isSelected = selectedNodeId && node.fullPath && selectedNodeId.replace(/\\/g, '/').endsWith(node.fullPath);
+
+    let gitColorClass = 'text-text-muted hover:text-text-main';
+    let gitStatusLabel = '';
+    let gitStatusBadgeColor = '';
+
+    if (gitStatus) {
+      if (gitStatus.status === 'Modified') {
+        gitColorClass = 'text-amber-400 hover:text-amber-300';
+        gitStatusLabel = 'M';
+        gitStatusBadgeColor = 'text-amber-400';
+      } else if (gitStatus.status === 'Added' || gitStatus.status === 'Untracked') {
+        gitColorClass = 'text-emerald-400 hover:text-emerald-300';
+        gitStatusLabel = gitStatus.status === 'Added' ? 'A' : 'U';
+        gitStatusBadgeColor = 'text-emerald-400';
+      } else if (gitStatus.status === 'Deleted') {
+        gitColorClass = 'text-rose-400/60 line-through hover:text-rose-400';
+        gitStatusLabel = 'D';
+        gitStatusBadgeColor = 'text-rose-400';
+      }
+    }
 
     return (
       <button
         onClick={() => onNodeFocus(node.fullPath)}
         className={`w-full flex items-center gap-2 py-1 pr-2 rounded-md text-left transition-colors cursor-pointer ${
           isSelected
-            ? 'bg-blue-500/10 text-text-main'
-            : 'text-text-muted hover:bg-surface-raised hover:text-text-main'
+            ? 'bg-blue-500/10 text-text-main font-semibold'
+            : gitColorClass
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        title={node.fullPath}
+        title={`${node.fullPath}${gitStatus ? ` (${gitStatus.status})` : ''}`}
       >
         {node.fileData && getFileIcon(node.fileData.group, node.fileData.isBackend)}
         <span className="text-[11px] truncate flex-1">{node.name}</span>
         {node.fileData?.isDeadCode && (
           <span className="text-[8px] text-red-400 font-bold shrink-0">💀</span>
+        )}
+        {gitStatusLabel && (
+          <span className={`text-[9px] font-bold font-mono px-1 rounded-sm ${gitStatusBadgeColor} bg-white/5`}>
+            {gitStatusLabel}
+          </span>
         )}
       </button>
     );

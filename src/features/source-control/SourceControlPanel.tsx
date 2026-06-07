@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { GitCommit, Plus, Minus, Check, User, Clock, X, FileText, RefreshCw } from 'lucide-react';
+import { useAppStore } from '../../store/appStore';
 
 interface GitFileStatus {
   path: string;
@@ -46,7 +47,8 @@ const parseDiff = (rawDiff: string): ParsedFileDiff[] => {
 };
 
 export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
-  const [files, setFiles] = useState<GitFileStatus[]>([]);
+  const files = useAppStore(s => s.gitStatuses);
+  const setGitStatuses = useAppStore(s => s.setGitStatuses);
   const [commits, setCommits] = useState<GitCommitInfo[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -73,7 +75,7 @@ export function SourceControlPanel({ workspacePath }: SourceControlPanelProps) {
       const historyPromise = invoke('get_git_history', { workspace: workspacePath });
       
       const [statusResult, historyResult] = await Promise.all([statusPromise, historyPromise]);
-      setFiles(statusResult as GitFileStatus[]);
+      setGitStatuses(statusResult as GitFileStatus[]);
       setCommits(historyResult as GitCommitInfo[]);
     } catch (e) {
       console.error(e);

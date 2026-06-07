@@ -236,6 +236,15 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
         {/* Content */}
         <div className={`${paddingClass} relative z-10`}>
           <div className="absolute -top-1 -right-1 flex flex-col items-end gap-1 z-20">
+            {data.gitStatus && (
+              <span className={`px-2 py-0.5 border rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center bg-zinc-900 ${
+                data.gitStatus === 'Modified' ? 'text-amber-400 border-amber-500/30' :
+                data.gitStatus === 'Added' || data.gitStatus === 'Untracked' ? 'text-emerald-400 border-emerald-500/30' :
+                'text-rose-400 border-rose-500/30'
+              }`}>
+                {data.gitStatus}
+              </span>
+            )}
             {coverageData && (
               <span className="px-2 py-0.5 border rounded-md text-[9px] font-bold uppercase tracking-wider flex items-center bg-zinc-900" style={{ color: coverageColor, borderColor: coverageColor }}>
                 <span className="mr-1">🧪</span> {Math.round(coverageData.score * 100)}% COV
@@ -507,5 +516,6 @@ export const FileNode = React.memo(function FileNode({ data, selected }: any) {
   prev.data.isSearchMatch === next.data.isSearchMatch &&
   prev.data.isDimmed === next.data.isDimmed &&
   prev.data.diffStatus === next.data.diffStatus &&
+  prev.data.gitStatus === next.data.gitStatus &&
   prev.data.coverageData?.score === next.data.coverageData?.score
 );

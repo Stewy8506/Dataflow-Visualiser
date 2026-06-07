@@ -6,9 +6,11 @@ interface StatusBarProps {
   isParsing: boolean;
   isEnriching: boolean;
   preferredIde: string;
+  gitBranch?: string | null;
+  warningsCount?: number;
 }
 
-export function StatusBar({ workspacePath, logsCount, isParsing, isEnriching, preferredIde }: StatusBarProps) {
+export function StatusBar({ workspacePath, logsCount, isParsing, isEnriching, preferredIde, gitBranch, warningsCount }: StatusBarProps) {
   // Extract project name from path
   const projectName = workspacePath ? workspacePath.split(/[\\/]/).pop() : 'No Workspace';
 
@@ -22,11 +24,11 @@ export function StatusBar({ workspacePath, logsCount, isParsing, isEnriching, pr
           <span>{projectName}</span>
         </div>
 
-        {/* Git info (mocked or static for now unless we hook up real git branch) */}
+        {/* Git info */}
         {workspacePath && (
           <div className="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer h-full px-1">
             <GitBranch size={12} />
-            <span>main</span>
+            <span>{gitBranch || 'main'}</span>
           </div>
         )}
 
@@ -46,10 +48,10 @@ export function StatusBar({ workspacePath, logsCount, isParsing, isEnriching, pr
 
       {/* Right side */}
       <div className="flex items-center gap-3 h-full">
-        {/* Error/Warning counts (mocked for now, can hook up later) */}
-        <div className="flex items-center gap-1 hover:text-text-main transition-colors cursor-pointer h-full px-1">
-          <AlertCircle size={12} />
-          <span>0</span>
+        {/* Error/Warning counts */}
+        <div className="flex items-center gap-1 hover:text-text-main transition-colors cursor-pointer h-full px-1" title={`${warningsCount || 0} circular import dependencies`}>
+          <AlertCircle size={12} className={(warningsCount || 0) > 0 ? "text-amber-500" : ""} />
+          <span>{warningsCount || 0}</span>
         </div>
 
         {/* Terminal/Logs count */}
