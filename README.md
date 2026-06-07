@@ -1,6 +1,6 @@
 # Dataflow Visualiser
 
-> **⚠️ This project is currently under active development.**
+> **⚠️ This project is very near release.**
 
 A high-performance native desktop tool for indexing, visualizing, and analyzing local codebases — with AI-powered blast-radius simulation and full privacy control.
 
@@ -148,6 +148,8 @@ Dataflow-Visualiser/
 - **High-Quality PNG Export** — export the interactive graph directly to a clean, transparent PNG image file.
 - **Architectural Mapping:** Visualizes codebases with a layout algorithm powered by Dagre and optimized with Web Workers for large repositories.
 - **AI Codebase Assistant:** Interactive Gemini-powered floating chat to ask questions about specific files or the entire repository.
+- **Canvas Graph Metrics Dashboard Overlay** — Expandable glassmorphic stats dashboard overlay presenting overall codebase complexity metrics: total nodes, import edges, circular dependency cycles, and dead-code percentages, accompanied by a dynamic SVG bar chart visualizing the file language/extension distribution.
+- **Quick Category Filter Pills** — Fast-filter canvas widgets located directly below the search input allowing developers to isolate layers or target specific properties (e.g., `[TSX]`, `[Backend]`, `[External]`, `[Circular]`, `[Unused]`) with a single click.
 - **Dynamic File Filtering:** Exclude specific directories, extensions, or tests/mocks dynamically.
 - **Platform & Mobile Directory Filtering:** Automatically detects Flutter or React Native setups and filters out platform-specific native directories (like `android`, `ios`, `windows`, `macos`, `linux`, `web`) to focus on core code.
 - **UI Component Filtering & Live Preview:** Instantly filter the graph to isolate the UI Layer and spin up a Sandpack-powered interactive sandbox of any React component right inside the Inspector panel, with automatic local dependency bundling, path alias resolution, and Tailwind CSS injection.
@@ -156,6 +158,8 @@ Dataflow-Visualiser/
 ### Predictive Blast-Radius Analytics
 Select any node and simulate a structural change. The engine traces dependencies downstream, color-coding files from **Deep Red** (immediate breaking risk) to **Light Orange** (type definition adjustment required) — before you've changed a single line.
 - **AI-Powered Executable Refactoring** — You can now seamlessly execute the refactoring preview. The Google Gemini API will directly rewrite the affected files and save them to your local disk, instantly applying the necessary codebase updates.
+- **Split-Pane Side-by-Side Diff Viewer** — Integrates a Monaco-powered side-by-side or inline code diff screen, allowing precise reviews of proposed AI modifications side-by-side with original source code.
+- **Affected Files Selector Sidebar** — Left-hand navigation list mapping all dependent files flagged during refactoring simulations, complete with file change/line badges for detailed inspection.
 - **Inline Diff Editor** — Powered by Monaco Editor, visually review exactly what the AI intends to change line-by-line before approving the refactor.
 
 ### Advanced Codebase Analysis
@@ -168,14 +172,14 @@ Select any node and simulate a structural change. The engine traces dependencies
 - **Barrel File Flattening** — automatically bypasses exclusively re-exporting modules (`index.ts` proxies) to prevent graph congestion, pointing directly to the underlying component source.
 - **Snapshot Diffing** — save snapshots of your entire graph state to a local SQLite journal, and visually diff them (Base vs Target) to highlight added and removed nodes/edges in bright emerald and rose.
 - **Symbol-Level Drill-Down** — click to expand any file node directly on the canvas to inspect its exported functions, classes, and variables, complete with inline dead-code tracking.
-- **Adjacency Matrix View** — Visualizes file relationships and dependencies in a structured tabular matrix (Rows: Importer, Columns: Imported) under the bottom panel to inspect coupling patterns.
+- **Interactive Adjacency Checkerboard Matrix Grid** — A full coupling visualization mapping source files against target imports in a checkerboard intersection grid. Automatically flags tight reciprocal circular imports in flashing warning red, supports interactive node focusing on click, and includes inline search filters to slice and analyze complex structural dependencies.
 - **Dependency Version Risk (CVE/OSV)** — Cross-references your external dependencies against the `osv.dev` vulnerability database by parsing lockfiles (`package-lock.json`, `pubspec.lock`), flagging vulnerable packages with critical CVE badges.
 - **Dependency Health Score** — Calculates a composite health grade (A-F) for every file based on structural metrics: coupling (out-edges), blast-radius (in-edges), and internal code complexity.
 - **Git Churn Heatmap Overlay** — analyzes up to the last 100 commits to paint the graph with a red/orange volatility heatmap, letting you instantly spot highly modified, bug-prone components.
 - **Headless CI Dependency Export** — invoke the binary via the CLI (`--export-graph`) to silently parse the project and dump a deterministic JSON graph snapshot for PR diffing in GitHub Actions.
 
 ### Interactive Command Palette
-Press **`Ctrl+K`** (or **`Cmd+K`** on macOS) at any time to open the global **Command Palette** overlay. Fully keyboard-driven, it lets you:
+Press **`Ctrl+K`** (or **`Cmd+K`** on macOS) at any time to open the global **Command Palette** overlay. Fully keyboard-driven, it displays styled **keycap badges** (e.g., `Ctrl + O`, `Alt + 2`) next to actions to help master navigation. It also includes a persistent **"Recently Used"** suggestion row that tracks the last 4 triggered actions for instant re-execution. It lets you:
 - Quickly switch projects/directories.
 - Toggle between **Dark Mode** and **Light Mode**.
 - Toggle layout overlays like the **Minimap** or **External Dependencies**.
@@ -227,6 +231,26 @@ Natively analyze and visualize test coverage metrics directly on your dependency
 - **Actual Coverage Parsing** — Natively parses standard format coverage reports such as `lcov.info` (Jest, Vitest, Istanbul) and Go's `coverage.out`.
 - **Heuristic Static Fallback** — If no active coverage reports are found, the engine performs static code analysis to locate test files (e.g., `*.test.*`, `*_test.go`, `__tests__/` directory structures) and map their imports to source files to infer heuristic test coverage.
 - **Interactive Visual Overlay** — Glows file node borders with vibrant visual indicators (Green for >80% coverage, Yellow for >50%, and Red for poorly covered code) and overlays clear `🧪 XX% COV` badges directly on the graph elements.
+
+### Beautiful Settings Customizability & Tauri Store Persistence
+Fine-grained customization dashboard allowing full control over your development environment. Persisted locally via Tauri's native `tauri-plugin-store` (bridged from React to Rust) for seamless session restoration:
+- **Aesthetic Customization**: Configure accent color themes, background grid styles (`lines`, `dots`, `none`), and custom graph opacity variables.
+- **Dynamic Fonts Styling**: Switch between pre-loaded, pre-fetched premium typography options (Inter, Outfit, Roboto, Fira Code, Source Code Pro) propagated dynamically to all layout components.
+- **Graph Engine Parameters**: Adjust custom node scaling sizes (`small`, `normal`, `large`), configure interactive edge styles (`bezier`, `straight`, `smoothstep`), toggle layout auto-fitting, and set edge animation speeds.
+- **AI Preferences**: Configure generative API temperature, custom system prompt overrides, and AI Chat sidebar docking positions (`left` vs `right`).
+- **Editor & Git Integrations**: Custom preferred IDE launcher path overrides, git history search query bounds, and toggleable file deletion confirmations.
+- **Keybindings Mapper**: Interactively record and customize modifier-based keyboard shortcuts (e.g., `Ctrl+Shift+P`) directly within the dashboard.
+
+### Redesigned Onboarding Welcome Loader
+A premium, visually-engaging entry experience designed to wow the user from the first second:
+- **Nebula Shaders & Glassmorphism**: Built with smooth CSS-driven background nebulas and high-fidelity glassmorphic card boundaries.
+- **Simulated Progression Logs**: Displays live, animated task stages showing exact status outputs during directory scanning and parsing phases.
+- **Interactive Spinners**: Fluid micro-animations matching the custom accent system colors.
+
+### Fully Integrated Documentation & Support Hubs
+Accessible directly from the application header or the sidebar to assist developers:
+- **Documentation Center**: Includes structured setup guides, color-coded node legends, blast-radius tier details, adjacency matrix explanations, and keyboard shortcuts maps.
+- **Support & Diagnostics Center**: Provides quick links for filing bugs, documentation channels, and native system-level platform diagnostics (querying Tauri backend to retrieve OS and platform architecture details).
 
 ---
 
