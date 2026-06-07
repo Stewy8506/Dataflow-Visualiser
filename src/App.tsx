@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { FolderOpen, Clock } from 'lucide-react';
+import { FolderOpen, Clock, Network } from 'lucide-react';
 import { motion } from 'framer-motion';
 import './App.css';
 
@@ -395,13 +395,53 @@ function App() {
   // ─── Loading Screen ──────────────────────────────────────────
   if (isParsing && !selectedPath) {
     return (
-      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center nebula-slide-up">
-            <div className="w-12 h-12 border-4 border-surface-raised border-t-primary rounded-full animate-spin mb-4" />
-            <p className="text-text-muted font-mono text-sm">
-              {isEnriching ? 'Enriching with AI...' : 'Analyzing codebase...'}
-            </p>
+      <div className="flex flex-col h-screen w-screen bg-background relative overflow-hidden flex items-center justify-center select-none" style={{ fontFamily: 'var(--theme-sans-font, "Plus Jakarta Sans"), sans-serif' }}>
+        {/* Background glowing nebulas */}
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-accent-primary-light blur-[150px] opacity-40 animate-pulse pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-fuchsia-500/10 blur-[150px] opacity-30 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }} />
+        <div className="noise-overlay" />
+
+        <div className="z-10 flex flex-col items-center max-w-sm w-full p-8 rounded-2xl glass-panel border border-border shadow-[0_20px_50px_rgba(0,0,0,0.4)] animate-slide-up text-center">
+          {/* Futuristic Loader */}
+          <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+            {/* Outer spinning ring */}
+            <div className="absolute inset-0 rounded-full border-2 border-border-subtle border-t-accent-primary animate-spin" />
+            
+            {/* Inner pulsing circle */}
+            <div className="absolute w-12 h-12 rounded-full bg-accent-primary-light border border-accent-primary/20 flex items-center justify-center animate-ping opacity-75" />
+            <div className="absolute w-8 h-8 rounded-full bg-surface-raised border border-border flex items-center justify-center shadow-md">
+              <Network size={16} className="text-accent-primary animate-pulse" />
+            </div>
+          </div>
+
+          <h2 className="text-base font-bold text-text-main tracking-tight mb-1">
+            {isEnriching ? 'Enriching Graph' : 'Analyzing Codebase'}
+          </h2>
+          <p 
+            className="text-xs text-text-dim/80 font-mono tracking-wide"
+            style={{ fontFamily: 'var(--theme-mono-font, "JetBrains Mono"), monospace' }}
+          >
+            {isEnriching 
+              ? 'Querying LLM for semantic groupings...' 
+              : 'Parsing file dependencies & syntax tree...'}
+          </p>
+
+          {/* Loading logs simulator */}
+          <div className="w-full mt-6 pt-4 border-t border-border-subtle flex flex-col gap-1 text-[10px] text-text-muted/65 font-mono text-left max-h-24 overflow-y-auto" style={{ fontFamily: 'var(--theme-mono-font, "JetBrains Mono"), monospace' }}>
+            <div className="flex items-center gap-1.5 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shrink-0" />
+              <span className="truncate">Loading AST parser...</span>
+            </div>
+            <div className="flex items-center gap-1.5 opacity-80">
+              <span className="w-1.5 h-1.5 rounded-full bg-border-accent shrink-0" />
+              <span className="truncate">Scanning file system paths...</span>
+            </div>
+            {isEnriching && (
+              <div className="flex items-center gap-1.5 text-accent-primary opacity-90 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shrink-0 animate-ping" />
+                <span className="truncate">Injected prompt context to Gemini model...</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

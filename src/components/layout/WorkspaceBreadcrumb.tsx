@@ -15,10 +15,16 @@ export function WorkspaceBreadcrumb({ path, onChangeDirectory }: WorkspaceBreadc
   const isClipped = segments.length > 3;
 
   return (
-    <div className="absolute top-[68px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg glass-panel shadow-sm animate-fade-in">
+    <div 
+      className="absolute top-[68px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg glass-panel shadow-sm animate-fade-in"
+      style={{ fontFamily: 'var(--theme-sans-font, "Plus Jakarta Sans"), sans-serif' }}
+    >
       <FolderOpen size={13} className="text-text-dim shrink-0" />
       
-      <div className="flex items-center gap-1 text-[11px] font-mono">
+      <div 
+        className="flex items-center gap-1 text-[11px] font-mono"
+        style={{ fontFamily: 'var(--theme-mono-font, "JetBrains Mono"), monospace' }}
+      >
         {isClipped && (
           <>
             <span className="text-text-dim">…</span>
@@ -38,6 +44,7 @@ export function WorkspaceBreadcrumb({ path, onChangeDirectory }: WorkspaceBreadc
       <button
         onClick={onChangeDirectory}
         className="ml-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-dim hover:text-text-main bg-surface-raised hover:bg-surface-overlay border border-border-subtle rounded-md transition-all duration-200 cursor-pointer"
+        style={{ fontFamily: 'var(--theme-sans-font, "Plus Jakarta Sans"), sans-serif' }}
       >
         Change
       </button>
