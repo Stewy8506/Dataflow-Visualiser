@@ -206,27 +206,25 @@ pub async fn get_git_history(workspace: String) -> Result<Vec<GitCommitInfo>, St
         .unwrap_or(());
 
     let mut commits = Vec::new();
-    for oid_res in revwalk.take(100) {
-        if let Ok(oid) = oid_res {
-            if let Ok(commit) = repo.find_commit(oid) {
-                let id = commit.id().to_string();
-                let author = commit.author().name().unwrap_or("Unknown").to_string();
-                let message = commit.summary().unwrap_or("").to_string();
-                let timestamp = commit.time().seconds();
+    for oid in revwalk.take(100).flatten() {
+        if let Ok(commit) = repo.find_commit(oid) {
+            let id = commit.id().to_string();
+            let author = commit.author().name().unwrap_or("Unknown").to_string();
+            let message = commit.summary().unwrap_or("").to_string();
+            let timestamp = commit.time().seconds();
 
-                let mut parents = Vec::new();
-                for parent in commit.parents() {
-                    parents.push(parent.id().to_string());
-                }
-
-                commits.push(GitCommitInfo {
-                    id,
-                    parents,
-                    author,
-                    message,
-                    timestamp,
-                });
+            let mut parents = Vec::new();
+            for parent in commit.parents() {
+                parents.push(parent.id().to_string());
             }
+
+            commits.push(GitCommitInfo {
+                id,
+                parents,
+                author,
+                message,
+                timestamp,
+            });
         }
     }
 
@@ -279,24 +277,22 @@ pub async fn get_git_churn(workspace: String, limit: usize) -> Result<HashMap<St
     
     let mut churn_map: HashMap<String, usize> = HashMap::new();
     
-    for oid_res in revwalk.take(limit) {
-        if let Ok(oid) = oid_res {
-            if let Ok(commit) = repo.find_commit(oid) {
-                let tree = commit.tree().map_err(|e| e.to_string())?;
-                
-                let parent_tree = if commit.parent_count() > 0 {
-                    let parent = commit.parent(0).map_err(|e| e.to_string())?;
-                    Some(parent.tree().map_err(|e| e.to_string())?)
-                } else {
-                    None
-                };
-                
-                if let Ok(diff) = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
-                    for delta in diff.deltas() {
-                        if let Some(path) = delta.new_file().path() {
-                            let path_str = path.to_string_lossy().into_owned();
-                            *churn_map.entry(path_str).or_insert(0) += 1;
-                        }
+    for oid in revwalk.take(limit).flatten() {
+        if let Ok(commit) = repo.find_commit(oid) {
+            let tree = commit.tree().map_err(|e| e.to_string())?;
+            
+            let parent_tree = if commit.parent_count() > 0 {
+                let parent = commit.parent(0).map_err(|e| e.to_string())?;
+                Some(parent.tree().map_err(|e| e.to_string())?)
+            } else {
+                None
+            };
+            
+            if let Ok(diff) = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
+                for delta in diff.deltas() {
+                    if let Some(path) = delta.new_file().path() {
+                        let path_str = path.to_string_lossy().into_owned();
+                        *churn_map.entry(path_str).or_insert(0) += 1;
                     }
                 }
             }

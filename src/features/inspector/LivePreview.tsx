@@ -44,7 +44,7 @@ export function LivePreview({ selectedNode, workspacePath, edges }: LivePreviewP
         const normalizedWorkspace = workspacePath.replace(/\\/g, '/');
 
         // Dynamically extract dependencies from package.json without passing it into the sandbox files
-        let pkgDependencies: Record<string, string> = {
+        const pkgDependencies: Record<string, string> = {
           "lucide-react": "latest",
           "framer-motion": "latest",
           "clsx": "latest",

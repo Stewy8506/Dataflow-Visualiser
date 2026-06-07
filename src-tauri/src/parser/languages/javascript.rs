@@ -141,13 +141,10 @@ pub fn extract_javascript_imports(
                     ModuleDeclaration::ExportAllDeclaration(_) => {
                         has_exports = true;
                     }
-                    ModuleDeclaration::ExportNamedDeclaration(named) => {
-                        if named.source.is_some() {
+                    ModuleDeclaration::ExportNamedDeclaration(named)
+                        if named.source.is_some() => {
                             has_exports = true;
-                        } else {
-                            all_exports_imports = false;
                         }
-                    }
                     ModuleDeclaration::ExportDefaultDeclaration(_) => {
                         all_exports_imports = false;
                     }

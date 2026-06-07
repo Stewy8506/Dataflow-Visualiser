@@ -183,8 +183,8 @@ export function getLayoutedElements(
       rowNodes.forEach((node) => {
         const { width, height } = getNodeDimensions(node);
 
-        let finalX = 0;
-        let finalY = 0;
+        let finalX: number;
+        let finalY: number;
 
         if (isLR) {
           finalX = currentOffset + lineIndex * (maxNodeWidthInRank + intraRankGap);
@@ -197,7 +197,7 @@ export function getLayoutedElements(
         }
 
         // Remove temporary dagre properties
-        const { dagreX, dagreY, ...cleanNode } = node;
+        const { dagreX: _dagreX, dagreY: _dagreY, ...cleanNode } = node as any;
 
         finalNodes.push({
           ...cleanNode,
@@ -259,8 +259,8 @@ export function getLayoutedElements(
     occupiedSpots.set(key, collisionCount + 1);
 
     // Spread them out dynamically if multiple dependencies share the exact same origin
-    let finalX = baseX;
-    let finalY = baseY;
+    let finalX: number;
+    let finalY: number;
 
     if (!isLR) { // TB direction
       // spread horizontally below

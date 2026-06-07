@@ -118,9 +118,9 @@ pub async fn parse_codebase(
                         for (key, val) in packages {
                             if key.starts_with("node_modules/") {
                                 let pkg_name = key.replace("node_modules/", "");
-                                if ext_deps.contains_key(&pkg_name) {
+                                if let std::collections::hash_map::Entry::Occupied(mut e) = ext_deps.entry(pkg_name) {
                                     if let Some(ver) = val.get("version").and_then(|v| v.as_str()) {
-                                        ext_deps.insert(pkg_name, ver.to_string());
+                                        e.insert(ver.to_string());
                                     }
                                 }
                             }
@@ -229,7 +229,7 @@ pub async fn parse_codebase(
 
     let vulnerabilities_map = utils::osv::check_vulnerabilities(&ext_deps, is_flutter).await;
 
-    for (dep, _) in &ext_deps {
+    for dep in ext_deps.keys() {
         let vulns = vulnerabilities_map.get(dep).cloned().unwrap_or_default();
         nodes.push(ParsedNode {
             id: format!("ext:{}", dep),
@@ -249,37 +249,35 @@ pub async fn parse_codebase(
     }
 
     let mut paths_to_parse = Vec::new();
-    for result in WalkBuilder::new(path_ref)
+    for entry in WalkBuilder::new(path_ref)
         .hidden(true)
         .git_ignore(true)
         .filter_entry(move |e| !is_ignored(e, filter_mobile_platforms))
-        .build()
+        .build().flatten()
     {
-        if let Ok(entry) = result {
-            let file_path = entry.path();
-            if file_path.is_file() {
-                let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                if matches!(
-                    ext,
-                    "js" | "ts"
-                        | "jsx"
-                        | "tsx"
-                        | "py"
-                        | "rs"
-                        | "dart"
-                        | "c"
-                        | "h"
-                        | "cpp"
-                        | "hpp"
-                        | "cc"
-                        | "cxx"
-                        | "hxx"
-                        | "java"
-                        | "cs"
-                        | "go"
-                ) {
-                    paths_to_parse.push(file_path.to_path_buf());
-                }
+        let file_path = entry.path();
+        if file_path.is_file() {
+            let ext = file_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if matches!(
+                ext,
+                "js" | "ts"
+                    | "jsx"
+                    | "tsx"
+                    | "py"
+                    | "rs"
+                    | "dart"
+                    | "c"
+                    | "h"
+                    | "cpp"
+                    | "hpp"
+                    | "cc"
+                    | "cxx"
+                    | "hxx"
+                    | "java"
+                    | "cs"
+                    | "go"
+            ) {
+                paths_to_parse.push(file_path.to_path_buf());
             }
         }
     }
@@ -523,174 +521,172 @@ pub async fn watch_codebase(path: String, window: Window) -> Result<(), crate::e
         let path_ref = Path::new(&path);
         let _ = watcher.watch(path_ref, RecursiveMode::Recursive);
 
-        for res in rx {
-            if let Ok(event) = res {
-                if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
-                    for path_buf in event.paths {
-                        if !path_buf.is_file() {
-                            continue;
-                        }
-                        let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
-                        if !matches!(
-                            ext,
-                            "js" | "ts"
-                                | "jsx"
-                                | "tsx"
-                                | "py"
-                                | "rs"
-                                | "dart"
-                                | "c"
-                                | "h"
-                                | "cpp"
-                                | "hpp"
-                                | "cc"
-                                | "cxx"
-                                | "hxx"
-                                | "go"
-                                | "java"
-                                | "cs"
-                        ) {
-                            continue;
-                        }
+        for event in rx.into_iter().flatten() {
+            if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+                for path_buf in event.paths {
+                    if !path_buf.is_file() {
+                        continue;
+                    }
+                    let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
+                    if !matches!(
+                        ext,
+                        "js" | "ts"
+                            | "jsx"
+                            | "tsx"
+                            | "py"
+                            | "rs"
+                            | "dart"
+                            | "c"
+                            | "h"
+                            | "cpp"
+                            | "hpp"
+                            | "cc"
+                            | "cxx"
+                            | "hxx"
+                            | "go"
+                            | "java"
+                            | "cs"
+                    ) {
+                        continue;
+                    }
 
-                        let id = path_buf.to_string_lossy().replace('\\', "/");
-                        let label = path_buf
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
+                    let id = path_buf.to_string_lossy().replace('\\', "/");
+                    let label = path_buf
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
 
-                        let mut imports = Vec::new();
-                        let mut custom_edges = Vec::new();
-                        let mut api_calls = Vec::new();
-                        let mut api_endpoints = Vec::new();
-                        let mut function_count = 0;
+                    let mut imports = Vec::new();
+                    let mut custom_edges = Vec::new();
+                    let mut api_calls = Vec::new();
+                    let mut api_endpoints = Vec::new();
+                    let mut function_count = 0;
 
-                        if let Ok(source_text) = fs::read_to_string(&path_buf) {
-                            let re = Regex::new(
-                                r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
-                            )
-                            .unwrap();
-                            function_count = re.find_iter(&source_text).count();
+                    if let Ok(source_text) = fs::read_to_string(&path_buf) {
+                        let re = Regex::new(
+                            r"(?m)(?:^|\s)(?:function\s+\w+|=>|fn\s+\w+|def\s+\w+|class\s+\w+)",
+                        )
+                        .unwrap();
+                        function_count = re.find_iter(&source_text).count();
 
-                            if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
-                                let mut exported_symbols = Vec::new();
-                                let mut import_specifiers = Vec::new();
-                                let _ = extract_javascript_imports(
-                                    &source_text,
-                                    &path_buf,
-                                    &mut imports,
-                                    &mut api_calls,
-                                    &mut exported_symbols,
-                                    &mut import_specifiers,
-                                );
-                            } else {
-                                match ext {
-                                    "py" => PYTHON_PARSER.with(|p| {
-                                        extract_imports_with_parser(
-                                            &mut p.borrow_mut(),
-                                            &source_text,
-                                            ext,
-                                            &mut imports,
-                                            &mut custom_edges,
-                                            &mut api_endpoints,
-                                        )
-                                    }),
-                                    "rs" => RUST_PARSER.with(|p| {
-                                        extract_imports_with_parser(
-                                            &mut p.borrow_mut(),
-                                            &source_text,
-                                            ext,
-                                            &mut imports,
-                                            &mut custom_edges,
-                                            &mut api_endpoints,
-                                        )
-                                    }),
-                                    "dart" => DART_PARSER.with(|p| {
-                                        extract_imports_with_parser(
-                                            &mut p.borrow_mut(),
-                                            &source_text,
-                                            ext,
-                                            &mut imports,
-                                            &mut custom_edges,
-                                            &mut api_endpoints,
-                                        )
-                                    }),
-                                    "c" | "h" => C_PARSER.with(|p| {
-                                        extract_imports_with_parser(
-                                            &mut p.borrow_mut(),
-                                            &source_text,
-                                            ext,
-                                            &mut imports,
-                                            &mut custom_edges,
-                                            &mut api_endpoints,
-                                        )
-                                    }),
-                                    "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
-                                        extract_imports_with_parser(
-                                            &mut p.borrow_mut(),
-                                            &source_text,
-                                            ext,
-                                            &mut imports,
-                                            &mut custom_edges,
-                                            &mut api_endpoints,
-                                        )
-                                    }),
-                                    _ => {}
-                                }
+                        if matches!(ext, "js" | "ts" | "jsx" | "tsx") {
+                            let mut exported_symbols = Vec::new();
+                            let mut import_specifiers = Vec::new();
+                            let _ = extract_javascript_imports(
+                                &source_text,
+                                &path_buf,
+                                &mut imports,
+                                &mut api_calls,
+                                &mut exported_symbols,
+                                &mut import_specifiers,
+                            );
+                        } else {
+                            match ext {
+                                "py" => PYTHON_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                        &mut custom_edges,
+                                        &mut api_endpoints,
+                                    )
+                                }),
+                                "rs" => RUST_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                        &mut custom_edges,
+                                        &mut api_endpoints,
+                                    )
+                                }),
+                                "dart" => DART_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                        &mut custom_edges,
+                                        &mut api_endpoints,
+                                    )
+                                }),
+                                "c" | "h" => C_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                        &mut custom_edges,
+                                        &mut api_endpoints,
+                                    )
+                                }),
+                                "cpp" | "hpp" | "cc" | "cxx" | "hxx" => CPP_PARSER.with(|p| {
+                                    extract_imports_with_parser(
+                                        &mut p.borrow_mut(),
+                                        &source_text,
+                                        ext,
+                                        &mut imports,
+                                        &mut custom_edges,
+                                        &mut api_endpoints,
+                                    )
+                                }),
+                                _ => {}
                             }
                         }
-
-                        let import_count = imports.len();
-                        let score = if function_count > 10 || import_count > 15 {
-                            "High"
-                        } else if function_count > 3 || import_count > 5 {
-                            "Medium"
-                        } else {
-                            "Low"
-                        };
-
-                        let node = ParsedNode {
-                            id: id.clone(),
-                            label,
-                            group: ext.to_string(),
-                            semantic_group: None,
-                            summary: None,
-                            unused_exports: Vec::new(),
-                            metrics: Some(NodeMetrics {
-                                function_count,
-                                import_count,
-                                complexity_score: score.to_string(),
-                            }),
-                            tags: Vec::new(),
-                            vulnerabilities: Vec::new(),
-                        };
-
-                        let alias_resolver = AliasResolver::new(path_ref);
-                        let mut resolved_imports = Vec::new();
-                        for (imp, is_data) in imports {
-                            let resolved = alias_resolver.resolve(&imp, &path_buf);
-                            let clean = resolved
-                                .strip_prefix("@/")
-                                .or_else(|| resolved.strip_prefix("~/"))
-                                .unwrap_or(&resolved);
-                            resolved_imports.push((clean.to_string(), is_data));
-                        }
-
-                        let mut resolved_custom_edges = Vec::new();
-                        for (tgt, etype) in custom_edges {
-                            resolved_custom_edges.push((tgt, etype));
-                        }
-
-                        let _ = window.emit(
-                            "node_updated",
-                            NodeUpdatedPayload {
-                                node,
-                                resolved_imports,
-                                resolved_custom_edges,
-                            },
-                        );
                     }
+
+                    let import_count = imports.len();
+                    let score = if function_count > 10 || import_count > 15 {
+                        "High"
+                    } else if function_count > 3 || import_count > 5 {
+                        "Medium"
+                    } else {
+                        "Low"
+                    };
+
+                    let node = ParsedNode {
+                        id: id.clone(),
+                        label,
+                        group: ext.to_string(),
+                        semantic_group: None,
+                        summary: None,
+                        unused_exports: Vec::new(),
+                        metrics: Some(NodeMetrics {
+                            function_count,
+                            import_count,
+                            complexity_score: score.to_string(),
+                        }),
+                        tags: Vec::new(),
+                        vulnerabilities: Vec::new(),
+                    };
+
+                    let alias_resolver = AliasResolver::new(path_ref);
+                    let mut resolved_imports = Vec::new();
+                    for (imp, is_data) in imports {
+                        let resolved = alias_resolver.resolve(&imp, &path_buf);
+                        let clean = resolved
+                            .strip_prefix("@/")
+                            .or_else(|| resolved.strip_prefix("~/"))
+                            .unwrap_or(&resolved);
+                        resolved_imports.push((clean.to_string(), is_data));
+                    }
+
+                    let mut resolved_custom_edges = Vec::new();
+                    for (tgt, etype) in custom_edges {
+                        resolved_custom_edges.push((tgt, etype));
+                    }
+
+                    let _ = window.emit(
+                        "node_updated",
+                        NodeUpdatedPayload {
+                            node,
+                            resolved_imports,
+                            resolved_custom_edges,
+                        },
+                    );
                 }
             }
         }

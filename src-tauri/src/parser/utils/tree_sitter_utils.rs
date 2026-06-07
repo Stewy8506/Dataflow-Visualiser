@@ -346,9 +346,7 @@ pub fn extract_imports_with_parser(
                         .replace("#include ", "")
                         .replace("<", "")
                         .replace(">", "")
-                        .replace(';', "")
-                        .replace('\'', "")
-                        .replace('"', "");
+                        .replace([';', '\'', '"'], "");
                     let parts: Vec<&str> = clean.split_whitespace().collect();
                     if parts.len() >= 2 {
                         imports.push((format!("{}/{}", parts[0], parts[1]), false));

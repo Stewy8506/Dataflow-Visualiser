@@ -29,7 +29,7 @@ pub async fn compute_test_coverage(workspace: String) -> Result<HashMap<String, 
             parse_lcov(&content, &workspace, &mut coverage_map);
             found_actual = true;
         }
-    } else if let Ok(content) = fs::read_to_string(&workspace_path.join("lcov.info")) {
+    } else if let Ok(content) = fs::read_to_string(workspace_path.join("lcov.info")) {
         parse_lcov(&content, &workspace, &mut coverage_map);
         found_actual = true;
     }
@@ -49,20 +49,18 @@ pub async fn compute_test_coverage(workspace: String) -> Result<HashMap<String, 
     let mut all_files = HashSet::new();
     let mut test_files = Vec::new();
 
-    for result in WalkBuilder::new(workspace_path)
+    for entry in WalkBuilder::new(workspace_path)
         .hidden(true)
         .git_ignore(true)
         .filter_entry(|e| !is_ignored(e, false))
-        .build()
+        .build().flatten()
     {
-        if let Ok(entry) = result {
-            if entry.path().is_file() {
-                let path_str = entry.path().to_string_lossy().replace('\\', "/");
-                all_files.insert(path_str.clone());
-                
-                if path_str.contains(".test.") || path_str.contains(".spec.") || path_str.contains("_test.") || path_str.contains("/__tests__/") || path_str.contains("/tests/") {
-                    test_files.push(path_str);
-                }
+        if entry.path().is_file() {
+            let path_str = entry.path().to_string_lossy().replace('\\', "/");
+            all_files.insert(path_str.clone());
+            
+            if path_str.contains(".test.") || path_str.contains(".spec.") || path_str.contains("_test.") || path_str.contains("/__tests__/") || path_str.contains("/tests/") {
+                test_files.push(path_str);
             }
         }
     }
@@ -121,8 +119,8 @@ fn parse_lcov(content: &str, workspace: &str, coverage_map: &mut HashMap<String,
             lh = line[3..].parse().unwrap_or(0.0);
         } else if line.starts_with("LF:") {
             lf = line[3..].parse().unwrap_or(0.0);
-        } else if line == "end_of_record" {
-            if !current_file.is_empty() && lf > 0.0 {
+        } else if line == "end_of_record"
+            && !current_file.is_empty() && lf > 0.0 {
                 coverage_map.insert(current_file.clone(), TestCoverageInfo {
                     covered: lh > 0.0,
                     score: lh / lf,
@@ -130,7 +128,6 @@ fn parse_lcov(content: &str, workspace: &str, coverage_map: &mut HashMap<String,
                     test_files: Vec::new(),
                 });
             }
-        }
     }
 }
 

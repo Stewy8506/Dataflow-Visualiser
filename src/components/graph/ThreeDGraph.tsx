@@ -111,8 +111,8 @@ export function ThreeDGraph({ graphData, selectedNode, onNodeSelect }: ThreeDGra
         for (let j = i + 1; j < initializedNodes.length; j++) {
           const v = initializedNodes[j];
           let dx = v.x - u.x;
-          let dy = v.y - u.y;
-          let dz = v.z - u.z;
+          const dy = v.y - u.y;
+          const dz = v.z - u.z;
           let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
           if (dist < 0.1) {
             dx = 0.1;

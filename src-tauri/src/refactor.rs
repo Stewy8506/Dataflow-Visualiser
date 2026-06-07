@@ -68,7 +68,7 @@ pub async fn preview_refactor(
 
     for result in walker {
         if let Ok(entry) = result {
-            if entry.file_type().map_or(false, |ft| ft.is_file()) {
+            if entry.file_type().is_some_and(|ft| ft.is_file()) {
                 let path = entry.path();
                 let path_str = path.to_string_lossy().replace('\\', "/");
                 
