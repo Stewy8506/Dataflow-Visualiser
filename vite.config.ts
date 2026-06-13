@@ -11,7 +11,7 @@ export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.ts']
+    setupFiles: ['./frontend/setupTests.ts']
   },
 
   build: {
